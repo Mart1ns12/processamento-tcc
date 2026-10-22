@@ -22,3 +22,12 @@ horarios_b3:
 dias_especiais:
   "2025-03-05": {abertura: "13:00", motivo: "quarta-feira de cinzas"}
   "2026-02-18": {abertura: "13:00", motivo: "quarta-feira de cinzas"}
+# Fase 1 (seção 5 da especificação). Janelas contadas em PREGÕES do calendário (datas com IBOV).
+fase1:
+  janelas: {d1: 1, m1: 21, m6: 126, a1: 252}
+  volume_pregoes: 20
+  volatilidade_retornos: 20
+  beta_pregoes: 252
+  beta_minimo: 120
+  setor_minimo: 3
+  setor_excluir: "empresa"  # "empresa" = tira todas as ações do mesmo CNPJ; "acao" = tira só a própria ação

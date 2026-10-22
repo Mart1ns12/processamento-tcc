@@ -153,7 +153,7 @@ Etapas da coleta, em ordem: `precos`, `macro`, `noticias`, `ipe`, `enriqueciment
 
 ## 5. Fase 1: indicadores do painel
 
-Fonte dos dados: tabelas da seção 3. `fech` = `fechamento`; `aj` = `fechamento_ajustado`. Comparações com o setor usam a **média das outras ações do mesmo setor** (sem a própria); se o setor tem menos de 3 ações, `setor_comparacao_fraca = true`.
+Fonte dos dados: tabelas da seção 3. `fech` = `fechamento`; `aj` = `fechamento_ajustado`. Comparações com o setor usam a **média das ações das outras empresas do mesmo setor** (sem a própria empresa: tiram-se todas as ações do mesmo CNPJ, ex.: PETR3 não entra no setor da PETR4); se o setor tem menos de 3 empresas (CNPJs distintos, contando a própria), `setor_comparacao_fraca = true`. Só ON, PN e UNIT entram nos pares (setor e `posicao_pct`); BDR aparece no painel, mas fica fora dos pares (`posicao_pct = nao_se_aplica`). Janelas "1 dia, 1 mês, 6 meses, 1 ano" = **1, 21, 126 e 252 pregões** (decisões de 22/10/2026; detalhes na seção 9, etapa 3).
 
 | Indicador | Cálculo | Observações / status |
 |---|---|---|
@@ -161,7 +161,7 @@ Fonte dos dados: tabelas da seção 3. `fech` = `fechamento`; `aj` = `fechamento
 | Variação do preço | Mesmo cálculo com `fech` em 1 dia, 1 mês, 6 meses, 1 ano | Sem dividendos |
 | Rentabilidade | `aj(t)/aj(t−n) − 1` em 1 dia, 1 mês, 6 meses, 1 ano; idem para IBOV e setor | Com dividendos |
 | Comparação com Ibovespa | Rentabilidade da ação × do IBOV, mesmas janelas | Gráfico: séries rebaseadas pela interface |
-| Comparação com o setor | Rentabilidade da ação × média do setor (sem ela), mesmas janelas | Na série do gráfico, o setor inclui todas as ações (diferença aceita) |
+| Comparação com o setor | Rentabilidade da ação × média do setor (sem a própria empresa), mesmas janelas | Na série do gráfico, o setor inclui todas as ações (diferença aceita) |
 | Comparação com índices | Ação × CDI, IPCA, IDIV, SMLL, IFIX, IVVB11. **CDI e IPCA acumulados** (juros sobre juros) | IPCA é mensal |
 | Volume total | `volume` do dia | — |
 | Volume em relação ao normal | `volume(t) / mediana(volume das 20 sessões anteriores, sem t)` | `historico_insuficiente` com menos de 20 |
@@ -321,7 +321,7 @@ Enquanto a API não existe, o processamento **gera os mesmos pacotes como arquiv
 
 **1. `acoes`:** `ticker`, `empresa`, `setor`, `subsetor`, `tipo_acao` (ON, PN, UNIT, BDR), `ativo_no_universo` (bool).
 
-**2. `mercado_dia`:** `data_referencia`, e para `IBOV`, `USDBRL`, `BRENT`: `fechamento`, `variacao_dia`; `cdi_dia` (fração ao dia); `ipca_12m`.
+**2. `mercado_dia`:** `data_referencia`, e para `IBOV`, `USDBRL`, `BRENT`: `fechamento`, `variacao_dia`; `cdi_dia` (fração ao dia); `ipca_12m`; `ipca_ate` (último mês de IPCA usado, `AAAA-MM`, para a interface mostrar "IPCA até <mês>").
 
 **3. `resumo_acao`** (um objeto por indicador, sempre com `valor`, `status` e, quando faz sentido, `setor`, `posicao_pct` e `texto`):
 - `cotacao`: `fechamento`, `variacao_dia`
@@ -330,7 +330,7 @@ Enquanto a API não existe, o processamento **gera os mesmos pacotes como arquiv
 - `volume`: `total`, `relativo` (÷ mediana de 20), `mediana_20` (para a linha de referência do gráfico de barras), `posicao_pct`
 - `volatilidade_20d`: `valor` (desvio diário), `posicao_pct` (fração de ações mais calmas)
 - `beta`: `valor`, `status`
-- `pl`, `pvp`, `roe`, `dividend_yield`, `payout`, `margem_bruta`, `margem_liquida`: `valor`, `setor` (média do setor sem a própria ação), `status`
+- `pl`, `pvp`, `roe`, `dividend_yield`, `payout`, `margem_bruta`, `margem_liquida`: `valor`, `setor` (média do setor sem a própria empresa), `status`
 - `payout_por_ano`: lista (`ano`, `valor`, `status`) dos últimos anos, para o gráfico de barras do payout
 - `ebitda`: `valor_12m`, `margem`, `setor_margem`, `status`
 - `endividamento`: `divida_liquida`, `dl_pl`, `dl_ebitda`, `caixa_liquido` (bool), `setor_dl_pl`, `setor_dl_ebitda`, `status`
@@ -404,7 +404,20 @@ Todas as 23 informações da planilha (`docs/planilha_final.xlsx`; cálculos na 
 | 7 | Saída | Os 10 pacotes da seção 8 gerados em JSON, validados contra o contrato |
 | 8 | Rotina diária | Gatilho da seção 4, prazos e avisos funcionando |
 
+**Decisões da etapa 3 (22/10/2026)**
+- **Janelas:** contadas em pregões do calendário: d1 = 1, m1 = 21, m6 = 126, a1 = 252 (`parametros.yaml`, bloco `fase1`).
+- **Setor:** modo "empresa" (seção 5). Ação sem setor ou sem outra empresa no setor: `indisponivel`; há outras, mas nenhuma com valor: `historico_insuficiente`.
+- **BDR:** entra no painel, fora dos pares (setor e `posicao_pct`).
+- **IPCA:** só meses fechados, sem rateio por dia. Na data d valem os meses anteriores ao mês de d; o acumulado da janela é o produto dos meses entre o último mês conhecido na base e o último conhecido em t. Ao vivo, nos primeiros ~10 dias do mês o IPCA fica defasado: por isso a saída informa `ipca_ate`.
+- **CDI:** entram as taxas com data em [base, t) (a taxa do dia d rende de d a d+1); a taxa de t não entra. `cdi_dia` = taxa da última data ≤ t.
+- **Lacunas de preço:** rentabilidade e variação usam a base "as-of" (último preço até t−n). Volatilidade e volume relativo exigem os 20 pregões completos; senão `historico_insuficiente`. Beta conta só pares de retornos válidos, mínimo 120.
+- **Volatilidade:** desvio-padrão amostral (ddof = 1), diário, sem anualizar.
+- **`posicao_pct`:** do volume, calculada sobre o volume **relativo**. Fórmula: nº de pares estritamente menores ÷ (nº de pares válidos − 1); menor = 0, maior = 1; menos de 2 válidos: `indisponivel`.
+- **Comparação com índices:** janelas d1, m1, m6 e a1.
+- Enquanto a coleta não completar os índices (seção 10), as janelas sem dados saem `historico_insuficiente`/`indisponivel`. Isso está correto, não é bug.
+
 **Pendências internas por etapa**
+- **Etapa 7 (vindos da etapa 3, não implementados nela):** (a) `mercado_dia`: `fechamento` e `variacao_dia` de `IBOV`, `USDBRL` e `BRENT` (reusar `grade_de_precos` + `variacao(g_fech, 1)` de `processamento/fatos/precos.py`); (b) `series_diarias` (seção 8.3, pacote 4): `fechamento`, `indice_retorno_total` base 100 (`aj(t)/aj(início) × 100`), `volume`, para cada ação, `IBOV`, `SETOR:<nome>` e índices (`CDI`, `IPCA`, `IDIV`, `SMLL`, `IFIX`, `IVVB11`) em base 100 acumulada (reusar o acumulado de CDI/IPCA de `processamento/fatos/indices.py`). Os cálculos ficam em `processamento/fatos/` (funções puras com teste); a etapa 7 só empacota. **A decidir no plano da etapa 7:** como montar a série `SETOR:<nome>` (média dos retornos diários das ações do setor, encadeada em base 100, é o candidato) e o que fazer com ações que entram/saem do setor no meio da série.
 - **Etapa 4 (payout):** `v1-acoes_emitidas` só separa ON e PN. Em empresas com **duas classes PN** (ex.: USIM5 e USIM6), a quantidade de cada classe não é conhecida: o payout vai precisar de uma **regra de aproximação**, a decidir no plano da etapa 4.
 
 ---
@@ -416,6 +429,7 @@ Todas as 23 informações da planilha (`docs/planilha_final.xlsx`; cálculos na 
 | Preencher EBIT, depreciação, empréstimos, caixa e aplicações em `v1-balancos` | Coleta |
 | Histórico de 5 anos (e testar a cobertura de notícias em 2021–2022) | Coleta |
 | Tabela `v1-composicao_ibov` | Coleta |
+| Histórico de IDIV, SMLL e IFIX (hoje só 20 e 21/10/2026) e de CDI/IPCA desde jul/2024 (hoje desde jan/2025): prometido para depois da manutenção do Railway | Coleta |
 | `data_mudanca` em `v1-mudancas_ticker` | Coleta |
 | Autenticação, endereço e forma de envio da API | Equipe da API |
 | Manter o filtro da juíza desligado na coleta e informar quantas notícias do histórico ficaram sem julgamento | Coleta |
