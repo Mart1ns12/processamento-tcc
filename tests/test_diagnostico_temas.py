@@ -1,0 +1,248 @@
+"""Testes das seções por tema do diagnóstico (temas.py), com `ler` falso (sem banco)."""
+
+import re
+from datetime import date, datetime
+
+import pandas as pd
+import pytest
+
+from processamento import fontes
+from processamento.diagnostico.esperado import ETAPAS_COLETA
+from processamento.diagnostico.temas import (
+    montar_sql_formato_iso,
+    secao_noticias,
+    secao_painel,
+    secao_precos,
+    secao_tickers,
+)
+from processamento.exclusoes import Exclusoes
+
+
+@pytest.fixture(scope="module")
+def mapa():
+    """Mapa real do fontes.yaml (só leitura do arquivo, sem banco)."""
+    return fontes.carregar_mapa()
+
+
+def _ler_sem_banco(sql):
+    """Falha se alguma seção tentar consultar quando a tabela está ausente."""
+    raise AssertionError(f"não devia consultar: {sql}")
+
+
+def test_montar_sql_formato_iso_exato():
+    esperado = (
+        "SELECT CHAR_LENGTH(`data_hora_coleta`) AS tam, RIGHT(`data_hora_coleta`, 6) AS fim, "
+        "COUNT(*) AS n, MIN(`data_hora_coleta`) AS exemplo_min, "
+        "MAX(`data_hora_coleta`) AS exemplo_max FROM `v1-noticias` "
+        "WHERE `data_hora_coleta` IS NOT NULL GROUP BY tam, fim ORDER BY n DESC"
+    )
+    assert montar_sql_formato_iso("v1-noticias", "data_hora_coleta") == esperado
+
+
+def test_secao_noticias_pulada_sem_tabela(mapa):
+    secao = secao_noticias(_ler_sem_banco, mapa, set())
+    assert any("pulada: tabela ausente" in n for n in secao["notas"])
+    assert secao["divergencias"] == []
+
+
+def _ler_precos(sql):
+    """Dublê de `ler` para a seção de preços, conforme o SQL pedido."""
+    if "NOT IN" in sql:
+        return pd.DataFrame({
+            "ticker": ["AAAA3", "AAAA3", "AAAA3", "BBBB4", "BBBB4", "BBBB4"],
+            "data": [date(2026, 1, 5), date(2026, 1, 8), date(2026, 1, 12),
+                     date(2026, 1, 6), date(2026, 1, 7), date(2026, 1, 8)],
+        })
+    if "= 'IBOV'" in sql:
+        return pd.DataFrame({"data": [date(2026, 1, 5), date(2026, 1, 6), date(2026, 1, 8),
+                                      date(2026, 1, 9), date(2026, 1, 12)]})
+    if "IN ('IBOV'" in sql:
+        return pd.DataFrame({
+            "ticker": ["IBOV", "USDBRL", "BRENT"],
+            "linhas": [5, 5, 5],
+            "com_volume": [0, 0, 0],
+            "inicio": [date(2026, 1, 5)] * 3,
+            "fim": [date(2026, 1, 12)] * 3,
+        })
+    raise AssertionError(f"SQL inesperado: {sql}")
+
+
+def test_secao_precos_gabarito(mapa):
+    secao = secao_precos(_ler_precos, mapa, {"v1-precos"})
+    divs = secao["divergencias"]
+    assert len(divs) == 2
+    fora = [d for d in divs if d["tema"] == "preco_fora_do_pregao"]
+    serie = [d for d in divs if d["tema"] == "serie_ausente"]
+    assert len(fora) == 1 and "BBBB4" in fora[0]["detalhe"]
+    assert len(serie) == 1 and "IVVB11" in serie[0]["detalhe"]
+    tabela_uteis = [t for t in secao["tabelas"] if "úteis" in t["subtitulo"]]
+    assert len(tabela_uteis) == 1
+    assert any(date(2026, 1, 7) in linha for linha in tabela_uteis[0]["linhas"])
+
+
+def _ler_painel_factory(horas_df):
+    """Dublê de `ler` para o painel; `horas_df` é a resposta da consulta de hora do daily."""
+    def _ler(sql):
+        if "HOUR(" in sql:
+            return horas_df
+        if "etapa_id" in sql:
+            return pd.DataFrame({
+                "etapa_id": ETAPAS_COLETA,
+                "ordem": list(range(1, len(ETAPAS_COLETA) + 1)),
+                "status": ["concluida"] * len(ETAPAS_COLETA),
+                "n": [1] * len(ETAPAS_COLETA),
+            })
+        return pd.DataFrame({
+            "tipo": ["daily"],
+            "status": ["concluida"],
+            "n": [35],
+            "primeira": [datetime(2026, 1, 5, 11, 0)],
+            "ultima": [datetime(2026, 10, 21, 11, 0)],
+        })
+    return _ler
+
+
+def test_secao_painel_cron_e_manual_viram_notas(mapa):
+    horas = pd.DataFrame({
+        "origem": ["cron", "cron", "manual"],
+        "hora": [11, 14, 17],
+        "n": [30, 2, 3],
+    })
+    secao = secao_painel(_ler_painel_factory(horas), mapa,
+                         {"v1-painel_execucoes", "v1-painel_etapas"})
+    assert secao["divergencias"] == []
+    assert any("14h: 2" in n for n in secao["notas"])
+    assert any("manual" in n for n in secao["notas"])
+
+
+def test_secao_painel_cron_so_na_agenda_nao_gera_nota_fora_da_agenda(mapa):
+    horas = pd.DataFrame({"origem": ["cron"], "hora": [11], "n": [30]})
+    secao = secao_painel(_ler_painel_factory(horas), mapa,
+                         {"v1-painel_execucoes", "v1-painel_etapas"})
+    assert not any("fora da agenda" in n for n in secao["notas"])
+
+
+# ---------------------------------------------------------------------------
+# secao_tickers: cobertura do other_codes, exclusões e classes de proventos
+# ---------------------------------------------------------------------------
+
+CADASTRO_FAKE = {
+    "PETR4": "33000167000101",
+    "ITUB4": "60872504000123",
+    "VALE3": "33592510000154",
+    "ABCD3": "06057223000171",
+    "CRFB3": None,
+}
+RAW_COMPLETO = [
+    ("33000167000101", '["PETR4","PETR3"]'),
+    ("60872504000123", '["ITUB3","ITUB4"]'),
+    ("33592510000154", '["VALE3"]'),
+    ("06057223000171", '["ABCD3"]'),
+]
+# Os 6 UNITS do esperado.py: sem eles a seção acusaria "units" (UNITS fora da consulta),
+# o que não é o cenário testado aqui.
+UNITS_FAKE = ["BPAC11", "ENGI11", "IGTI11", "KLBN11", "SANB11", "TAEE11"]
+EXISTENTES_TICKERS = {
+    "v1-noticias", "v1-precos", "v1-cadastro", "v1-mudancas_ticker", "v1-balancos",
+    "v1-acoes_emitidas", "v1-proventos", "v1-indices", "v1-raw_b3_cadastro",
+}
+EXCLUSOES_FAKE = Exclusoes(
+    tickers_excluidos={"CRFB3": "x"},
+    cnpjs_sem_balanco={"06057223000171": "x"},
+)
+
+
+def _ler_tickers(raw_linhas):
+    """Dublê de `ler` para secao_tickers: despacha pelo texto do SQL, sem banco."""
+    tabelas = {
+        "v1-cadastro": {"ticker": list(CADASTRO_FAKE), "cnpj": list(CADASTRO_FAKE.values())},
+        "v1-precos": {"ticker": ["PETR4", "ITUB4", "VALE3", "ABCD3", "IBOV"]},
+        "v1-noticias": {"ticker": ["PETR4"]},
+        "v1-proventos": {"ticker": ["PETR4", "ITUB3", "VALE5", "ZZZZ3"]},
+        "v1-mudancas_ticker": {"ticker_antigo": [], "ticker_novo": []},
+        "v1-balancos": {"cnpj": ["33000167000101", "60872504000123", "33592510000154"]},
+        "v1-acoes_emitidas": {"cnpj": ["33000167000101", "60872504000123",
+                                       "33592510000154", "06057223000171"]},
+    }
+
+    def _ler(sql):
+        tab = re.search(r"FROM `([^`]+)`", sql).group(1)
+        if "DISTINCT" in sql:
+            col = re.search(r"DISTINCT `([^`]+)`", sql).group(1)
+            valores = pd.Series(tabelas[tab][col]).dropna().unique()
+            return pd.DataFrame({"valor": list(valores)})
+        if tab == "v1-precos" and "MIN(" in sql:
+            return pd.DataFrame({"inicio": [date(2025, 1, 2)], "fim": [date(2026, 10, 21)]})
+        if tab == "v1-proventos" and "data_com" in sql:
+            return pd.DataFrame({"ticker": ["PETR4", "VALE5", "VALE5"],
+                                 "data_com": [date(2025, 5, 2), date(2016, 3, 1), date(2025, 6, 2)]})
+        if tab == "v1-cadastro" and "IS NULL" in sql:
+            return pd.DataFrame({"ticker": ["CRFB3"]})
+        if "tipo_acao" in sql:
+            return pd.DataFrame({"ticker": UNITS_FAKE,
+                                 "unit_qtd_on": [1] * len(UNITS_FAKE),
+                                 "unit_qtd_pn": [1] * len(UNITS_FAKE)})
+        if tab == "v1-raw_b3_cadastro":
+            return pd.DataFrame({"cnpj": [c for c, _ in raw_linhas],
+                                 "other_codes": [oc for _, oc in raw_linhas]})
+        if tab == "v1-mudancas_ticker":
+            return pd.DataFrame({"ticker_antigo": [], "ticker_novo": []})
+        if tab == "v1-cadastro" and "AS cnpj" in sql:
+            return pd.DataFrame({"ticker": list(CADASTRO_FAKE),
+                                 "cnpj": list(CADASTRO_FAKE.values())})
+        raise AssertionError(f"SQL inesperado: {sql}")
+    return _ler
+
+
+def test_secao_tickers_excluidos_e_classes_de_proventos_viram_nota(mapa):
+    secao = secao_tickers(_ler_tickers(RAW_COMPLETO), mapa, EXISTENTES_TICKERS, EXCLUSOES_FAKE)
+    divs = secao["divergencias"]
+    assert len(divs) == 1
+    assert divs[0]["tema"] == "ticker_sem_cadastro"
+    assert "ZZZZ3 (sem_empresa)" in divs[0]["detalhe"]
+    notas = secao["notas"]
+    assert any("CRFB3" in n and "excluídos por decisão" in n for n in notas)
+    assert any("ITUB3" in n for n in notas)
+    assert any("VALE5" in n and "extintas" in n for n in notas)
+    assert any("06057223000171" in n for n in notas)
+
+
+def test_secao_tickers_cnpj_sem_linha_no_other_codes_diverge(mapa):
+    raw = [linha for linha in RAW_COMPLETO if linha[0] != "60872504000123"]
+    secao = secao_tickers(_ler_tickers(raw), mapa, EXISTENTES_TICKERS, EXCLUSOES_FAKE)
+    divs = secao["divergencias"]
+    oc = [d for d in divs if d["tema"] == "other_codes"]
+    assert len(oc) == 1 and "60872504000123" in oc[0]["detalhe"]
+    sem_cad = [d for d in divs if d["tema"] == "ticker_sem_cadastro"]
+    assert any("ITUB3 (sem_other_codes)" in d["detalhe"] for d in sem_cad)
+    assert any("ZZZZ3" in d["detalhe"] for d in sem_cad)
+
+
+def test_secao_tickers_sem_tabela_raw_gera_divergencia_other_codes(mapa):
+    existentes = EXISTENTES_TICKERS - {"v1-raw_b3_cadastro"}
+    secao = secao_tickers(_ler_tickers([]), mapa, existentes, EXCLUSOES_FAKE)
+    assert any(d["tema"] == "other_codes" for d in secao["divergencias"])
+
+
+def test_secao_tickers_other_codes_json_invalido_diverge_sem_derrubar_secao(mapa):
+    raw = [linha if linha[0] != "33592510000154" else ("33592510000154", "xx") for linha in RAW_COMPLETO]
+    secao = secao_tickers(_ler_tickers(raw), mapa, EXISTENTES_TICKERS, EXCLUSOES_FAKE)
+    detalhes = [d["detalhe"] for d in secao["divergencias"] if d["tema"] == "other_codes"]
+    assert any("JSON inválido" in d and "33592510000154" in d for d in detalhes)
+
+
+def test_secao_tickers_classe_de_empresa_excluida_vira_nota_de_excluidos(mapa):
+    # ITUB4 excluída: ITUB3 (mesma empresa) vai para a nota de excluídos, não para "ligadas"
+    exclusoes = Exclusoes(tickers_excluidos={"CRFB3": "x", "ITUB4": "x"},
+                          cnpjs_sem_balanco={"06057223000171": "x"})
+    secao = secao_tickers(_ler_tickers(RAW_COMPLETO), mapa, EXISTENTES_TICKERS, exclusoes)
+    assert not any("ITUB3" in d["detalhe"] for d in secao["divergencias"])
+    assert any("excluídos por decisão" in n and "ITUB3" in n for n in secao["notas"])
+    assert not any("ligadas" in n and "ITUB3" in n for n in secao["notas"])
+
+
+def test_secao_tickers_tabela_de_proventos_das_classes_extintas(mapa):
+    secao = secao_tickers(_ler_tickers(RAW_COMPLETO), mapa, EXISTENTES_TICKERS, EXCLUSOES_FAKE)
+    tabela = next(t for t in secao["tabelas"] if t["subtitulo"] == "Classes extintas: proventos")
+    assert tabela["linhas"] == [["VALE5", 2, date(2016, 3, 1), date(2025, 6, 2), 1]]
+    assert any("período analisado (pregões do IBOV): 2025-01-02 a 2026-10-21" in n for n in secao["notas"])

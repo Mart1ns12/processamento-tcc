@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(./.env)",
+      "Edit(./.env)",
+      "Edit(./extracao-dados-tcc-main/**)",
+      "Write(./extracao-dados-tcc-main/**)",
+      "Bash(python -m tcc_scraper:*)",
+      "Bash(tcc-scraper:*)",
+      "Bash(mysql:*)"
+    ]
+  }
+}

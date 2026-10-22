@@ -1,0 +1,9 @@
+# Exclusões decididas manualmente com a coleta em 22/10/2026 (ESPECIFICACAO.md, seção 3.4).
+# Classes extintas NÃO ficam aqui: são calculadas pelo other_codes de v1-raw_b3_cadastro.
+tickers_excluidos:            # fora do universo em TODAS as datas (viés de sobrevivência)
+  CRFB3: deslistada, sem preço nas fontes
+  SRNA3: deslistada, sem preço nas fontes
+  STBP3: deslistada, sem preço nas fontes
+cnpjs_sem_balanco:            # empresa fica no painel e no modelo; indicadores de balanço = indisponivel
+  "03847461000192": sem balanço nas fontes
+  "06057223000171": sem balanço nas fontes
