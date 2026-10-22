@@ -406,7 +406,7 @@ Todas as 23 informações da planilha (`docs/planilha_final.xlsx`; cálculos na 
 
 **Decisões da etapa 3 (22/10/2026)**
 - **Janelas:** contadas em pregões do calendário: d1 = 1, m1 = 21, m6 = 126, a1 = 252 (`parametros.yaml`, bloco `fase1`).
-- **Setor:** modo "empresa" (seção 5). Ação sem setor ou sem outra empresa no setor: `indisponivel`; há outras, mas nenhuma com valor: `historico_insuficiente`.
+- **Setor:** modo "empresa" (seção 5). Ação sem setor ou sem outra empresa no setor: `indisponivel`; há outras, mas nenhuma com valor: `historico_insuficiente`. Atualizado na etapa 4: conta cada empresa uma vez (ver D10).
 - **BDR:** entra no painel, fora dos pares (setor e `posicao_pct`).
 - **IPCA:** só meses fechados, sem rateio por dia. Na data d valem os meses anteriores ao mês de d; o acumulado da janela é o produto dos meses entre o último mês conhecido na base e o último conhecido em t. Ao vivo, nos primeiros ~10 dias do mês o IPCA fica defasado: por isso a saída informa `ipca_ate`.
 - **CDI:** entram as taxas com data em [base, t) (a taxa do dia d rende de d a d+1); a taxa de t não entra. `cdi_dia` = taxa da última data ≤ t.
@@ -416,9 +416,26 @@ Todas as 23 informações da planilha (`docs/planilha_final.xlsx`; cálculos na 
 - **Comparação com índices:** janelas d1, m1, m6 e a1.
 - Enquanto a coleta não completar os índices (seção 10), as janelas sem dados saem `historico_insuficiente`/`indisponivel`. Isso está correto, não é bug.
 
+**Decisões da etapa 4 (22/10/2026)**
+- **Janela do payout (D1):** proventos com `data_com` em (t − 12 meses, t], igual ao yield (`data_pagamento` está 95,6% vazia). Parâmetros no `parametros.yaml`, bloco `fundamentos`.
+- **Duas classes PN (D2):** média das classes PN que pagaram no evento × `qtd_pn` (limitação na seção 10).
+- **Ações da época (D3):** cada provento usa a linha de `v1-acoes_emitidas` com a maior `data_referencia` ≤ `data_com`; sem ela, a mais antiga disponível.
+- **Point-in-time das ações (D4):** uma linha de `v1-acoes_emitidas` só vale em t se o balanço do mesmo CNPJ com `data_fim_periodo` = `data_referencia` já foi entregue (`data_entrega` ≤ t).
+- **Bancos e seguradoras (D5):** pelo **subsetor** do cadastro ("Intermediários Financeiros" e "Previdência e Seguros"), não pelo setor. Margens, EBITDA e endividamento: `nao_se_aplica`.
+- **Patrimônio ≤ 0 (D6):** P/VP, ROE e DL/PL saem `nao_se_aplica`.
+- **Lucro 12m = 0 e payout com prejuízo (D7):** P/L com lucro zero: sem valor, `lucro_negativo`. Payout com lucro ≤ 0: sem valor, `lucro_negativo`.
+- **Sem provento na janela (D8):** yield e payout = 0,0 com `ok` (não pagar é um fato, não ausência de dado).
+- **BDR (D9):** P/L, P/VP, yield e payout `indisponivel` (a coleta não traz proventos de BDR e a razão BDR/ação é desconhecida); ROE, margens, EBITDA e endividamento calculados se houver balanço.
+- **Média do setor por empresa (D10, vale para as etapas 3 e 4):** exclui todas as ações do mesmo CNPJ e conta cada CNPJ uma vez (primeiro a média das ações da empresa com valor, depois a média entre empresas). Ticker sem CNPJ conta como empresa própria. A média só usa valores com status `ok`: no P/L, empresa com `lucro_negativo` não entra.
+- **Balanço de referência (D11):** o documento mais recente entregue até t. Os 12 meses exigem os 4 trimestres que terminam nele; senão `historico_insuficiente`.
+- **Valor de mercado (D12):** "só uma classe negociada" = só uma classe no cadastro. Classe do cadastro sem preço no dia: `indisponivel`.
+- **Proventos e mudança de ticker:** a `v1-mudancas_ticker` serve só para achar a empresa (CNPJ); a classe (ON/PN) sai do final do ticker **original** do provento. O yield (e a soma por ano e a lista do ticker) só usa proventos do ticker atual e de tickers antigos da **mesma classe** (ex.: ELET3 → AXIA3); em conversão de classe (ex.: CPLE6 PN → CPLE3 ON), o provento antigo fica fora do yield. O payout usa todas as classes ON e PN da empresa. Linha antiga da mesma classe que colide com uma do ticker atual (mesmo tipo e `data_com`) é descartada.
+- **Payout por ano:** usa o lucro líquido da própria DFP do exercício.
+- **Lista de proventos:** mostra o ticker atual.
+
 **Pendências internas por etapa**
 - **Etapa 7 (vindos da etapa 3, não implementados nela):** (a) `mercado_dia`: `fechamento` e `variacao_dia` de `IBOV`, `USDBRL` e `BRENT` (reusar `grade_de_precos` + `variacao(g_fech, 1)` de `processamento/fatos/precos.py`); (b) `series_diarias` (seção 8.3, pacote 4): `fechamento`, `indice_retorno_total` base 100 (`aj(t)/aj(início) × 100`), `volume`, para cada ação, `IBOV`, `SETOR:<nome>` e índices (`CDI`, `IPCA`, `IDIV`, `SMLL`, `IFIX`, `IVVB11`) em base 100 acumulada (reusar o acumulado de CDI/IPCA de `processamento/fatos/indices.py`). Os cálculos ficam em `processamento/fatos/` (funções puras com teste); a etapa 7 só empacota. **A decidir no plano da etapa 7:** como montar a série `SETOR:<nome>` (média dos retornos diários das ações do setor, encadeada em base 100, é o candidato) e o que fazer com ações que entram/saem do setor no meio da série.
-- **Etapa 4 (payout):** `v1-acoes_emitidas` só separa ON e PN. Em empresas com **duas classes PN** (ex.: USIM5 e USIM6), a quantidade de cada classe não é conhecida: o payout vai precisar de uma **regra de aproximação**, a decidir no plano da etapa 4.
+- **Etapa 4 (payout), resolvida:** `v1-acoes_emitidas` só separa ON e PN. Em empresas com **duas classes PN** (ex.: USIM5 e USIM6), a quantidade de cada classe não é conhecida: regra de aproximação D2 (decisões da etapa 4; limitação na seção 10).
 
 ---
 
@@ -434,6 +451,9 @@ Todas as 23 informações da planilha (`docs/planilha_final.xlsx`; cálculos na 
 | Autenticação, endereço e forma de envio da API | Equipe da API |
 | Manter o filtro da juíza desligado na coleta e informar quantas notícias do histórico ficaram sem julgamento | Coleta |
 | Validação do FinBERT: já feita pelo usuário; registrar os números (manchetes, % de acerto, por idioma) | Usuário |
+| Empresa com duas classes PN (ex.: USIM5/USIM6, BRKM5/BRKM6): `v1-acoes_emitidas` traz só o total de PN, então o payout usa, em cada provento, a média das classes PN que pagaram naquele evento × qtd_pn. É exato quando as classes pagam igual; limitação registrada no TCC. Resolve-se com a quantidade por classe | Coleta |
+| Balanço reapresentado: `v1-balancos` guarda só a última versão, com a sua `data_entrega`. Antes dessa data o período fica sem dado (`historico_insuficiente`); não há vazamento, mas a versão original não é recuperável. Limitação registrada no TCC. Resolve-se guardando as versões | Coleta |
+| Desdobramento ou bonificação entre o último balanço e t: o valor de mercado usa o preço já ajustado × a quantidade antiga de `v1-acoes_emitidas` e fica errado pelo fator. Limitação registrada no TCC. Pode ser conferido no futuro com `v1-raw_b3_suplemento` | Coleta |
 
 **Resolvidas em 22/10/2026** (as fontes não tinham os dados; não foi erro da coleta):
 - CRFB3, SRNA3 e STBP3 sem preço → removidas da análise (seção 3.4). Registrar no TCC como **viés de sobrevivência**.

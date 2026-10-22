@@ -31,3 +31,9 @@ fase1:
   beta_minimo: 120
   setor_minimo: 3
   setor_excluir: "empresa"  # "empresa" = tira todas as ações do mesmo CNPJ; "acao" = tira só a própria ação
+# Fase 1: fundamentos e proventos (seções 5 e 6 da especificação; plano da etapa 4).
+fundamentos:
+  subsetores_financeiros: ["Intermediários Financeiros", "Previdência e Seguros"]  # bancos e seguradoras (subsetor do v1-cadastro)
+  meses_janela: 12              # yield e payout: data_com em (t − 12 meses, t]
+  anos_payout: 5                # payout_por_ano: últimos N exercícios (DFP) entregues até t
+  anos_historico_proventos: 5   # soma por ano: ano de t e os N − 1 anteriores

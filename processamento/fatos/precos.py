@@ -244,6 +244,8 @@ def _outros_do_setor(t: str, pares: list[str], setor_de: dict, cnpj_de: dict, mo
 def media_setor(gr: Grade, pares: list[str], setor_de: dict, cnpj_de: dict, modo: str) -> Grade:
     """Média simples dos valores dos outros pares do setor de cada ticker.
 
+    No modo "empresa", cada CNPJ conta uma vez: primeiro a média das suas ações com valor,
+    depois a média entre empresas (ticker sem CNPJ conta como empresa à parte).
     Sem setor ou sem outro par: indisponivel. Outros pares existem mas nenhum tem valor: HIST.
     """
     _conferir_modo(modo)
@@ -253,6 +255,8 @@ def media_setor(gr: Grade, pares: list[str], setor_de: dict, cnpj_de: dict, modo
         outros = _outros_do_setor(t, pares, setor_de, cnpj_de, modo)
         if outros:
             bloco = gr.valor[outros]
+            if modo == "empresa":
+                bloco = bloco.T.groupby([cnpj_de.get(p) or p for p in outros], sort=False).mean().T
             cnt = bloco.notna().sum(axis=1).to_numpy()
             valor[t] = bloco.mean(axis=1)
             status[t] = pd.Series(np.select([cnt == 0], [HIST], default=OK), index=idx, dtype=object)

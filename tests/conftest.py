@@ -20,7 +20,9 @@ def pytest_collection_modifyitems(config, items):
 DADOS = Path(__file__).parent / "dados"
 ARQUIVOS = {"precos.csv": "v1-precos", "cadastro.csv": "v1-cadastro",
             "mudancas_ticker.csv": "v1-mudancas_ticker", "noticias.csv": "v1-noticias",
-            "raw_b3_cadastro.csv": "v1-raw_b3_cadastro", "indices.csv": "v1-indices"}
+            "raw_b3_cadastro.csv": "v1-raw_b3_cadastro", "indices.csv": "v1-indices",
+            "balancos.csv": "v1-balancos", "acoes_emitidas.csv": "v1-acoes_emitidas",
+            "proventos.csv": "v1-proventos"}
 
 
 @pytest.fixture
