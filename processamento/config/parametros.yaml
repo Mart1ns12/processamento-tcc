@@ -1,0 +1,24 @@
+# Horários da B3 (mercado à vista, sessão regular; fechamento = fim do call de fechamento).
+# Fonte: B3 — horários de negociação do mercado à vista, ajustados ao horário de verão dos EUA
+# (17h no horário de verão americano, 18h fora dele; troca na segunda-feira após a mudança nos EUA).
+# Conferido pelo usuário na B3 (22/10/2026): em 2025 o horário mais cedo valeu a partir de
+# 10/03/2025 e o normal voltou em 03/11/2025. A negociação contínua vai até 16:55/17:55 e o
+# leilão de fechamento termina às 17h/18h — o "fechamento" aqui é o fim do leilão.
+# Cada período vale de a_partir_de até o próximo.
+# HORAS E DATAS ENTRE ASPAS.
+fuso: "America/Sao_Paulo"
+corte_noite: "08:00"            # fim da janela da noite (seção 7.2 da especificação)
+horarios_b3_valido_ate: "2027-03-12"   # depois disso: erro, atualizar o arquivo
+horarios_b3:
+  - {a_partir_de: "2024-03-11", abertura: "10:00", fechamento: "17:00"}
+  - {a_partir_de: "2024-11-04", abertura: "10:00", fechamento: "18:00"}
+  - {a_partir_de: "2025-03-10", abertura: "10:00", fechamento: "17:00"}
+  - {a_partir_de: "2025-11-03", abertura: "10:00", fechamento: "18:00"}
+  - {a_partir_de: "2026-03-09", abertura: "10:00", fechamento: "17:00"}
+  - {a_partir_de: "2026-11-03", abertura: "10:00", fechamento: "18:00"}
+# Dias especiais: pregões com horário diferente do período (só o que muda: abertura e/ou fechamento).
+# Ex.: quarta-feira de cinzas. Copa de 2026: a B3 manteve o horário normal nos jogos do Brasil
+# (ex.: 29/06/2026; conferido pelo usuário), por isso nenhum dia da Copa entra aqui.
+dias_especiais:
+  "2025-03-05": {abertura: "13:00", motivo: "quarta-feira de cinzas"}
+  "2026-02-18": {abertura: "13:00", motivo: "quarta-feira de cinzas"}

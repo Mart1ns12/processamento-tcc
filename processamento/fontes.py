@@ -11,12 +11,17 @@ import functools
 import os
 import re
 from collections.abc import Callable, Mapping
+from datetime import date
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 import yaml
 from dotenv import load_dotenv
 from sqlalchemy import URL, Engine, create_engine, event, text
+from sqlalchemy.exc import SQLAlchemyError
+
+from processamento.tickers import aplicar_mudancas, parse_other_codes
 
 RAIZ = Path(__file__).resolve().parent.parent
 CAMINHO_MAPA = Path(__file__).resolve().parent / "config" / "fontes.yaml"
@@ -206,3 +211,426 @@ def executar_leitura(
         engine = _obter_engine_padrao()
     with engine.connect() as con:
         return pd.read_sql_query(text(limpo), con, params=params)
+
+
+# ---------------------------------------------------------------------------
+# Camada de leitura (Etapa 2, fase 2): lê as tabelas da coleta, confere o contrato
+# (`CONTRATO` + `valores_permitidos` do mapa) e devolve DataFrames prontos.
+# Só lê: nada aqui grava no banco. Todo `ler` injetado é `ler(sql, params=None)`.
+# ---------------------------------------------------------------------------
+
+SP = ZoneInfo("America/Sao_Paulo")
+
+
+class ErroLeitura(Exception):
+    """Dado do banco fora do contrato; mensagem legível."""
+
+
+CONTRATO = {
+    "precos": {
+        "datas": ["data"],
+        "numeros": ["abertura", "maxima", "minima", "fechamento", "fechamento_ajustado", "volume"],
+        "corte": "data",
+    },
+    "cadastro": {"datas": [], "numeros": ["unit_qtd_on", "unit_qtd_pn"], "corte": None},
+    "mudancas_ticker": {"datas": ["data_mudanca"], "numeros": [], "corte": None},
+    "balancos": {
+        "datas": ["data_inicio_periodo", "data_fim_periodo", "data_entrega"],
+        "numeros": [
+            "receita_liquida",
+            "lucro_bruto",
+            "lucro_liquido",
+            "patrimonio_liquido",
+            "ebit",
+            "depreciacao_amortizacao",
+            "emprestimos_curto_prazo",
+            "emprestimos_longo_prazo",
+            "caixa",
+            "aplicacoes_financeiras",
+        ],
+        "corte": "data_entrega",
+    },
+    "acoes_emitidas": {"datas": ["data_referencia"], "numeros": ["qtd_on", "qtd_pn"], "corte": None},
+    "proventos": {
+        "datas": ["data_com", "data_pagamento"],
+        "numeros": ["valor_por_acao"],
+        "corte": "data_com",
+    },
+    "indices": {"datas": ["data"], "numeros": ["valor"], "corte": "data"},
+    "noticias": {
+        "datas": ["data_publicacao"],
+        "numeros": ["prob_positivo", "prob_neutro", "prob_negativo", "qualidade"],
+        "iso_fuso": ["data_hora_publicacao", "data_hora_coleta"],
+        "corte": None,
+    },
+}
+TABELAS_COM_TICKER = {"precos", "proventos", "noticias"}
+_RE_ISO_FUSO = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})")
+_COLUNAS_TICKER = ("ticker", "ticker_antigo", "ticker_novo")
+
+
+def _ler_padrao(sql: str, params: dict | None = None) -> pd.DataFrame:
+    """Leitura padrão, pela conexão somente leitura da coleta (só sem `ler` injetado)."""
+    return executar_leitura(sql, params)
+
+
+def _data_texto(d) -> str:
+    """Data como texto 'AAAA-MM-DD', para usar como parâmetro de consulta."""
+    return pd.Timestamp(d).strftime("%Y-%m-%d")
+
+
+def _vazio_como_nulo(serie: pd.Series) -> pd.Series:
+    """Texto só com espaços vira nulo: ausência é NaN, nunca texto vazio."""
+    return serie.map(lambda v: None if isinstance(v, str) and not v.strip() else v)
+
+
+def tabela_existe(nome_real: str, ler: Callable[..., pd.DataFrame] | None = None) -> bool:
+    """Diz se a tabela existe no schema atual do banco."""
+    if ler is None:
+        ler = _ler_padrao
+    df = ler(
+        "SELECT COUNT(*) AS n FROM information_schema.TABLES "
+        "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :nome",
+        {"nome": nome_real},
+    )
+    return int(df["n"].iloc[0]) > 0
+
+
+def _conferir_tabela(tabela: str, ler: Callable[..., pd.DataFrame]) -> list[str]:
+    """Passo 2: confere se a tabela existe e tem as colunas do mapa. Devolve as colunas lógicas."""
+    ent = _entrada(tabela)
+    nome = ent["nome_real"]
+    ignoradas = set(ent.get("colunas_ignoradas", []))
+    colunas = [c for c in ent["colunas"] if c not in ignoradas]
+    try:
+        vazia = ler(f"SELECT * FROM {tabela_sql(tabela)} LIMIT 0")
+    except (SQLAlchemyError, pd.errors.DatabaseError) as erro:
+        # pandas embrulha o erro do SQLAlchemy em pandas.errors.DatabaseError
+        raise ErroLeitura(f"falha ao ler a tabela {nome} (não existe ou sem acesso)") from erro
+    presentes = set(vazia.columns)
+    for c in colunas:
+        if ent["colunas"][c] not in presentes:
+            raise ErroLeitura(f"tabela {nome} sem a coluna {ent['colunas'][c]}")
+    return colunas
+
+
+def _selecionar(
+    tabela: str,
+    colunas: list[str],
+    condicoes: list[str],
+    params: dict | None,
+    ler: Callable[..., pd.DataFrame],
+) -> pd.DataFrame:
+    """Passo 3: SELECT só das colunas pedidas, com alias lógico e filtros já montados."""
+    lista = ", ".join(f"{coluna_sql(tabela, c)} AS {citar(c)}" for c in colunas)
+    sql = f"SELECT {lista} FROM {tabela_sql(tabela)}"
+    if condicoes:
+        sql += " WHERE " + " AND ".join(condicoes)
+    return ler(sql, params)
+
+
+def _tratar(
+    tabela: str, df: pd.DataFrame, ler: Callable[..., pd.DataFrame], unir_mudancas: bool
+) -> pd.DataFrame:
+    """Passos 4 a 9: tipos, normalização, valores permitidos, mudanças de ticker, chave e ordem."""
+    ent = _entrada(tabela)
+    nome = ent["nome_real"]
+    ct = CONTRATO[tabela]
+    for c in list(df.columns):
+        df[c] = _vazio_como_nulo(df[c])
+    for c in ct.get("iso_fuso", []):
+        df[c] = para_sao_paulo_iso(df[c], f"{nome}.{c}")
+    for c in ct["datas"]:
+        original = df[c]
+        datas = pd.to_datetime(original, errors="coerce", format="ISO8601").dt.normalize()
+        invalido = original.notna() & datas.isna()
+        if invalido.any():
+            ex = original[invalido].iloc[0]
+            raise ErroLeitura(f"{nome}.{c}: {int(invalido.sum())} datas inválidas, ex.: {ex!r}")
+        df[c] = datas
+    for c in ct["numeros"]:
+        original = df[c]
+        numeros = pd.to_numeric(original, errors="coerce")
+        invalido = original.notna() & numeros.isna()
+        if invalido.any():
+            ex = original[invalido].iloc[0]
+            raise ErroLeitura(f"{nome}.{c}: {int(invalido.sum())} valores não numéricos, ex.: {ex!r}")
+        df[c] = numeros
+    for c in _COLUNAS_TICKER:
+        if c in df.columns:
+            df[c] = normalizar_ticker(df[c])
+    if "cnpj" in df.columns:
+        df["cnpj"] = normalizar_cnpj(df["cnpj"], f"{nome}.cnpj")
+    for c, permitidos in ent.get("valores_permitidos", {}).items():
+        fora = [v for v in df[c] if pd.notna(v) and v not in permitidos]
+        if fora:
+            raise ErroLeitura(f"{nome}.{c}: valor fora do contrato: {fora[0]!r}")
+    if unir_mudancas and tabela in TABELAS_COM_TICKER:
+        mudancas = mudancas_como_dict(ler_tabela("mudancas_ticker", ler=ler, unir_mudancas=False))
+        df = unir_historicos(df, mudancas, ent["chave"])
+    chave = ent["chave"]
+    repetida = df.duplicated(subset=chave, keep=False)
+    if repetida.any():
+        ex = df.loc[repetida, chave].iloc[0]
+        raise ErroLeitura(
+            f"{nome}: {int(repetida.sum())} linhas com chave repetida "
+            f"({', '.join(chave)}), ex.: {' / '.join(str(v) for v in ex)}"
+        )
+    return df.sort_values(chave).reset_index(drop=True)
+
+
+def ler_tabela(
+    tabela: str,
+    *,
+    desde: date | None = None,
+    ate: date | None = None,
+    ler: Callable[..., pd.DataFrame] | None = None,
+    unir_mudancas: bool = True,
+) -> pd.DataFrame:
+    """Lê uma tabela do contrato, confere o formato e devolve o DataFrame tratado.
+
+    `desde` e `ate` filtram pela coluna de corte do contrato (inclusivos). Com
+    `unir_mudancas`, os tickers antigos viram o código atual (só tabelas com ticker).
+    """
+    if tabela == "noticias":
+        raise ValueError("use ler_noticias")
+    if tabela not in CONTRATO:
+        raise ValueError(f"tabela {tabela} não tem contrato de leitura")
+    if ler is None:
+        ler = _ler_padrao
+    colunas = _conferir_tabela(tabela, ler)
+    condicoes: list[str] = []
+    params: dict[str, str] = {}
+    if desde is not None or ate is not None:
+        corte = CONTRATO[tabela]["corte"]
+        if corte is None:
+            raise ValueError(f"tabela {tabela} não tem coluna de corte para filtrar por período")
+        if desde is not None:
+            condicoes.append(f"{coluna_sql(tabela, corte)} >= :desde")
+            params["desde"] = _data_texto(desde)
+        if ate is not None:
+            condicoes.append(f"{coluna_sql(tabela, corte)} <= :ate")
+            params["ate"] = _data_texto(ate)
+    df = _selecionar(tabela, colunas, condicoes, params or None, ler)
+    return _tratar(tabela, df, ler, unir_mudancas)
+
+
+def ler_noticias(
+    *,
+    desde: date | None = None,
+    ate: pd.Timestamp | None = None,
+    ler: Callable[..., pd.DataFrame] | None = None,
+    unir_mudancas: bool = True,
+) -> pd.DataFrame:
+    """Lê `v1-noticias` na janela (seção 7.2) e devolve também `momento_ref` (horário de São Paulo).
+
+    `momento_ref` é `data_hora_publicacao`; sem ela, 23:59:59 do dia de `data_publicacao`.
+    O filtro grosso vai ao SQL pela data; o filtro fino é feito em `momento_ref`.
+    `ate` precisa ter fuso horário.
+    """
+    tabela = "noticias"
+    if ate is not None and pd.Timestamp(ate).tzinfo is None:
+        raise ValueError("ate precisa ter fuso horário")
+    if ler is None:
+        ler = _ler_padrao
+    ate_sp = pd.Timestamp(ate).tz_convert(SP) if ate is not None else None
+    colunas = _conferir_tabela(tabela, ler)
+    coluna_data = coluna_sql(tabela, "data_publicacao")
+    condicoes: list[str] = []
+    params: dict[str, str] = {}
+    if ate_sp is not None:
+        condicoes.append(f"{coluna_data} <= :ate_data")
+        params["ate_data"] = ate_sp.strftime("%Y-%m-%d")
+    if desde is not None:
+        condicoes.append(f"{coluna_data} >= :desde_menos_1")
+        params["desde_menos_1"] = _data_texto(pd.Timestamp(desde) - pd.Timedelta(days=1))
+    df = _selecionar(tabela, colunas, condicoes, params or None, ler)
+    df = _tratar(tabela, df, ler, unir_mudancas)
+    fim_do_dia = df["data_publicacao"].dt.tz_localize(SP) + pd.Timedelta(hours=23, minutes=59, seconds=59)
+    df["momento_ref"] = df["data_hora_publicacao"].fillna(fim_do_dia)
+    if ate_sp is not None:
+        df = df[df["momento_ref"] <= ate_sp]
+    if desde is not None:
+        df = df[df["momento_ref"] >= pd.Timestamp(desde).tz_localize(SP)]
+    return df.sort_values(["momento_ref", "id", "ticker"]).reset_index(drop=True)
+
+
+def ler_raw_b3_cadastro(ler: Callable[..., pd.DataFrame] | None = None) -> pd.DataFrame:
+    """Lê `v1-raw_b3_cadastro`: CNPJ normalizado e `other_codes` como lista de tickers."""
+    if ler is None:
+        ler = _ler_padrao
+    _conferir_tabela("raw_b3_cadastro", ler)
+    df = _selecionar("raw_b3_cadastro", ["cnpj", "issuing_company", "other_codes"], [], None, ler)
+    df["cnpj"] = normalizar_cnpj(_vazio_como_nulo(df["cnpj"]), "v1-raw_b3_cadastro.cnpj")
+    try:
+        df["other_codes"] = df["other_codes"].map(parse_other_codes)
+    except ValueError as erro:
+        raise ErroLeitura(f"v1-raw_b3_cadastro.other_codes: {erro}") from erro
+    return df
+
+
+def para_sao_paulo_iso(serie: pd.Series, rotulo: str) -> pd.Series:
+    """Converte texto ISO com fuso (ex.: '2025-10-17T17:00:00-03:00') para horário de São Paulo.
+
+    Texto sem fuso ou fora do formato levanta ErroLeitura. Nulo continua nulo (NaT).
+    """
+    fora = [v for v in serie if pd.notna(v) and not (isinstance(v, str) and _RE_ISO_FUSO.fullmatch(v))]
+    if fora:
+        raise ErroLeitura(f"{rotulo}: {len(fora)} valores fora do ISO com fuso, ex.: {fora[0]!r}")
+    return pd.to_datetime(serie, format="ISO8601", utc=True).dt.tz_convert(SP)
+
+
+def para_sao_paulo_de_utc(serie: pd.Series) -> pd.Series:
+    """Converte horário UTC sem fuso (ex.: `raw_articles.published_at`) para São Paulo."""
+    return pd.to_datetime(serie, format="ISO8601").dt.tz_localize("UTC").dt.tz_convert(SP)
+
+
+def normalizar_ticker(serie: pd.Series) -> pd.Series:
+    """Tira espaços, põe em maiúsculas e tira o sufixo '.SA' (ex.: ' petr4.sa ' -> 'PETR4')."""
+
+    def _um(v):
+        if v is None or (not isinstance(v, str) and pd.isna(v)):
+            return None
+        t = str(v).strip().upper()
+        if t.endswith(".SA"):
+            t = t[:-3]
+        return t or None
+
+    return serie.map(_um)
+
+
+def normalizar_cnpj(serie: pd.Series, rotulo: str) -> pd.Series:
+    """Deixa só os dígitos do CNPJ; comprimento diferente de 14 levanta ErroLeitura. Nulo segue nulo."""
+
+    def _um(v):
+        if v is None or (not isinstance(v, str) and pd.isna(v)):
+            return None
+        if isinstance(v, str) and not v.strip():
+            return None
+        digitos = re.sub(r"\D", "", str(v))
+        if len(digitos) != 14:
+            raise ErroLeitura(f"{rotulo}: CNPJ com {len(digitos)} dígitos (esperado 14): {v!r}")
+        return digitos
+
+    return serie.map(_um)
+
+
+def mudancas_como_dict(mudancas: pd.DataFrame) -> dict[str, str]:
+    """Monta {ticker antigo: ticker novo} a partir de `v1-mudancas_ticker`, ignorando linhas sem destino."""
+    antigos = normalizar_ticker(mudancas["ticker_antigo"])
+    novos = normalizar_ticker(mudancas["ticker_novo"])
+    return {
+        a: n
+        for a, n in zip(antigos, novos, strict=True)
+        if isinstance(a, str) and isinstance(n, str) and a != n
+    }
+
+
+def unir_historicos(df: pd.DataFrame, mudancas: dict[str, str], chave: list[str]) -> pd.DataFrame:
+    """Troca o ticker antigo pelo novo (`tickers.aplicar_mudancas`) e junta o histórico.
+
+    Se a linha trocada colidir com uma linha que já tinha o ticker novo na mesma chave,
+    fica a que já tinha o ticker novo. Repetições que não vêm de troca continuam no
+    DataFrame, para `ler_tabela` acusar a chave repetida.
+    """
+    original = df["ticker"]
+    novos = [aplicar_mudancas(t, mudancas) if isinstance(t, str) else t for t in original]
+    trocada = [isinstance(t, str) and n != t for t, n in zip(original, novos, strict=True)]
+    resultado = df.copy()
+    resultado["ticker"] = novos
+    chaves = [tuple(linha) for linha in resultado[chave].itertuples(index=False, name=None)]
+    fixas = {k for k, t in zip(chaves, trocada, strict=True) if not t}
+    manter = [not (t and k in fixas) for k, t in zip(chaves, trocada, strict=True)]
+    return resultado[manter].sort_values(chave).reset_index(drop=True)
+
+
+def intervalos_de_fotos(fotos: pd.DataFrame) -> pd.DataFrame:
+    """Transforma fotos de carteira (uma linha por carteira e ticker) em intervalos de permanência.
+
+    Entra na primeira carteira em que o ticker aparece. Sai na primeira em que some, com
+    data_fim = dia anterior a essa carteira. Se ainda está na última carteira, data_fim é
+    NaT (sem limite). Reentrada abre um novo intervalo.
+    """
+    presentes: dict[pd.Timestamp, set[str]] = {}
+    for d, t in zip(pd.to_datetime(fotos["data_carteira"]).dt.normalize(), fotos["ticker"], strict=True):
+        if isinstance(t, str):
+            presentes.setdefault(d, set()).add(t)
+    carteiras = sorted(presentes)
+    tickers = sorted({t for s in presentes.values() for t in s})
+    intervalos = []
+    for ticker in tickers:
+        inicio = None
+        for d in carteiras:
+            if ticker in presentes[d]:
+                if inicio is None:
+                    inicio = d
+            elif inicio is not None:
+                intervalos.append((ticker, inicio, d - pd.Timedelta(days=1)))
+                inicio = None
+        if inicio is not None:
+            intervalos.append((ticker, inicio, pd.NaT))
+    resultado = pd.DataFrame(intervalos, columns=["ticker", "data_inicio", "data_fim"])
+    return resultado.sort_values(["ticker", "data_inicio"]).reset_index(drop=True)
+
+
+def intervalos_de_cadastro(cadastro: pd.DataFrame, col_entrada: str, col_saida: str) -> pd.DataFrame:
+    """Um intervalo por linha: data_inicio = entrada, data_fim = saída (ambas inclusivas).
+
+    NaT em entrada ou saída quer dizer sem limite. Colunas ausentes levantam ErroLeitura.
+    """
+    faltando = [c for c in (col_entrada, col_saida) if c not in cadastro.columns]
+    if faltando:
+        raise ErroLeitura("cadastro sem as colunas de período: " + ", ".join(faltando))
+    inicio = pd.to_datetime(cadastro[col_entrada]).dt.normalize()
+    fim = pd.to_datetime(cadastro[col_saida]).dt.normalize()
+    resultado = pd.DataFrame(
+        {
+            "ticker": cadastro["ticker"].to_numpy(),
+            "data_inicio": inicio.to_numpy(),
+            "data_fim": fim.to_numpy(),
+        }
+    )
+    return resultado.sort_values(["ticker", "data_inicio"]).reset_index(drop=True)
+
+
+def _mudar_ticker(t, mudancas: dict[str, str]) -> str | None:
+    """Código atual de um ticker (ou None, se não há ticker)."""
+    return aplicar_mudancas(t, mudancas) if isinstance(t, str) else None
+
+
+def ler_composicao(
+    ler: Callable[..., pd.DataFrame] | None = None, existe: bool | None = None
+) -> pd.DataFrame | None:
+    """Intervalos de permanência no IBOV (ticker, data_inicio, data_fim) de `v1-composicao_ibov`.
+
+    Devolve None se a tabela ainda não existe na coleta. O formato (`intervalos`, `fotos`
+    ou `cadastro`) vem do `fontes.yaml`. Os tickers passam pelas mudanças de código.
+    """
+    if ler is None:
+        ler = _ler_padrao
+    ent = _entrada("composicao_ibov")
+    formato = ent.get("formato")
+    if formato not in ("intervalos", "fotos", "cadastro"):
+        raise ValueError(f"formato de composicao_ibov desconhecido: {formato!r}")
+    if formato != "cadastro":
+        if existe is None:
+            existe = tabela_existe(ent["nome_real"], ler)
+        if not existe:
+            return None
+    mudancas = mudancas_como_dict(ler_tabela("mudancas_ticker", ler=ler, unir_mudancas=False))
+    if formato == "cadastro":
+        cadastro = ler_tabela("cadastro", ler=ler)
+        intervalos = intervalos_de_cadastro(cadastro, "data_inicio", "data_fim")
+        intervalos["ticker"] = intervalos["ticker"].map(lambda t: _mudar_ticker(t, mudancas))
+    elif formato == "fotos":
+        bruto = _selecionar("composicao_ibov", ["data_carteira", "ticker"], [], None, ler)
+        bruto["ticker"] = normalizar_ticker(bruto["ticker"]).map(lambda t: _mudar_ticker(t, mudancas))
+        intervalos = intervalos_de_fotos(bruto)
+    else:
+        intervalos = _selecionar("composicao_ibov", ["ticker", "data_inicio", "data_fim"], [], None, ler)
+        intervalos["ticker"] = normalizar_ticker(intervalos["ticker"]).map(
+            lambda t: _mudar_ticker(t, mudancas)
+        )
+        for c in ("data_inicio", "data_fim"):
+            intervalos[c] = pd.to_datetime(intervalos[c]).dt.normalize()
+    return intervalos.sort_values(["ticker", "data_inicio"]).reset_index(drop=True)

@@ -1,0 +1,9 @@
+ticker,cnpj,empresa,setor,subsetor,tipo_acao,unit_qtd_on,unit_qtd_pn
+PETR3,33000167000101,PETROBRAS,Petroleo,Petroleo e gas,ON,,
+PETR4,33000167000101,PETROBRAS,Petroleo,Petroleo e gas,PN,,
+TAEE11,07859971000130,TAESA,Energia,Transmissao,UNIT,1,2
+ABEV3,07526557000100,AMBEV,Bebidas,Cervejas,ON,,
+NOVA3,11111111000111,EMPRESA NOVA,Varejo,Diversos,ON,,
+JBSS32,22222222000122,JBS,Alimentos,Carnes,BDR,,
+ITUB4,60872504000123,ITAU UNIBANCO,Financeiro,Bancos,PN,,
+CRFB3,,CARREFOUR,,Hipermercados,ON,,

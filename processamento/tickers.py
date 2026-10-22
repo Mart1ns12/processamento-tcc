@@ -10,6 +10,8 @@ import json
 import re
 from collections.abc import Iterable
 
+import pandas as pd
+
 _RE_CLASSE = re.compile(r"[0-9]+")
 _TIPO_POR_CLASSE = {
     3: "ON",
@@ -142,3 +144,28 @@ def classificar_classe(
     else:
         situacao = "extinta"
     return {"ticker_atual": t2, "cnpj": cnpj, "situacao": situacao}
+
+
+_COLUNAS_CLASSES = ["ticker", "ticker_atual", "cnpj", "tipo", "situacao", "ligacao"]
+
+
+def tabela_classes(
+    tickers: Iterable[str],
+    cadastro: dict[str, str | None],
+    tipos_cadastro: dict[str, str],
+    mudancas: dict[str, str],
+    codigos: dict[str, set[str]],
+) -> pd.DataFrame:
+    """Uma linha por código, ordenada por ticker: situação e ligação à empresa de cada um.
+
+    `tipo` vem do cadastro (pelo código atual); sem ele, da classe. Ausência = None, nunca 0 ou "".
+    """
+    linhas = []
+    for t in tickers:
+        info = classificar_classe(t, cadastro, mudancas, codigos)
+        t_atual = info["ticker_atual"]
+        cnpj, ligacao = ligar_a_cnpj(t, cadastro, mudancas)
+        tipo = tipos_cadastro.get(t_atual) or tipo_por_classe(classe(t_atual))
+        linhas.append((t, t_atual, cnpj, tipo, info["situacao"], ligacao))
+    df = pd.DataFrame(linhas, columns=_COLUNAS_CLASSES, dtype=object)
+    return df.sort_values("ticker").reset_index(drop=True)

@@ -1,0 +1,11 @@
+id,ticker,data_hora_publicacao,data_hora_coleta,titulo,fonte,link,prob_positivo,prob_neutro,prob_negativo,origem,papel,tipo_conteudo,evento,qualidade,data_publicacao,momento_pregao
+n000001,PETR4,2025-10-17T16:59:00-03:00,2026-09-07T17:38:43-03:00,Noticia n000001,Fonte exemplo,https://exemplo.invalid/n000001,0.2,0.5,0.3,google_news,,,,,2025-10-17,durante
+n000002,PETR4,2025-10-17T17:00:01-03:00,2026-09-07T17:38:43-03:00,Noticia n000002,Fonte exemplo,https://exemplo.invalid/n000002,0.2,0.5,0.3,google_news,,,,,2025-10-17,durante
+n000002,PETR3,2025-10-17T17:00:01-03:00,2026-09-07T17:38:43-03:00,Noticia n000002,Fonte exemplo,https://exemplo.invalid/n000002,0.2,0.5,0.3,google_news,,,,,2025-10-17,durante
+n000003,PETR3,2025-10-18T10:00:00-03:00,2026-09-07T17:38:43-03:00,Noticia n000003,Fonte exemplo,https://exemplo.invalid/n000003,0.2,0.5,0.3,google_news,,,,,2025-10-18,durante
+n000004,PETR4,2025-10-20T08:00:00-03:00,2026-09-07T17:38:43-03:00,Noticia n000004,Fonte exemplo,https://exemplo.invalid/n000004,0.2,0.5,0.3,google_news,,,,,2025-10-20,durante
+n000005,PETR4,2025-10-20T08:00:01-03:00,2026-09-07T17:38:43-03:00,Noticia n000005,Fonte exemplo,https://exemplo.invalid/n000005,0.2,0.5,0.3,google_news,,,,,2025-10-20,durante
+n000006,TAEE11,,2026-09-07T17:38:43-03:00,Noticia n000006,Fonte exemplo,https://exemplo.invalid/n000006,0.2,0.5,0.3,cvm_ipe,,,,,2025-10-17,durante
+n000007,TAEE11,,2026-09-07T17:38:43-03:00,Noticia n000007,Fonte exemplo,https://exemplo.invalid/n000007,0.2,0.5,0.3,cvm_ipe,,,,,2025-10-20,durante
+n000008,PETR4,2025-10-21T09:00:00-03:00,2026-09-07T17:38:43-03:00,Noticia n000008,Fonte exemplo,https://exemplo.invalid/n000008,0.2,0.5,0.3,google_news,,,,,2025-10-21,durante
+n000009,ELET3,2025-10-16T12:00:00-03:00,2026-09-07T17:38:43-03:00,Noticia n000009,Fonte exemplo,https://exemplo.invalid/n000009,0.2,0.5,0.3,google_news,,,,,2025-10-16,durante

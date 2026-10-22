@@ -84,6 +84,7 @@ auxiliares:
   composicao_ibov:            # pedida à coleta; ainda NÃO existe (seção 3.5)
     nome_real: v1-composicao_ibov
     opcional: true
+    formato: intervalos        # intervalos | fotos (colunas data_carteira, ticker) | cadastro
     colunas: {ticker: ticker, data_inicio: data_inicio, data_fim: data_fim}
   raw_b3_cadastro:            # códigos de negociação atuais por empresa (other_codes = lista JSON de tickers)
     nome_real: v1-raw_b3_cadastro
