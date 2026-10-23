@@ -65,7 +65,7 @@ processamento/
 ├── experimento/             # Fase 2
 │   ├── dataset.py           # variáveis + alvo (seção 7)
 │   ├── preparacao.py        # ranks e tratamento (mesma função no treino e na previsão)
-│   ├── treino.py            # walk-forward, modelos 1/2/3/3b
+│   ├── treino.py            # walk-forward, modelos 1/3/3b (o modelo 2 saiu em 23/10/2026, N2-A)
 │   ├── avaliacao.py         # acaso, bootstrap, top 5 (e top 3) × últimos 5, robustez por ano
 │   └── previsao.py          # top 5 do dia + motivos
 ├── saida/                   # pacotes da seção 8 (arquivo JSON hoje; API depois)
@@ -267,7 +267,8 @@ XGBoost, ponto de partida: `n_estimators=300, max_depth=3, learning_rate=0.03, s
 
 ### 7.5 Avaliação
 - **Walk-forward mensal** (treina no passado, testa no mês seguinte, avança), com **embargo de 1 pregão**.
-- **Conjunto de teste final** separado e usado **uma única vez**.
+- **Conjunto de teste final** separado e usado **uma única vez** (decidido em 23/10/2026, F1/F2): de **23/06/2026** até a **véspera da entrada da rotina diária em produção** (data fixada na etapa 8). Fica em `parametros.yaml`, `treino.teste_final.inicio` e `treino.teste_final.fim`; **`fim` vazio = trava ativa** (o teste final não roda). Enquanto isso, o treino usa só o período de desenvolvimento (antes de 23/06/2026, menos o pregão de embargo).
+- **Teste ao vivo:** os dados **depois do `fim`** formam um **segundo teste, independente**: o histórico do top 5 gravado no momento da geração (7.6 e 7.7), sem nenhuma escolha feita olhando esse período.
 - **Corte principal: top 5** (o que vai para a tela). Avaliar também o **top 3** com as mesmas métricas, para mostrar que o resultado não depende do corte.
 - Métricas: acerto do top 5 × **faixa do acaso** (10 mil sorteios aleatórios de 5 ações por dia, faixa de 95%); retorno médio do top 5 − IBOV; **top 5 × últimos 5**; AUC geral e AUC médio por pregão; IC por bootstrap em blocos de pregão; **robustez por ano**; se o universo for o atual, **análise de sensibilidade** (último ano × anteriores).
 - **Teste extra "notícia depois do fechamento" (pedido em 23/10/2026; implementar na etapa 6):** recalcular as variáveis de notícias usando **só as notícias com hora real** (`precisao_hora = 'hora'`) e **só a noite** (do fechamento de t até 08:00 de t+1; `inicio_janela = "fechamento"`), e comparar com o modelo 3 na mesma validação. Mede o efeito das notícias publicadas depois do fechamento. Amostra pequena (~9% das notícias têm hora real, ~47% delas na noite): informar as contagens e tratar como exploratório.
@@ -285,7 +286,7 @@ XGBoost, ponto de partida: `n_estimators=300, max_depth=3, learning_rate=0.03, s
 - **Qual modelo gera o top 5:** o **modelo 3** (com as notícias do dia e da noite, até 08:00 de t+1), porque é ele que testa a hipótese do TCC. Ele é mostrado mesmo que não supere o acaso: o selo "em avaliação" e o histórico existem para isso.
 - **Comparação ao vivo:** todo dia, gravar também (sem mostrar na tela) o top 5 do **modelo 1** (sem notícias) e o da **regra da volatilidade**. Assim, o histórico mostra, com dados de verdade e daqui para frente, se as notícias fazem diferença.
 - **Retreino mensal:** no primeiro dia útil de cada mês, treinar de novo com todo o histórico até o fim do mês anterior (o mesmo esquema do walk-forward). Os hiperparâmetros só mudam numa nova avaliação completa, nunca no retreino automático.
-- **Arquivo do modelo:** salvar em `modelos/xgb-AAAA-MM.json`, com um arquivo de metadados ao lado: variáveis usadas, período de treino, hiperparâmetros, métricas da validação, universo (`composicao_atual` ou histórica) e um hash do dataset. O `modelo_versao` do pacote `experimento_top` aponta para esse arquivo.
+- **Arquivo do modelo:** salvar em `modelos/xgb-AAAA-MM.json`, com um arquivo de metadados ao lado: variáveis usadas, período de treino, hiperparâmetros, métricas da validação, universo (`composicao_atual` ou histórica) e um hash do dataset. O `modelo_versao` do pacote `experimento_top` aponta para esse arquivo (nome **sem o dia**; o exemplo da 8.3 é acertado na etapa 7). O modelo 1, usado no top 5 sombra, vai em `modelos/xgb-m1-AAAA-MM.json` (F17).
 - **Antes do histórico completo:** o modelo pode ser treinado com o 1 ano atual **só para testar a rotina** (top 5 marcado com aviso "modelo provisório"; `valido_para_historico = false`). O modelo "oficial" e o histórico que vale para o TCC começam quando o histórico completo chegar.
 
 ---
@@ -461,6 +462,28 @@ Todas as 23 informações da planilha (`docs/planilha_final.xlsx`; cálculos na 
 - **N1-A Meia-noite do Pacífico (23/10/2026):** notícias com 00:00:00 em Los Angeles (04:00/05:00 de SP; ~89% das notícias) viram "só data" na camada de leitura (`fontes.aplicar_regra_so_data`, coluna `precisao_hora`), em `v1-noticias` e `raw_articles`. `raw_articles.published_precision` não ajuda: marca `date` só nos documentos da CVM (as 131.616 de meia-noite vêm como `datetime`). Pedido de horário real à coleta na seção 10.
 - **N2-A Janela única (23/10/2026):** colunas `noticias_dia_*` na janela 08:00:01 de t → 08:00 do próximo pregão; `noticias_pregao_tom` e o modelo 2 saem; `experimento.inicio_janela` no `parametros.yaml`.
 - **Horários da B3 antes de 03/2024:** ainda não cadastrados; com o histórico de 5 anos o código para com aviso, e os horários de 2021–2024 serão cadastrados quando o histórico chegar.
+
+**Decisões da etapa 6 (23/10/2026; plano completo, com os casos de teste, em `docs/plano_etapa6.md`)**
+Com ~1 ano de histórico, a etapa 6 é **só teste de funcionamento** (3.4): o relatório gerado abre com o aviso "TESTE DE FUNCIONAMENTO, NÃO É RESULTADO", e nenhum número dele vale como conclusão.
+- **F1 Teste final:** de 23/06/2026 (período nunca olhado; jan–jun/2026 já foram vistos na avaliação da v1) até a véspera da entrada em produção (etapa 8), em `treino.teste_final.inicio`/`fim`. `fim` vazio = trava ativa. Depois do `fim`: teste ao vivo (7.5).
+- **F2 Trava:** o teste final só roda com `fim` preenchido, `treino.teste_final.liberado: true`, a opção `--teste-final` **e** sem o registro `docs/teste_final_usado.json` (criado no uso; uso único). No modo desenvolvimento, as linhas a partir de `inicio` e o pregão de embargo antes dele saem logo na leitura; no modo teste final, as linhas depois do `fim` também.
+- **F3 Avaliação do teste final:** walk-forward mensal dentro do período, com a configuração (colunas e hiperparâmetros) congelada nos metadados do desenvolvimento, como no retreino da 7.7.
+- **F4 Linhas:** todos os modelos usam só as linhas a partir do início da cobertura de notícias (hoje 01/08/2025), para comparar o modelo 1 com o 3 nas mesmas linhas.
+- **F5 Walk-forward:** treino mínimo de 3 meses; cada dobra testa um mês. O treino tem todos os pregões antes do 1º dia de teste, **menos o imediatamente anterior** (embargo de 1 pregão: o alvo dele olha o 1º dia de teste).
+- **F6 Blocos complementares (7.4):** os de preço são escolhidos no modelo 1 e herdados pelo 3; o de notícias (`tom_setor`, `tom_mercado`) é testado só no 3. Um bloco entra se o AUC médio por pregão subir mais de 0,005.
+- **F7 Grade:** `max_depth` {2, 3} × `min_child_weight` {50, 200} sobre o ponto de partida da 7.4, escolhida no modelo 3 **só nas dobras de desenvolvimento** e aplicada a todos os XGBoost. As métricas de desenvolvimento ficam otimistas (escolha e medida nas mesmas dobras): o número honesto é o do teste final.
+- **F8 Desempate do top k:** score decrescente, depois ticker crescente. "Últimos k" = os k finais da mesma ordem.
+- **F9 Faixa do acaso:** 10 mil sorteadores, com semente fixa, cada um sorteando k ações por pregão; faixa = percentis 2,5 e 97,5 da taxa de acerto **do período**. Uma faixa só para todos os modelos (as linhas são as mesmas).
+- **F10 Regra da volatilidade:** ações mais calmas primeiro (score = 1 − rank da `volatilidade_20d`); volatilidade vazia = score neutro 0,5.
+- **F11 Regressão logística:** mediana + indicador de vazio, padronização, C = 1, as mesmas colunas do modelo 3.
+- **F12 Modelo 3b:** as previsões do modelo 3 avaliadas só nos dias de resultado (AUC do 3 × do 1, dentro e fora desses dias), sem treino separado.
+- **F13 `alvo_abertura`:** coluna nova `alvo_abertura_valido` no dataset (abertura do IBOV em t+1 ≠ fechamento em t). As mesmas previsões são avaliadas só nos dias válidos (seção 10).
+- **F14 Teste "hora real na noite" (7.5):** versão de dataset `hora_real_noite` (`precisao_hora = 'hora'` e `inicio_janela = "fechamento"`). Exploratório: a `mudanca_tom` fica quase toda vazia.
+- **F15 Bootstrap:** circular, em blocos de 5 pregões, 2000 reamostragens.
+- **F16 Calibração e chance:** ECE com 10 faixas; aprovada se ECE ≤ 0,02 com pelo menos 5000 linhas. A chance só é exibida com calibração aprovada **e** `liberar_chance: true` (decisão manual); até lá sai `valor: null`, `exibir: false`, `status: calibracao_nao_conferida` (o exemplo da 8.3 é acertado na etapa 7).
+- **F17 Modelos salvos:** `modelos/xgb-AAAA-MM.json` (modelo 3) e `modelos/xgb-m1-AAAA-MM.json` (modelo 1, top 5 sombra), cada um com `.meta.json` (colunas, período de treino, hiperparâmetros, semente, métricas, universo, sha256 do dataset, versões das bibliotecas). Antes do histórico completo: `provisorio: true`, treinados só com o desenvolvimento.
+- **F18 Semente:** uma só, `20261023`, em tudo (XGBoost com `n_jobs=1`, sorteios, bootstrap, logística).
+- **F19 Saídas:** `saida/experimento/treino/dev-<data do dataset>/` (fora do git): `relatorio.md`, `metricas.json`, previsões e resumos diários. O treino lê só os CSV do dataset (nunca o banco).
 
 **Pendências internas por etapa**
 - **Etapa 7 (vindos da etapa 3, não implementados nela):** (a) `mercado_dia`: `fechamento` e `variacao_dia` de `IBOV`, `USDBRL` e `BRENT` (reusar `grade_de_precos` + `variacao(g_fech, 1)` de `processamento/fatos/precos.py`); (b) `series_diarias` (seção 8.3, pacote 4): `fechamento`, `indice_retorno_total` base 100 (`aj(t)/aj(início) × 100`), `volume`, para cada ação, `IBOV`, `SETOR:<nome>` e índices (`CDI`, `IPCA`, `IDIV`, `SMLL`, `IFIX`, `IVVB11`) em base 100 acumulada (reusar o acumulado de CDI/IPCA de `processamento/fatos/indices.py`). Os cálculos ficam em `processamento/fatos/` (funções puras com teste); a etapa 7 só empacota. **A decidir no plano da etapa 7:** como montar a série `SETOR:<nome>` (média dos retornos diários das ações do setor, encadeada em base 100, é o candidato) e o que fazer com ações que entram/saem do setor no meio da série.
