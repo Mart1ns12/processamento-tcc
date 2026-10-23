@@ -208,7 +208,7 @@ __marimo__/
 
 # --- processamento do TCC ---
 .env
-saida/
-modelos/
+/saida/
+/modelos/
 # código da extração: outro repositório, só consulta
 extracao-dados-tcc-main/

@@ -1,6 +1,6 @@
 # ESPECIFICAÇÃO DO MÓDULO DE PROCESSAMENTO (fonte da verdade)
 
-> Versão de 21/10/2026. Este arquivo descreve **só o que vale hoje** e deve ser seguido na implementação.
+> Versão de 23/10/2026. Este arquivo descreve **só o que vale hoje** e deve ser seguido na implementação.
 > O porquê das decisões, os resultados antigos e o histórico ficam em `HISTORICO.md` (consulte só quando precisar justificar algo).
 > Se algo aqui conflitar com o `HISTORICO.md`, **vale este arquivo**.
 
@@ -61,16 +61,20 @@ processamento/
 │   ├── precos.py            # cotação, variação, rentabilidade, volume, volatilidade, beta, comparações
 │   ├── fundamentos.py       # 12 meses, P/L, P/VP, ROE, margens, EBITDA, endividamento, payout
 │   ├── proventos.py         # yield, histórico por ano
-│   └── noticias.py          # resumo do tom e manchetes do dia
+│   ├── series.py            # séries base 100
+│   ├── multiplos.py         # P/L, P/VP e yield diários
+│   └── noticias.py          # notícias da janela do painel (resumo do tom e manchetes do dia)
 ├── experimento/             # Fase 2
 │   ├── dataset.py           # variáveis + alvo (seção 7)
 │   ├── preparacao.py        # ranks e tratamento (mesma função no treino e na previsão)
 │   ├── treino.py            # walk-forward, modelos 1/3/3b (o modelo 2 saiu em 23/10/2026, N2-A)
 │   ├── avaliacao.py         # acaso, bootstrap, top 5 (e top 3) × últimos 5, robustez por ano
 │   └── previsao.py          # top 5 do dia + motivos
-├── saida/                   # pacotes da seção 8 (arquivo JSON hoje; API depois)
+├── saida/                   # pacotes da seção 8 (arquivo JSON hoje; API depois): contrato.py (validador),
+│                            # insumos.py (leitura cortada), textos.py, pacotes_*.py, gerar.py (python -m processamento.saida)
 └── rotina.py                # gatilho diário (seção 4)
 tests/                       # na raiz do projeto (pytest.ini: testpaths = tests); fixtures em tests/dados/
+registros/experimento/       # na raiz do projeto (versionável): top 5 do dia e resultado (S11)
 ```
 
 **Decisões de estrutura (22/10/2026):**
@@ -287,7 +291,7 @@ XGBoost, ponto de partida: `n_estimators=300, max_depth=3, learning_rate=0.03, s
 - **Qual modelo gera o top 5:** o **modelo 3** (com as notícias do dia e da noite, até 08:00 de t+1), porque é ele que testa a hipótese do TCC. Ele é mostrado mesmo que não supere o acaso: o selo "em avaliação" e o histórico existem para isso.
 - **Comparação ao vivo:** todo dia, gravar também (sem mostrar na tela) o top 5 do **modelo 1** (sem notícias) e o da **regra da volatilidade**. Assim, o histórico mostra, com dados de verdade e daqui para frente, se as notícias fazem diferença.
 - **Retreino mensal:** no primeiro dia útil de cada mês, treinar de novo com todo o histórico até o fim do mês anterior (o mesmo esquema do walk-forward). Os hiperparâmetros só mudam numa nova avaliação completa, nunca no retreino automático.
-- **Arquivo do modelo:** salvar em `modelos/xgb-AAAA-MM.json`, com um arquivo de metadados ao lado: variáveis usadas, período de treino, hiperparâmetros, métricas da validação, universo (`composicao_atual` ou histórica) e um hash do dataset. O `modelo_versao` do pacote `experimento_top` aponta para esse arquivo (nome **sem o dia**; o exemplo da 8.3 é acertado na etapa 7). O modelo 1, usado no top 5 sombra, vai em `modelos/xgb-m1-AAAA-MM.json` (F17).
+- **Arquivo do modelo:** salvar em `modelos/xgb-AAAA-MM.json`, com um arquivo de metadados ao lado: variáveis usadas, período de treino, hiperparâmetros, métricas da validação, universo (`composicao_atual` ou histórica) e um hash do dataset. O `modelo_versao` do pacote `experimento_top` aponta para esse arquivo (nome sem o dia, como no exemplo da 8.3). O modelo 1, usado no top 5 sombra, vai em `modelos/xgb-m1-AAAA-MM.json` (F17).
 - **Antes do histórico completo:** o modelo pode ser treinado com o 1 ano atual **só para testar a rotina** (top 5 marcado com aviso "modelo provisório"; `valido_para_historico = false`). O modelo "oficial" e o histórico que vale para o TCC começam quando o histórico completo chegar.
 
 ---
@@ -312,6 +316,12 @@ Enquanto a API não existe, o processamento **gera os mesmos pacotes como arquiv
 | Textos prontos | Opcionais, em campos `texto` (ex.: `"mais calma que 96% das ações"`). O número sempre vem junto; a interface pode usar um ou outro |
 | Chave de gravação | Cada pacote declara a chave (`data_referencia` + `ticker` etc.). A API grava por **upsert**: reenviar substitui, nunca duplica |
 | Metadados | Todo pacote tem `gerado_em` e `dados_ate` (até quando os dados da coleta vão) |
+| Folha | Todo número de indicador vai como `{"valor": ..., "status": ...}`. `ok` exige valor; valor nulo exige status ≠ `ok`; valor com status ≠ `ok` só em `lucro_negativo`. **Exceção: o `series_diarias` usa o formato compacto (item 4 da 8.3)** |
+| Janelas do pacote | A interface mostra 1m, 6m e 1a: `series_diarias` leva os últimos 253 pregões até t; `fundamentos_trimestrais`, os 8 trimestres mais recentes de cada ação; `proventos` e `proventos_por_ano`, 5 anos (ano de t e os 4 anteriores); `experimento_historico`, tudo desde a produção. Os cálculos usam o histórico inteiro; só o pacote é cortado |
+| `status` da chance | `ok` ou `calibracao_nao_conferida` (só no `chance` do `experimento_top`) |
+| Arquivos | Um arquivo por pacote em `saida/AAAA-MM-DD/<pacote>.json` (D = dia da rotina), com envelope `{pacote, versao_contrato, chave, gerado_em, dados_ate, registros, removidos}`; cada registro repete os metadados |
+| Datas de referência | D = dia da rotina = pregão previsto; t = último pregão antes de D. `mercado_dia`, `resumo_acao`, `noticias_dia` usam t; `experimento_top` e `execucao` usam D; `dados_ate` = 08:00 de D |
+| Envio "quando muda" | `acoes`, `fundamentos_trimestrais`, `proventos` e `series_diarias` comparam com o estado do último envio (`saida/estado/`): só vai o novo ou alterado; o que sumiu vai em `removidos`; série com ponto antigo alterado vai inteira com `substituir_serie: true` |
 
 ### 8.2 Os pacotes
 
@@ -320,7 +330,7 @@ Enquanto a API não existe, o processamento **gera os mesmos pacotes como arquiv
 | 1 | `acoes` | ação | `ticker` | Quando muda (cadastro) | Nome, setor, tipo de ação, busca |
 | 2 | `mercado_dia` | dia | `data_referencia` | Todo dia | Faixa do mercado: Ibovespa, dólar, Brent, CDI |
 | 3 | `resumo_acao` | ação × dia | `data_referencia` + `ticker` | Todo dia | O card da ação: todos os indicadores da Fase 1 (valor atual) |
-| 4 | `series_diarias` | ação (ou índice) × dia | `ticker` + `data` | Todo dia (dia novo); **reenvio da série inteira** da ação que teve dividendo, desdobramento ou bonificação (o ajustado do passado muda) | Gráficos de preço, rentabilidade, comparação com Ibovespa, setor e índices, volume |
+| 4 | `series_diarias` | ação (ou índice) × dia | `ticker` + `data` | Todo dia (dia novo); **reenvio da série inteira** (`substituir_serie: true`) quando algum ponto antigo dentro da janela muda: desdobramento, bonificação, reapresentação de balanço ou histórico estendido (dividendo não muda o índice dos dias anteriores à data-ex; ver 8.3) | Gráficos de preço, rentabilidade, comparação com Ibovespa, setor e índices, volume |
 | 5 | `fundamentos_trimestrais` | ação × trimestre | `ticker` + `data_fim_periodo` | Quando sai balanço novo | Gráficos de margens, ROE, EBITDA, endividamento |
 | 6 | `proventos` | provento | `ticker` + `tipo` + `data_com` | Quando há provento novo | Histórico de dividendos (tabela e barras por ano) |
 | 7 | `noticias_dia` | ação × dia | `data_referencia` + `ticker` | Todo dia | Manchetes com rótulo e resumo do tom |
@@ -332,7 +342,7 @@ Enquanto a API não existe, o processamento **gera os mesmos pacotes como arquiv
 
 **1. `acoes`:** `ticker`, `empresa`, `setor`, `subsetor`, `tipo_acao` (ON, PN, UNIT, BDR), `ativo_no_universo` (bool).
 
-**2. `mercado_dia`:** `data_referencia`, e para `IBOV`, `USDBRL`, `BRENT`: `fechamento`, `variacao_dia`; `cdi_dia` (fração ao dia); `ipca_12m`; `ipca_ate` (último mês de IPCA usado, `AAAA-MM`, para a interface mostrar "IPCA até <mês>").
+**2. `mercado_dia`:** cada número é uma folha `{valor, status}` (8.1). `data_referencia` (t); `IBOV`, `USDBRL`, `BRENT`: `{fechamento, variacao_dia, unidade}`; `cdi_dia` (fração ao dia) e `cdi_data`; `ipca_12m`; `ipca_ate` (último mês de IPCA usado, `AAAA-MM`); `indices`: `{CDI, IPCA, IDIV, SMLL, IFIX, IVVB11}` × `{d1, m1, m6, a1}` (o % de cada índice por período, igual para todas as ações).
 
 **3. `resumo_acao`** (um objeto por indicador, sempre com `valor`, `status` e, quando faz sentido, `setor`, `posicao_pct` e `texto`):
 - `cotacao`: `fechamento`, `variacao_dia`
@@ -343,57 +353,66 @@ Enquanto a API não existe, o processamento **gera os mesmos pacotes como arquiv
 - `beta`: `valor`, `status`
 - `pl`, `pvp`, `roe`, `dividend_yield`, `payout`, `margem_bruta`, `margem_liquida`: `valor`, `setor` (média do setor sem a própria empresa), `status`
 - `payout_por_ano`: lista (`ano`, `valor`, `status`) dos últimos anos, para o gráfico de barras do payout
-- `ebitda`: `valor_12m`, `margem`, `setor_margem`, `status`
-- `endividamento`: `divida_liquida`, `dl_pl`, `dl_ebitda`, `caixa_liquido` (bool), `setor_dl_pl`, `setor_dl_ebitda`, `status`
+- `ebitda`: `valor_12m`, `margem`, `setor_margem`, cada um com o seu `status`, e `rotulo` ("EBITDA (cálculo padrão CVM)")
+- `endividamento`: `divida_liquida`, `dl_pl`, `dl_ebitda`, `caixa_liquido` (bool), `setor_dl_pl`, `setor_dl_ebitda`, cada um com o seu `status`, e `aviso` ("Dívida líquida sem arrendamentos.")
 - `setor_comparacao_fraca` (bool: setor com menos de 3 empresas)
 - `balanco_referencia`: `data_fim_periodo` e `data_entrega` do balanço usado
 
-**4. `series_diarias`:** `ticker`, `data`, `fechamento` (sem dividendos), `indice_retorno_total` (base 100 no início da série, com dividendos), `volume`. Também para `IBOV`, para cada setor (`SETOR:<nome>`, média de todas as ações do setor; **no gráfico, a linha do setor inclui a própria ação**, diferente dos valores do `resumo_acao`, que a excluem; diferença pequena, registrada como decisão) e para os índices (`CDI`, `IPCA`, `IDIV`, `SMLL`, `IFIX`, `IVVB11`), em base 100 acumulada. **A interface recorta o período e "parte do mesmo ponto" dividindo pelo primeiro valor do recorte.** Campo `substituir_serie: true` quando a série inteira da ação está sendo reenviada.
+Acréscimos: `proventos_por_ano` (soma por ano, 5 anos, com `ano`, `valor` e `status`); textos prontos (campo `texto`) em `volume.relativo`, `volatilidade_20d`, `beta` e `pl` (prejuízo).
 
-**5. `fundamentos_trimestrais`:** `ticker`, `data_fim_periodo`, `data_entrega`, `receita_trimestre`, `receita_12m`, `lucro_liquido_trimestre`, `lucro_liquido_12m`, `margem_bruta`, `margem_liquida`, `roe`, `ebitda_trimestre` (para o gráfico de barras por trimestre), `ebitda_12m`, `margem_ebitda`, `divida_liquida`, `dl_pl`, `dl_ebitda`, `payout_12m`, cada um com `status`. Margens, ROE e payout são sempre de 12 meses.
+**4. `series_diarias`** (formato compacto, só neste pacote): um registro por série com `ticker`, `tipo` (`acao`, `etf`, `indice`, `taxa`, `setor`), `nome`, `substituir_serie`, `inicio_janela`, `datas` (lista crescente, sem repetir), `valores` (uma lista por campo, do mesmo tamanho de `datas`, número ou `null`) e `status` (por campo, só para os pontos que não são `ok`, em trechos `{de, ate, status}` contíguos e sem sobreposição; `null` ⇔ coberto por um trecho; valor coberto por trecho só com `lucro_negativo`). Campos por tipo: ação: `fechamento`, `indice_retorno_total` (com dividendos), `volume`, `pl`, `pvp`, `dividend_yield` (point-in-time, mesmas regras e status do `resumo_acao`); `IVVB11`: fechamento, índice, volume; `IBOV`, `IDIV`, `SMLL`, `IFIX`: fechamento (pontos) e índice; `CDI`, `IPCA`: índice base 100 acumulado (CDI: taxas com data < d; IPCA: meses fechados até K(d)); `SETOR:<nome>`: índice e `n_empresas` (sem status). Números sem arredondar. **Janela:** só os últimos 253 pregões até t (`inicio_janela` = o 1º deles); a API apaga os pontos da série com data anterior a `inicio_janela`, e o ponto que sai pelo corte não conta como mudança. **Base 100 com âncora fixa** no 1º dia da série no histórico inteiro (o 1º valor enviado em geral não é 100); o pacote não rebaseia no início da janela, porque isso mudaria todos os pontos todo dia (reenvio inteiro diário) e exigiria três versões (1m, 6m, 1a). **Setor:** média igual por empresa dos retornos diários das ações ON, PN e UNIT do setor (BDR fora), **incluindo a própria**, com preço no dia e no pregão anterior, encadeada em base 100; dia sem nenhuma: ponto vazio (`indisponivel`) e a cadeia segue do último valor. A divisão de dois pontos dá a rentabilidade da janela do `resumo_acao`/`mercado_dia`. **A interface recorta o período e parte do mesmo ponto dividindo pelo primeiro valor do recorte.** Reenvio da série inteira (`substituir_serie: true`) quando algum ponto antigo dentro da janela muda (desdobramento, bonificação, reapresentação de balanço, histórico estendido); dividendo não muda o índice dos dias anteriores à data-ex. Envio diário: o mesmo formato só com as datas novas.
 
-**6. `proventos`:** `ticker`, `tipo` (DIVIDENDO, JCP), `data_com`, `data_pagamento`, `valor_por_acao`. A soma por ano a interface faz (ou vem pronta em `resumo_acao`).
+**5. `fundamentos_trimestrais`:** `ticker`, `data_fim_periodo`, `data_entrega`, `receita_trimestre`, `receita_12m`, `lucro_liquido_trimestre`, `lucro_liquido_12m`, `margem_bruta`, `margem_liquida`, `roe`, `ebitda_trimestre` (para o gráfico de barras por trimestre), `ebitda_12m`, `margem_ebitda`, `divida_liquida`, `dl_pl`, `dl_ebitda`, `payout_12m`, cada um com `status`. Margens, ROE e payout são sempre de 12 meses. Só os 8 trimestres mais recentes de cada ação (os mais antigos saem em `removidos`).
 
-**7. `noticias_dia`:** `data_referencia`, `ticker`, `resumo` (`quantidade`, `positivas`, `neutras`, `negativas`, `tom_medio`) e `itens` (lista: `id`, `titulo`, `fonte`, `link`, `publicado_em`, `rotulo` = maior das 3 probabilidades, `prob_positivo`, `prob_neutro`, `prob_negativo`, `janela` = `pregao` / `noite` / `sem_horario`, `destaque` = ordem para "principais manchetes"). Critério do `destaque`: primeiro as notícias em que a empresa é protagonista (juíza: `papel = protagonista`, quando houver), depois a força do tom (\|positivo − negativo\|) e por fim a mais recente.
+**6. `proventos`:** `ticker`, `tipo` (DIVIDENDO, JCP), `data_com`, `data_pagamento`, `valor_por_acao`. A soma por ano a interface faz (ou vem pronta em `resumo_acao`). Só os proventos com data-com no ano de t ou nos 4 anteriores.
 
-**8. `experimento_top`:** lista `ranking` com as **5** ações (posição 1 a 5), cada uma com chance, motivos e notícias usadas.
+**7. `noticias_dia`:** `data_referencia` (t), `ticker`, `janela_inicio`/`janela_fim` (08:00:01 de t até 08:00 de D, a mesma janela do modelo), `resumo` (`quantidade`, `positivas`, `neutras`, `negativas`, `tom_medio`, em folhas) e `itens` (`id`, `titulo`, `fonte`, `link`, `publicado_em`, `data_publicacao`, `precisao_hora`, `rotulo`, `prob_*`, `janela` = `pregao` (inclui a pré-abertura de t) / `noite` / `sem_horario` (sem hora real, inclusive "só data"), `destaque`, `status`). Rótulo: maior das 3 probabilidades; empate com o neutro, ou positivo = negativo, vira neutro. Destaque: protagonista primeiro, depois |positivo − negativo| e depois a mais recente. Sem notícia: quantidade 0 e `tom_medio` `nao_se_aplica`; antes do início da cobertura: tudo `indisponivel`.
+
+**8. `experimento_top`:** lista `ranking` com as **5** ações (posição 1 a 5), cada uma com chance, motivos (com texto) e notícias usadas.
 ```json
 {
   "versao_contrato": "1.0",
-  "data_referencia": "2026-06-22",
-  "pregao_previsto": "2026-06-22",
-  "gerado_em": "2026-06-22T09:12:00-03:00",
-  "dados_ate": "2026-06-22T08:00:00-03:00",
+  "gerado_em": "2026-11-03T09:12:00-03:00",
+  "dados_ate": "2026-11-03T08:00:00-03:00",
+  "data_referencia": "2026-11-03",
+  "pregao_previsto": "2026-11-03",
+  "pregao_base": "2026-10-30",
   "valido_para_historico": true,
-  "modelo_versao": "xgb-2026-11-01",
+  "modelo_versao": "xgb-2026-11",
+  "modelo_provisorio": false,
   "universo": "composicao_atual",
+  "n_candidatas": 84,
   "selo": "em_avaliacao",
+  "titulo": "5 ações com maior chance de superar o Ibovespa (experimento)",
+  "aviso_fixo": "Não constitui recomendação de investimento.",
   "avisos": [],
   "ranking": [
     {
       "posicao": 1,
       "ticker": "CMIG4",
-      "chance": {"valor": 0.54, "media": 0.50, "exibir": false},
+      "chance": {"valor": null, "media": 0.5, "exibir": false, "status": "calibracao_nao_conferida"},
       "motivos": [
-        {"fator": "tom_noticias_noite", "valor": 0.42, "efeito": "ajudou", "texto": "Notícias da noite com tom positivo (3 notícias)"},
-        {"fator": "retorno_5d", "valor": -0.031, "efeito": "ajudou", "texto": "Caiu mais que a média nos últimos 5 dias"}
+        {"fator": "noticias_dia_tom", "valor": 0.42, "efeito": "ajudou", "texto": "Notícias do último pregão e da noite com tom positivo (3 notícias)"},
+        {"fator": "ret_5d", "valor": -0.031, "efeito": "ajudou", "texto": "Caiu 3,1% nos últimos 5 pregões (abaixo da média das ações)"}
       ],
-      "noticias_usadas": ["n000123", "n000124"]
+      "noticias_usadas": ["n000123", "n000124", "n000125"]
     }
   ]
 }
 ```
-(valores ilustrativos) `valido_para_historico = false` se for gerado depois das 10h. `chance.exibir` só vira `true` depois que a calibração for conferida.
+(valores ilustrativos; 02/11 é feriado, por isso o pregão base é 30/10.) `valido_para_historico = true` só com modelo não provisório, gerado até as 10h de D e D depois do fim do teste final (`treino.teste_final.fim`). `chance.valor` fica `null` (`calibracao_nao_conferida`) até a calibração ser aprovada **e** `liberar_chance: true` (F16); então vem o número, com `exibir: true` e `status: "ok"`. `modelo_versao` aponta para `modelos/xgb-AAAA-MM.json` (sem o dia). Os fatores dos motivos são os nomes das colunas do dataset (seção 7.3), com o valor bruto; os textos falam da janela única do modelo (08:00:01 de t até 08:00 de D: "último pregão e noite"). As sombras (modelo 1 e regra da volatilidade) e as probabilidades ficam só no registro interno (`registros/experimento/`), não no pacote.
 
-**9. `experimento_historico`:** por dia: `data_referencia`, `ranking` (os 5 tickers), `resultado` (para cada um: `retorno`, `retorno_ibov`, `superou`), `acertos_dia` (0 a 5), `acertos_top3` (0 a 3, só para a avaliação). E um resumo: `periodo_inicio`, `periodo_fim`, `n_dias`, `taxa_acerto`, `acaso_media`, `acaso_faixa` (`[min, max]` de 95%), `universo`, `nota` (ex.: "Histórico calculado com as ações que compõem o Ibovespa atualmente.").
+**9. `experimento_historico`:** `data_referencia` (dia fechado); `dia` (`ranking`, `resultado` com `retorno`, `retorno_ibov`, `superou` de cada ação, `acertos_dia`, `acertos_top3`, `resultado_incompleto`, `taxa_acumulada`) ou `null`; `resumo` (`periodo_inicio`, `periodo_fim`, `n_dias`, `taxa_acerto`, `acaso_media`, `acaso_faixa`, `universo`, `nota`). Só entram dias com `valido_para_historico = true` e pregão previsto depois de `treino.teste_final.fim`; até a produção, `n_dias = 0` e a nota explica. O resultado de cada dia é gravado uma vez (`registros/experimento/AAAA-MM-DD.resultado.json`) e nunca recalculado.
 
-**10. `execucao`:** `data_referencia`, `rodada`, `inicio`, `fim`, `status` (`ok`, `parcial`, `falhou`), `coleta_status` (o que se leu do painel da coleta), `pacotes_enviados`, `avisos` (lista de textos).
+**10. `execucao`:** `data_referencia` (D), `rodada`, `inicio`, `fim`, `status` (`em_andamento`, `ok`, `parcial`, `falhou`), `coleta_status` (o que se leu do painel da coleta; vazio até a etapa 8), `pacotes_enviados` (`pacote`, `arquivo`, `registros`, `removidos`), `avisos`.
 
 ### 8.4 Cobertura da planilha (conferida item a item)
-Todas as 23 informações da planilha (`docs/planilha_final.xlsx`; cálculos na seção 5) têm origem num pacote: Top 5 e detalhes → `experimento_top` (+ `resumo_acao` e `noticias_dia`); Histórico do experimento → `experimento_historico`; Volume total, volume relativo, volatilidade, beta, cotação, variação do preço, rentabilidade, P/L, P/VP, ROE, yield, payout, margens, EBITDA e endividamento (valor atual) → `resumo_acao`; comparação com Ibovespa, setor e índices, gráficos de preço, rentabilidade e volume → `series_diarias` (+ `resumo_acao` para os % de cada período); gráficos trimestrais de margens, ROE, EBITDA e endividamento → `fundamentos_trimestrais`; gráfico do payout por ano → `resumo_acao.payout_por_ano`; dividend yield (barras) e histórico de dividendos → `proventos`; tom das notícias → `noticias_dia`.
+Todas as 23 informações da planilha (`docs/planilha_final.xlsx`; cálculos na seção 5) têm origem num pacote: Top 5 e detalhes → `experimento_top` (+ `resumo_acao` e `noticias_dia`); Histórico do experimento → `experimento_historico`; Volume total, volume relativo, volatilidade, beta, cotação, variação do preço, rentabilidade, P/L, P/VP, ROE, yield, payout, margens, EBITDA e endividamento (valor atual) → `resumo_acao`; comparação com Ibovespa, setor e índices, gráficos de preço, rentabilidade e volume → `series_diarias` (+ `resumo_acao` para os % de cada período); gráficos trimestrais de margens, ROE, EBITDA e endividamento → `fundamentos_trimestrais`; gráfico do payout por ano → `resumo_acao.payout_por_ano`; dividend yield (barras) e histórico de dividendos → `proventos`; tom das notícias → `noticias_dia`. Comparação com índices: o % de cada índice por período vem em `mercado_dia.indices` (igual para todas as ações). P/L, P/VP e yield ao longo do tempo: `series_diarias` (pontos das ações). Linha do acerto acumulado do experimento: `experimento_historico.dia.taxa_acumulada`. As séries trazem 1 ano (253 pregões: 252 variações, para o gráfico de 1 ano bater com a `rentabilidade.a1`), os trimestres 8 e os proventos 5 anos.
 
 ### 8.5 Ordem diária de envio
 1. `execucao` (início) → 2. `acoes` (se mudou) → 3. `series_diarias` → 4. `mercado_dia` → 5. `resumo_acao` → 6. `fundamentos_trimestrais` e `proventos` (se mudaram) → 7. `noticias_dia` → 8. `experimento_historico` (fecha o dia anterior) → 9. `experimento_top` (antes das 10h) → 10. `execucao` (fim).
+
+Nomes dos arquivos: `execucao.json`, `acoes.json`, `series_diarias.json`, `mercado_dia.json`, `resumo_acao.json`, `fundamentos_trimestrais.json`, `proventos.json`, `noticias_dia.json`, `experimento_historico.json`, `experimento_top.json` (o `execucao.json` é regravado no fim da rodada). Cada pacote é validado antes de gravar; reprovado, não é gravado e a rodada fica `parcial`.
 
 ### 8.6 O que fica para a equipe da API e do banco decidir
 - Autenticação, endereço e se o envio é um pacote por chamada ou em lote.
@@ -481,14 +500,36 @@ Com ~1 ano de histórico, a etapa 6 é **só teste de funcionamento** (3.4): o r
 - **F13 `alvo_abertura`:** coluna nova `alvo_abertura_valido` no dataset (abertura do IBOV em t+1 ≠ fechamento em t). As mesmas previsões são avaliadas só nos dias válidos (seção 10).
 - **F14 Teste "hora real na noite" (7.5):** versão de dataset `hora_real_noite` (`precisao_hora = 'hora'` e `inicio_janela = "fechamento"`). Exploratório: a `mudanca_tom` fica quase toda vazia.
 - **F15 Bootstrap:** circular, em blocos de 5 pregões, 2000 reamostragens.
-- **F16 Calibração e chance:** ECE com 10 faixas; aprovada se ECE ≤ 0,02 com pelo menos 5000 linhas. A chance só é exibida com calibração aprovada **e** `liberar_chance: true` (decisão manual); até lá sai `valor: null`, `exibir: false`, `status: calibracao_nao_conferida` (o exemplo da 8.3 é acertado na etapa 7).
+- **F16 Calibração e chance:** ECE com 10 faixas; aprovada se ECE ≤ 0,02 com pelo menos 5000 linhas. A chance só é exibida com calibração aprovada **e** `liberar_chance: true` (decisão manual); até lá sai `valor: null`, `exibir: false`, `status: calibracao_nao_conferida` (como no exemplo da 8.3).
 - **F17 Modelos salvos:** `modelos/xgb-AAAA-MM.json` (modelo 3) e `modelos/xgb-m1-AAAA-MM.json` (modelo 1, top 5 sombra), cada um com `.meta.json` (colunas, período de treino, hiperparâmetros, semente, métricas, universo, sha256 do dataset, versões das bibliotecas). Antes do histórico completo: `provisorio: true`, treinados só com o desenvolvimento.
 - **F18 Semente:** uma só, `20261023`, em tudo (XGBoost com `n_jobs=1`, sorteios, bootstrap, logística).
 - **F19 Saídas:** `saida/experimento/treino/dev-<data do dataset>/` (fora do git): `relatorio.md`, `metricas.json`, previsões e resumos diários. O treino lê só os CSV do dataset (nunca o banco).
 
+**Decisões da etapa 7 (23/10/2026; plano completo, com os casos de teste, em `docs/plano_etapa7.md`)**
+- **S1 Datas:** D = dia da rotina (pregão previsto); t = último pregão antes de D. Fase 1 e notícias com `data_referencia = t`; `experimento_top` e `execucao` com D; `dados_ate` = 08:00 de D.
+- **S2 Folha:** todo número de indicador em `{valor, status}`; cadastro pode ter texto nulo sem status.
+- **S3 Arquivos:** um por pacote em `saida/D/`, com envelope de lote; cada registro com os metadados.
+- **S4 Quando muda:** comparação com o estado do último envio (`saida/estado/`); `substituir_serie` quando um ponto antigo muda; `removidos` para o que sumiu; sem estado, vai tudo.
+- **S5 Setor:** média por empresa dos retornos diários (preço em t e no pregão anterior) das ações ON/PN/UNIT do setor, inclusive a própria; BDR fora; dia sem retorno = ponto vazio e a cadeia segue.
+- **S6 Índices base 100:** CDI com as taxas de datas < d; IPCA com meses fechados até K(d); lacuna = `indisponivel` dali em diante.
+- **S7 % dos índices** em `mercado_dia.indices`.
+- **S8 P/L, P/VP e yield diários** em `series_diarias`, calculados por trechos entre entregas de balanço (`fatos/multiplos.py`).
+- **S9 Notícias do painel:** mesma janela do modelo; rótulo com empate = neutro; destaque protagonista → força do tom → mais recente.
+- **S10 Top 5:** modelo do mês de D ou o mais recente anterior (com aviso); válido só com modelo oficial, até as 10h e depois do fim do teste final; sombras e probabilidades só no registro.
+- **S11 Registro do top 5** em `registros/experimento/` (versionável). Com `treino.teste_final.fim` preenchido (produção), é de uso único: gravado na 1ª geração e nunca sobrescrito, e a rodada repetida do mesmo dia reconstrói o pacote do registro. Com `fim` vazio (testes de funcionamento), cada rodada gera de novo e sobrescreve o registro do dia.
+- **S12 Histórico vazio até a produção;** nenhum dia do teste final é fechado.
+- **S13 Validador próprio** (`saida/contrato.py`), sem dependência nova.
+- **S14 Textos prontos** (`saida/textos.py`), com `tom_neutro = 0,05` e as faixas do beta.
+- **S15 Acréscimos no `resumo_acao`:** `proventos_por_ano`, `ebitda.rotulo`, `endividamento.aviso`; sem status de grupo.
+- **S16 `ativo_no_universo`** = candidata do experimento em t (tipo aceito, não excluída, na composição), mesmo sem preço no dia.
+- **S17 Ponto de entrada** `python -m processamento.saida --data D`; a etapa 8 chama `gerar(...)` como função.
+- **S18 Bloco `saida`** no `parametros.yaml` (limite das 10h, pastas, `tom_neutro`).
+- **S19 Janelas do pacote:** a interface mostra 1m, 6m e 1a. `series_diarias` (inclusive P/L, P/VP e yield diários) com os últimos 253 pregões até t; base 100 sem rebasear (âncora no 1º dia da série; a interface divide pelo 1º valor do recorte); `inicio_janela` em cada série, e o ponto que sai pelo corte não dispara `substituir_serie`; `fundamentos_trimestrais` com os 8 trimestres mais recentes; `proventos` e `proventos_por_ano` com 5 anos; `experimento_historico` sem corte. As contas usam o histórico inteiro; P/L, P/VP e yield por trechos só nos 253 pregões (~8 s por rodada).
+- **S20 Formato compacto só no `series_diarias`:** `datas` + `valores` (listas paralelas) + `status` em trechos `{de, ate, status}` só para os pontos que não são `ok`; números sem arredondar (2,6 MB no 1º envio com 253 pontos, contra 8,0 MB em folhas; ~47 KB por dia). Os outros pacotes seguem com a folha.
+
 **Pendências internas por etapa**
-- **Etapa 7 (vindos da etapa 3, não implementados nela):** (a) `mercado_dia`: `fechamento` e `variacao_dia` de `IBOV`, `USDBRL` e `BRENT` (reusar `grade_de_precos` + `variacao(g_fech, 1)` de `processamento/fatos/precos.py`); (b) `series_diarias` (seção 8.3, pacote 4): `fechamento`, `indice_retorno_total` base 100 (`aj(t)/aj(início) × 100`), `volume`, para cada ação, `IBOV`, `SETOR:<nome>` e índices (`CDI`, `IPCA`, `IDIV`, `SMLL`, `IFIX`, `IVVB11`) em base 100 acumulada (reusar o acumulado de CDI/IPCA de `processamento/fatos/indices.py`). Os cálculos ficam em `processamento/fatos/` (funções puras com teste); a etapa 7 só empacota. **A decidir no plano da etapa 7:** como montar a série `SETOR:<nome>` (média dos retornos diários das ações do setor, encadeada em base 100, é o candidato) e o que fazer com ações que entram/saem do setor no meio da série.
 - **Etapa 4 (payout), resolvida:** `v1-acoes_emitidas` só separa ON e PN. Em empresas com **duas classes PN** (ex.: USIM5 e USIM6), a quantidade de cada classe não é conhecida: regra de aproximação D2 (decisões da etapa 4; limitação na seção 10).
+- **Etapa 8 (vindos da etapa 7):** (a) o calendário só conhece pregões passados: a rotina precisa saber se D é pregão (lista de feriados da B3 no `parametros.yaml` ou checagem no dia seguinte, com o dia descartado pelo `fechar_dia`); (b) checagem diária da seção 6 (poucas ações, retorno > 30%, volume zero, preço parado, indicador vazio) como avisos do `execucao`; (c) fixar `treino.teste_final.fim`, rodar o teste final uma vez e ligar o histórico ao vivo; (d) retreino mensal (`xgb-AAAA-MM`); (e) limpar `registros/experimento/` dos testes de funcionamento antes da produção; (f) medir o tempo da rodada contra o prazo das 9h45.
 
 ---
 

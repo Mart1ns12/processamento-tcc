@@ -18,7 +18,7 @@ import yaml
 
 SP = ZoneInfo("America/Sao_Paulo")
 CAMINHO_PARAMETROS = Path(__file__).resolve().parent / "config" / "parametros.yaml"
-_CHAVES_DE_TOPO = {"fuso", "corte_noite", "horarios_b3_valido_ate", "horarios_b3", "dias_especiais", "fase1", "fundamentos", "experimento", "treino"}
+_CHAVES_DE_TOPO = {"fuso", "corte_noite", "horarios_b3_valido_ate", "horarios_b3", "dias_especiais", "fase1", "fundamentos", "experimento", "treino", "saida"}
 _CHAVES_PERIODO = {"a_partir_de", "abertura", "fechamento"}
 _CHAVES_ESPECIAL = {"abertura", "fechamento", "motivo"}
 _RE_HORA = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")

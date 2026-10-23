@@ -76,3 +76,10 @@ treino:
   motivos_qtd: 3
   motivos_limiar: 0.01              # |contribuição| (escala log-odds) até isto = "neutro"
   calibracao: {bins: 10, ece_maximo: 0.02, linhas_minimas: 5000, liberar_chance: false}
+# Saída: pacotes JSON da seção 8 (plano da etapa 7). HORAS E CAMINHOS ENTRE ASPAS.
+saida:
+  limite_valido_historico: "10:00"          # top 5 gerado depois disso: valido_para_historico = false (seção 4)
+  pasta: "saida"                            # saida/AAAA-MM-DD/ (fora do git)
+  pasta_estado: "saida/estado"              # último envio dos pacotes "quando muda"
+  pasta_registros: "registros/experimento"  # top 5 do dia e resultado (uso único; S11)
+  tom_neutro: 0.05                          # |tom| até isto = "tom neutro" nos textos
