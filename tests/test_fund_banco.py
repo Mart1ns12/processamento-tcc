@@ -72,10 +72,11 @@ def test_ticker_sem_balanco_tem_pl_indisponivel(resumo):
         assert _status(r, ticker, "pl.valor") == INDISPONIVEL
 
 
-def test_petr4_sem_ebitda_nem_divida_liquida_e_pl_ok_ou_prejuizo(resumo):
+def test_petr4_com_ebitda_e_divida_liquida_e_pl_ok_ou_prejuizo(resumo):
+    # Desde 22/10/2026 a coleta preenche ebit, D&A, empréstimos, caixa e aplicações
     r, _, _ = resumo
-    assert _status(r, "PETR4", "ebitda.valor_12m") == INDISPONIVEL
-    assert _status(r, "PETR4", "endividamento.divida_liquida") == INDISPONIVEL
+    assert _status(r, "PETR4", "ebitda.valor_12m") == OK
+    assert _status(r, "PETR4", "endividamento.divida_liquida") == OK
     assert _status(r, "PETR4", "pl.valor") in (OK, LUCRO_NEGATIVO)
 
 

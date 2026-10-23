@@ -214,6 +214,42 @@ def test_indicadores_empresa_d_com_divida():
     _par(r["endividamento.caixa_liquido"], 0.0, OK)
 
 
+def _foto_divida(emp_cp, emp_lp, aplic=50.0):
+    """PL 1000, caixa 100, EBIT 12m 200 + D&A 50 (EBITDA 250); empréstimos e aplicações dados."""
+    return _foto_a_mao(
+        fluxo={"ebit": (200.0, OK), "depreciacao_amortizacao": (50.0, OK)},
+        estoque={
+            "patrimonio_liquido": (1000.0, OK),
+            "emprestimos_curto_prazo": (emp_cp, OK),
+            "emprestimos_longo_prazo": (emp_lp, OK),
+            "caixa": (100.0, OK),
+            "aplicacoes_financeiras": (aplic, OK),
+        },
+    )
+
+
+def test_emprestimos_cp_e_lp_zero_juntos_viram_indisponivel():
+    r = indicadores_empresa(_foto_divida(0.0, 0.0), (NAN, INDISPONIVEL), (NAN, INDISPONIVEL), False)
+    for chave in ("endividamento.divida_liquida", "endividamento.dl_pl",
+                  "endividamento.dl_ebitda", "endividamento.caixa_liquido"):
+        _par(r[chave], None, INDISPONIVEL)
+    _par(r["ebitda.valor_12m"], 250.0, OK)  # o EBITDA não depende dos empréstimos
+
+
+@pytest.mark.parametrize("emp_cp, emp_lp, aplic, dl", [
+    (0.0, 500.0, 50.0, 350.0),   # só o CP = 0: vale (0 + 500 − 100 − 50)
+    (300.0, 0.0, 50.0, 150.0),   # só o LP = 0: vale (300 + 0 − 100 − 50)
+    (300.0, 500.0, 0.0, 700.0),  # aplicações = 0: vale (300 + 500 − 100 − 0)
+])
+def test_um_emprestimo_zero_ou_aplicacoes_zero_continuam_valendo(emp_cp, emp_lp, aplic, dl):
+    r = indicadores_empresa(_foto_divida(emp_cp, emp_lp, aplic), (NAN, INDISPONIVEL),
+                            (NAN, INDISPONIVEL), False)
+    _par(r["endividamento.divida_liquida"], dl, OK)
+    _par(r["endividamento.dl_pl"], dl / 1000.0, OK)
+    _par(r["endividamento.dl_ebitda"], dl / 250.0, OK)
+    _par(r["endividamento.caixa_liquido"], 0.0, OK)
+
+
 def test_indicadores_empresa_d2_caixa_liquido():
     foto = foto_balanco(D2, CNPJ["D"], T, EXCL)
     r = indicadores_empresa(foto, (900.0, OK), (0.0, OK), False)

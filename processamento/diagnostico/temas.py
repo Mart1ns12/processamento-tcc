@@ -15,6 +15,7 @@ from processamento import fontes
 from processamento.diagnostico.esperado import (
     AMOSTRA_FUSO_POR_ANO,
     ETAPAS_COLETA,
+    ETAPAS_EXECUCAO_MANUAL,
     HORAS_DAILY_UTC,
     IDIOMAS,
     MACROS_PRECOS,
@@ -866,10 +867,28 @@ def secao_painel(ler, mapa: dict, existentes: set) -> dict:
         adicionar_tabela(secao, "Etapas do painel", ["etapa_id", "ordem", "status", "n"],
                          _registros(df_eta, ("etapa_id", "ordem", "status", "n")))
         ids = {texto(x) for x in df_eta["etapa_id"]} - {None}
-        desconhecidas = valores_fora_da_lista(ids, ETAPAS_COLETA)
+        desconhecidas = valores_fora_da_lista(ids, ETAPAS_COLETA + ETAPAS_EXECUCAO_MANUAL)
         if desconhecidas:
             secao["divergencias"].append(
                 div("etapa_desconhecida", _nome(mapa, "painel_etapas"), ", ".join(desconhecidas)))
+        manuais = sorted(ids & set(ETAPAS_EXECUCAO_MANUAL))
+        if manuais:
+            secao["notas"].append(f"etapas de execuções manuais (fora do daily): {', '.join(manuais)}")
+            if _existe(mapa, existentes, "painel_execucoes"):
+                x = lambda c: _col(mapa, "painel_execucoes", c)
+                lista = ", ".join(f"'{m}'" for m in manuais)
+                df_md = ler(
+                    f"SELECT e.{g('etapa_id')} AS etapa_id, COUNT(*) AS n "
+                    f"FROM {ETA} e JOIN {_tab(mapa, 'painel_execucoes')} x "
+                    f"ON x.{x('id')} = e.{g('execucao_id')} "
+                    f"WHERE x.{x('tipo')} = 'daily' AND e.{g('etapa_id')} IN ({lista}) "
+                    f"GROUP BY etapa_id"
+                )
+                no_daily = sorted(texto(v) for v in df_md["etapa_id"])
+                if no_daily:
+                    secao["divergencias"].append(div(
+                        "etapa_manual_no_daily", _nome(mapa, "painel_etapas"),
+                        f"etapas de execução manual dentro de um daily: {', '.join(no_daily)}"))
         if "entrega" not in ids:
             secao["divergencias"].append(div(
                 "etapa_entrega_ausente", _nome(mapa, "painel_etapas"),

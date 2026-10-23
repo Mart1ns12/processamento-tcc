@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 
 from processamento import fontes
-from processamento.diagnostico.esperado import ETAPAS_COLETA
+from processamento.diagnostico.esperado import ETAPAS_COLETA, ETAPAS_EXECUCAO_MANUAL
 from processamento.diagnostico.temas import (
     montar_sql_formato_iso,
     secao_noticias,
@@ -113,6 +113,41 @@ def test_secao_painel_cron_e_manual_viram_notas(mapa):
     assert secao["divergencias"] == []
     assert any("14h: 2" in n for n in secao["notas"])
     assert any("manual" in n for n in secao["notas"])
+
+
+def _ler_painel_com_manuais(etapas_no_daily):
+    """Dublê com as etapas da coleta + cvm_itr_dfp/build_entrega (execução manual)."""
+    base = _ler_painel_factory(pd.DataFrame({"origem": ["cron"], "hora": [11], "n": [30]}))
+    etapas = ETAPAS_COLETA + ETAPAS_EXECUCAO_MANUAL
+
+    def _ler(sql):
+        if " JOIN " in sql:
+            assert "'daily'" in sql
+            return pd.DataFrame({"etapa_id": etapas_no_daily, "n": [1] * len(etapas_no_daily)})
+        if "etapa_id" in sql:
+            return pd.DataFrame({
+                "etapa_id": etapas,
+                "ordem": list(range(1, len(etapas) + 1)),
+                "status": ["concluida"] * len(etapas),
+                "n": [1] * len(etapas),
+            })
+        return base(sql)
+    return _ler
+
+
+def test_secao_painel_etapas_manuais_fora_do_daily_viram_nota(mapa):
+    secao = secao_painel(_ler_painel_com_manuais([]), mapa,
+                         {"v1-painel_execucoes", "v1-painel_etapas"})
+    assert secao["divergencias"] == []
+    assert any("build_entrega, cvm_itr_dfp" in n for n in secao["notas"])
+
+
+def test_secao_painel_etapa_manual_dentro_do_daily_e_divergencia(mapa):
+    secao = secao_painel(_ler_painel_com_manuais(["cvm_itr_dfp"]), mapa,
+                         {"v1-painel_execucoes", "v1-painel_etapas"})
+    temas = [d["tema"] for d in secao["divergencias"]]
+    assert temas == ["etapa_manual_no_daily"]
+    assert "cvm_itr_dfp" in secao["divergencias"][0]["detalhe"]
 
 
 def test_secao_painel_cron_so_na_agenda_nao_gera_nota_fora_da_agenda(mapa):

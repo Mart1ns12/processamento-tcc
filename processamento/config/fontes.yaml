@@ -45,7 +45,8 @@ tabelas:
     coluna_entidade: cnpj
     valores_permitidos:
       tipo_documento: [DFP, ITR]
-    colunas_vazias_conhecidas: [ebit, depreciacao_amortizacao, emprestimos_curto_prazo, emprestimos_longo_prazo, caixa, aplicacoes_financeiras]
+    # ebit, D&A, empréstimos, caixa e aplicações: parciais desde 22/10/2026 (como lucro_bruto);
+    # sem lista de vazias conhecidas, a regra geral só acusa se voltarem a ficar 100% vazias
   acoes_emitidas:
     nome_real: v1-acoes_emitidas
     chave: [cnpj, data_referencia]

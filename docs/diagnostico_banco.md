@@ -1,6 +1,6 @@
 # Diagnóstico do banco da coleta (só leitura)
 
-- Gerado em: 2026-10-22 12:05 (America/Sao_Paulo)
+- Gerado em: 2026-10-22 23:06 (America/Sao_Paulo)
 - Banco: tcc_scraper
 - MySQL: 8.0.46-0ubuntu0.24.04.4
 - Comando: `python -m processamento.diagnostico`
@@ -518,23 +518,25 @@ Nenhuma divergência encontrada.
 | v1-balancos | lucro_bruto | 740 | 72 | 9.7 | parcial | 0 | 2 |
 | v1-balancos | lucro_liquido | 740 | 37 | 5 | parcial | 0 | 1 |
 | v1-balancos | patrimonio_liquido | 740 | 19 | 2.6 | parcial | 0 | 1 |
-| v1-balancos | ebit | 740 | 740 | 100 | vazia | 0 | 0 |
-| v1-balancos | depreciacao_amortizacao | 740 | 740 | 100 | vazia | 0 | 0 |
-| v1-balancos | emprestimos_curto_prazo | 740 | 740 | 100 | vazia | 0 | 0 |
-| v1-balancos | emprestimos_longo_prazo | 740 | 740 | 100 | vazia | 0 | 0 |
-| v1-balancos | caixa | 740 | 740 | 100 | vazia | 0 | 0 |
-| v1-balancos | aplicacoes_financeiras | 740 | 740 | 100 | vazia | 0 | 0 |
+| v1-balancos | ebit | 740 | 72 | 9.7 | parcial | 0 | 1 |
+| v1-balancos | depreciacao_amortizacao | 740 | 74 | 10 | parcial | 0 | 1 |
+| v1-balancos | emprestimos_curto_prazo | 740 | 72 | 9.7 | parcial | 0 | 89 |
+| v1-balancos | emprestimos_longo_prazo | 740 | 72 | 9.7 | parcial | 0 | 89 |
+| v1-balancos | caixa | 740 | 72 | 9.7 | parcial | 0 | 1 |
+| v1-balancos | aplicacoes_financeiras | 740 | 72 | 9.7 | parcial | 0 | 134 |
 | v1-acoes_emitidas | qtd_pn | 510 | 0 | 0 | cheia | 0 | 361 |
 | v1-proventos | data_pagamento | 8392 | 8023 | 95.6 | parcial | 0 | 0 |
 
 ## 11. Painel de execuções (v1-painel_execucoes e v1-painel_etapas)
 
 - daily cron fora da agenda (11h/21h UTC): 0h: 1 execuções
+- etapas de execuções manuais (fora do daily): build_entrega, cvm_itr_dfp
 
 ### Execuções por tipo e status
 
 | tipo | status | n | primeira | ultima |
 |---|---|---|---|---|
+| coletar | concluida | 1 | 2026-10-22 21:56:25.015448 | 2026-10-22 21:56:25.015448 |
 | daily | concluida | 2 | 2026-10-21 21:30:04.283650 | 2026-10-22 11:00:03.476873 |
 | daily | parcial | 1 | 2026-10-21 00:46:43.367434 | 2026-10-21 00:46:43.367434 |
 | etapa | concluida | 1 | 2026-10-20 14:45:13.211003 | 2026-10-20 14:45:13.211003 |
@@ -552,7 +554,9 @@ Nenhuma divergência encontrada.
 | etapa_id | ordem | status | n |
 |---|---|---|---|
 | precos | 1 | concluida | 4 |
+| cvm_itr_dfp | 1 | concluida | 1 |
 | macro | 2 | concluida | 3 |
+| build_entrega | 2 | concluida | 1 |
 | noticias | 3 | concluida | 3 |
 | ipe | 4 | concluida | 3 |
 | enriquecimento | 5 | concluida | 2 |

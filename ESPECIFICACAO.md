@@ -98,7 +98,7 @@ Nomes reais (com crase): `v1-noticias`, `v1-precos`, `v1-cadastro`, `v1-mudancas
 | `v1-precos` | `data`, `ticker` | todas | `fechamento` = sem dividendos (ajustado só por desdobramento); `fechamento_ajustado` = com dividendos. Inclui `IBOV`, `USDBRL`, `BRENT`, `IVVB11`. Volume vazio nos não-ações. **O histórico inteiro é regravado a cada dia** (o ajustado do passado pode mudar) |
 | `v1-cadastro` | `ticker` | todas | `tipo_acao`: ON, PN, UNIT ou BDR. Units: KLBN11, BPAC11, ENGI11, IGTI11, SANB11, TAEE11. CRFB3 sem CNPJ nem setor |
 | `v1-mudancas_ticker` | `ticker_antigo` | todas | `data_mudanca` hoje vazia |
-| `v1-balancos` | `cnpj`, `tipo_documento`, `data_inicio_periodo`, `data_fim_periodo` | todas | Consolidado, em reais. Trimestre e acumulado do ano em linhas separadas. `data_entrega` = da última versão do documento. **Hoje só vêm receita, lucro bruto, lucro líquido e patrimônio**; `ebit`, `depreciacao_amortizacao`, `emprestimos_*`, `caixa`, `aplicacoes_financeiras` estão vazias até a coleta corrigir |
+| `v1-balancos` | `cnpj`, `tipo_documento`, `data_inicio_periodo`, `data_fim_periodo` | todas | Consolidado, em reais. Trimestre e acumulado do ano em linhas separadas. `data_entrega` = da última versão do documento. **Desde 22/10/2026 todas as colunas vêm preenchidas** (~90%, como `lucro_bruto`): `ebit`, `depreciacao_amortizacao` (sempre positiva), `emprestimos_*`, `caixa`, `aplicacoes_financeiras`; vazias nos bancos e seguradoras. Zeros suspeitos em `emprestimos_*` e `aplicacoes_financeiras`: ver seção 10 |
 | `v1-acoes_emitidas` | `cnpj`, `data_referencia` | todas | — |
 | `v1-proventos` | `ticker`, `tipo`, `data_com` | todas | Valor já ajustado por desdobramento, bonificação e grupamento. Units já somadas pela composição |
 | `v1-indices` | `data`, `indice` | todas | CDI em % ao dia; IPCA em % no mês; IDIV, SMLL, IFIX em pontos |
@@ -118,7 +118,7 @@ Ticker sem `.SA`; datas `AAAA-MM-DD`; ponto decimal; vazio = `NULL` (nunca 0); b
 ### 3.4 Lacunas da coleta e o que o código faz enquanto isso
 | Lacuna | Comportamento do processamento |
 |---|---|
-| EBITDA e endividamento sem dados | Implementar e testar com dados de teste. Com colunas vazias: `status = indisponivel` |
+| EBITDA e endividamento com insumo vazio (colunas preenchidas desde 22/10/2026, mas ~10% das linhas sem valor) | `status = indisponivel` no indicador que dependia do valor vazio |
 | Histórico curto (~1 ano hoje; meta de 5 anos) | Implementar tudo. **Não treinar o modelo "para valer"** até o histórico completo chegar; com 1 ano, só teste de funcionamento (sem conclusões) |
 | Composição histórica do Ibovespa | Ver 3.5 |
 | `data_mudanca` vazia | Unir históricos pela `v1-mudancas_ticker` assim mesmo; quando a data vier, usá-la |
@@ -140,7 +140,7 @@ Ticker sem `.SA`; datas `AAAA-MM-DD`; ponto decimal; vazio = `NULL` (nunca 0); b
 
 1. A coleta roda **uma vez por dia, às 8h** (Brasília).
 2. A partir das **8h**, a cada **~5 minutos**, o processamento consulta:
-   - em `v1-painel_execucoes`: o daily mais recente de hoje (`tipo = 'daily'`). **`iniciada_em` está em UTC**: converter para São Paulo antes de comparar a data;
+   - em `v1-painel_execucoes`: o daily mais recente de hoje (`tipo = 'daily'`), com `iniciada_em` **no próprio dia e a partir das 08:00 de São Paulo**. **`iniciada_em` está em UTC**: converter para São Paulo antes de comparar data e hora. Vale **`origem` `cron` ou `manual`**; daily manual vira **nota** no pacote `execucao`. Execuções de outros tipos (ex.: `coletar`, com as etapas `cvm_itr_dfp` e `build_entrega`) não servem de gatilho. `origem = 'cron'` só é usada na conferência do horário no diagnóstico (decidido em 22/10/2026);
    - em `v1-painel_etapas` (por `execucao_id`): esperar **`etapa_id = 'entrega'` com `status = 'concluida'`**. **Não esperar o daily inteiro** (a etapa seguinte, `analise`, não interessa e, se falhar, deixa o daily `parcial`);
    - conferir se `precos`, `noticias` e `enriquecimento` também estão `concluida`. Se não: seguir, mas com aviso.
 3. Com a entrega pronta: calcular a Fase 1, fechar o resultado do top 5 do pregão anterior, gerar o top 5 de hoje e enviar os pacotes (ordem na seção 8.5).
@@ -173,7 +173,7 @@ Fonte dos dados: tabelas da seção 3. `fech` = `fechamento`; `aj` = `fechamento
 | ROE | Lucro líquido 12m ÷ patrimônio líquido mais recente | — |
 | Margem bruta | Lucro bruto 12m ÷ receita líquida 12m | `nao_se_aplica` em bancos e seguradoras |
 | Margem líquida | Lucro líquido 12m ÷ receita líquida 12m | `nao_se_aplica` em bancos e seguradoras |
-| EBITDA | EBIT 12m + depreciação e amortização 12m; margem = EBITDA ÷ receita 12m | `nao_se_aplica` em bancos/seguradoras; `indisponivel` enquanto a coleta não preencher. Rótulo: "EBITDA (cálculo padrão CVM)" |
+| EBITDA | EBIT 12m + depreciação e amortização 12m; margem = EBITDA ÷ receita 12m | `nao_se_aplica` em bancos/seguradoras; `indisponivel` se faltar EBIT ou D&A. Rótulo: "EBITDA (cálculo padrão CVM)" |
 | Endividamento | Dívida líquida = empréstimos CP + LP − caixa − aplicações; DL/PL; DL/EBITDA 12m | Sem arrendamentos (avisar). DL < 0 → `caixa_liquido = true`. `nao_se_aplica`/`indisponivel` como o EBITDA |
 | Dividend yield | Σ proventos com `data_com` nos últimos 12 meses ÷ `fech` atual | — |
 | Payout | Σ proventos pagos em 12 meses (valor × quantidade de ações da classe) ÷ lucro líquido 12m; também por ano | Somar só ON e PN, **nunca a unit** |
@@ -193,6 +193,7 @@ Fonte dos dados: tabelas da seção 3. `fech` = `fechamento`; `aj` = `fechamento
 | Bancos e seguradoras | Identificar pelo setor do cadastro |
 | Calendário | Pregões = datas com preço do `IBOV` em `v1-precos` |
 | Mudança de ticker | Unir os históricos pela `v1-mudancas_ticker` antes de qualquer cálculo |
+| Empréstimos zerados | `emprestimos_curto_prazo = 0` **e** `emprestimos_longo_prazo = 0` na mesma linha = ausente (conta não achada pela coleta): dívida líquida, DL/PL, DL/EBITDA e `caixa_liquido` saem `indisponivel`. Só um dos dois = 0 continua valendo; `aplicacoes_financeiras = 0` continua valendo (decidido em 22/10/2026; pedido à coleta na seção 10) |
 | Abertura ajustada | `abertura × aj / fech` do mesmo dia (para o salto da abertura não confundir dividendo com queda) |
 | Checagem diária | Avisar: poucas ações no dia, retorno acima de 30% em módulo, volume zero, preço parado, indicador vazio |
 
@@ -297,7 +298,7 @@ Enquanto a API não existe, o processamento **gera os mesmos pacotes como arquiv
 | Percentuais | **Fração decimal**: `0.0123` = 1,23%. A interface formata |
 | Dinheiro | Reais, sem escala (`48200000000` = R$ 48,2 bi). A interface abrevia |
 | Ausência | Valor `null` **sempre acompanhado de `status`** (nunca 0 no lugar de vazio) |
-| `status` de cada indicador | `ok` · `nao_se_aplica` (ex.: margem de banco) · `indisponivel` (dado ainda não veio da coleta, ex.: EBITDA hoje) · `historico_insuficiente` (ex.: beta com menos de 120 pregões) · `lucro_negativo` (P/L de empresa com prejuízo: valor mostrado com aviso) |
+| `status` de cada indicador | `ok` · `nao_se_aplica` (ex.: margem de banco) · `indisponivel` (dado não veio da coleta, ex.: empresa sem balanço nas fontes) · `historico_insuficiente` (ex.: beta com menos de 120 pregões) · `lucro_negativo` (P/L de empresa com prejuízo: valor mostrado com aviso) |
 | Textos prontos | Opcionais, em campos `texto` (ex.: `"mais calma que 96% das ações"`). O número sempre vem junto; a interface pode usar um ou outro |
 | Chave de gravação | Cada pacote declara a chave (`data_referencia` + `ticker` etc.). A API grava por **upsert**: reenviar substitui, nunca duplica |
 | Metadados | Todo pacote tem `gerado_em` e `dados_ate` (até quando os dados da coleta vão) |
@@ -443,7 +444,7 @@ Todas as 23 informações da planilha (`docs/planilha_final.xlsx`; cálculos na 
 
 | Pendência | De quem |
 |---|---|
-| Preencher EBIT, depreciação, empréstimos, caixa e aplicações em `v1-balancos` | Coleta |
+| Zeros em `v1-balancos`: `emprestimos_curto_prazo` e `emprestimos_longo_prazo` = 0 **juntos** em 89 linhas de 12 empresas que não são banco (ex.: CSNA3, SBSP3, RDOR3, PCAR3, MGLU3, que têm dívida), e `aplicacoes_financeiras` = 0 em 134 linhas de 19 empresas. Provável conta não encontrada gravada como 0 (deveria ser `NULL`). Pedido à coleta: gravar `NULL` quando a conta não é achada. Enquanto isso, o processamento trata CP e LP = 0 juntos como ausente (seção 6, "Empréstimos zerados"); aplicações = 0 continuam valendo | Coleta |
 | Histórico de 5 anos (e testar a cobertura de notícias em 2021–2022) | Coleta |
 | Tabela `v1-composicao_ibov` | Coleta |
 | Histórico de IDIV, SMLL e IFIX (hoje só 20 e 21/10/2026) e de CDI/IPCA desde jul/2024 (hoje desde jan/2025): prometido para depois da manutenção do Railway | Coleta |
@@ -459,6 +460,7 @@ Todas as 23 informações da planilha (`docs/planilha_final.xlsx`; cálculos na 
 - CRFB3, SRNA3 e STBP3 sem preço → removidas da análise (seção 3.4). Registrar no TCC como **viés de sobrevivência**.
 - Classes extintas nos proventos (VALE5, AXIA6, CPLE5 etc.) → identificadas pelo `other_codes`; seus proventos contam no histórico e no payout, ligados pela raiz; units ficam de fora (seções 3.4 e 6).
 - CNPJs 03847461000192 e 06057223000171 sem balanço → indicadores de balanço `indisponivel` (seção 3.4).
+- EBIT, depreciação, empréstimos, caixa e aplicações em `v1-balancos`: preenchidos pela coleta (~90%, como `lucro_bruto`). O diagnóstico passa a tratá-los como parciais; as etapas `cvm_itr_dfp` e `build_entrega` (execução manual `tipo = 'coletar'`) passam a ser conhecidas e só geram divergência se aparecerem num daily.
 
 ---
 

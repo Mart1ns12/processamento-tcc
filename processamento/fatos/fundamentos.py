@@ -293,7 +293,13 @@ def indicadores_empresa(
         divida = _falha(NAO_SE_APLICA)
     else:
         falha = _primeiro_nao_ok(base, emp_cp_s, emp_lp_s, caixa_s, aplic_s)
-        divida = _falha(falha) if falha else (emp_cp + emp_lp - caixa - aplic, OK)
+        if falha:
+            divida = _falha(falha)
+        elif emp_cp == 0 and emp_lp == 0:
+            # CP e LP = 0 juntos: conta não achada pela coleta, não dívida zero (decisão de 22/10/2026)
+            divida = _falha(INDISPONIVEL)
+        else:
+            divida = (emp_cp + emp_lp - caixa - aplic, OK)
     divida_valor, divida_s = divida
 
     falha = _primeiro_nao_ok(divida_s, pl_s)

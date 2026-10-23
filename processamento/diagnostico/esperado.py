@@ -9,7 +9,9 @@ INDICES = {"CDI", "IPCA", "IDIV", "SMLL", "IFIX"}
 UNITS = {"KLBN11", "BPAC11", "ENGI11", "IGTI11", "SANB11", "TAEE11"}
 SEM_CNPJ_CONHECIDOS = {"CRFB3"}
 ETAPAS_COLETA = ["precos", "macro", "noticias", "ipe", "enriquecimento", "juiza", "cadastro", "entrega", "analise"]
-STATUS_ETAPA = {"pendente", "em_andamento", "concluida", "falhou", "pulada"}
+# Etapas de execuções manuais (ex.: tipo 'coletar'); nunca devem aparecer num daily
+ETAPAS_EXECUCAO_MANUAL = ["cvm_itr_dfp", "build_entrega"]
+STATUS_ETAPA ={"pendente", "em_andamento", "concluida", "falhou", "pulada"}
 MODELOS_FINBERT = {"pt": "lucas-leme/FinBERT-PT-BR", "en": "ProsusAI/finbert"}
 IDIOMAS = {"pt", "en"}
 OFFSET_SP = "-03:00"
