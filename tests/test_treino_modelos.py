@@ -1,0 +1,203 @@
+"""Testes de modelos.py (etapa 6, fase 4): XGBoost, contribuições, logística, regra da volatilidade
+e gravação/leitura do modelo. Dados sintéticos pequenos; nenhum teste usa banco ou rede.
+"""
+
+import hashlib
+import json
+import warnings
+
+import numpy as np
+import pandas as pd
+import pytest
+
+from processamento.experimento import dataset, modelos
+from processamento.experimento.preparacao import (
+    COLUNAS_ALVO,
+    COLUNAS_BRUTAS,
+    COLUNAS_RANK,
+    IDENTIFICACAO,
+    preparar,
+)
+
+NAN = np.nan
+HIPER = {"n_estimators": 50}
+
+
+def _dados_sinteticos():
+    """X 2000×4 (beta todo NaN, tom NaN a cada 7 linhas) e y binário ligado a ret_1d."""
+    rng = np.random.default_rng(0)
+    n = 2000
+    ret_1d = rng.normal(0, 1, n)
+    ret_5d = rng.normal(0, 2, n)
+    tom = rng.uniform(-1, 1, n)
+    tom[::7] = NAN
+    ruido = rng.normal(0, 0.3, n)
+    X = pd.DataFrame({"ret_1d": ret_1d, "ret_5d": ret_5d, "noticias_dia_tom": tom, "beta": np.full(n, NAN)})
+    y = pd.Series(((ret_1d + ruido) > 0.5).astype(int))
+    return X, y
+
+
+def _dataset(linhas):
+    """DataFrame com todas as colunas do dataset; cada dict de `linhas` sobrescreve os padrões (NaN)."""
+    colunas = IDENTIFICACAO + COLUNAS_RANK + COLUNAS_BRUTAS + COLUNAS_ALVO
+    registros = []
+    for lin in linhas:
+        reg = {c: NAN for c in colunas}
+        reg.update({"empresa": lin["ticker"], "setor": "S1", "universo": True, "dia_resultado": False})
+        reg.update(lin)
+        registros.append(reg)
+    df = pd.DataFrame(registros, columns=colunas)
+    df["data"] = pd.to_datetime(df["data"])
+    return df
+
+
+def _caso_volatilidade():
+    """Caso 6 do plano: seis ações num único pregão, com volatilidade_20d e alvo conhecidos."""
+    base = {"data": "2026-06-18", "ret_ibov_t1": 0.0}
+    linhas = [
+        {**base, "ticker": "AAAA3", "volatilidade_20d": 0.010, "alvo": 1, "ret_t1": 0.01},
+        {**base, "ticker": "BBBB3", "volatilidade_20d": 0.030, "alvo": 0, "ret_t1": -0.02},
+        {**base, "ticker": "CCCC3", "volatilidade_20d": 0.020, "alvo": 0, "ret_t1": -0.01},
+        {**base, "ticker": "DDDD3", "volatilidade_20d": NAN, "alvo": 1, "ret_t1": 0.03},
+        {**base, "ticker": "EEEE3", "volatilidade_20d": 0.020, "alvo": 1, "ret_t1": 0.02},
+        {**base, "ticker": "FFFF3", "volatilidade_20d": 0.050, "alvo": 0, "ret_t1": -0.03},
+    ]
+    return preparar(_dataset(linhas))
+
+
+# --- Caso 8, parte 1: contribuições (pred_contribs) ---------------------------------------------
+
+
+def test_contribuicoes_somam_a_margem():
+    X, y = _dados_sinteticos()
+    modelo = modelos.treinar_xgb(X, y, HIPER, semente=0)
+    contrib = modelos.contribuicoes(modelo, X)
+    assert contrib.shape == (2000, 5)
+    assert contrib.columns[-1] == "vies"
+    assert list(contrib.columns[:-1]) == list(X.columns)
+    assert contrib.index.equals(X.index)
+    margem = modelos.margem_xgb(modelo, X)
+    assert np.allclose(contrib.sum(axis=1).to_numpy(), margem, atol=1e-4)
+    assert np.allclose(1 / (1 + np.exp(-margem)), modelos.prob_xgb(modelo, X), atol=1e-6)
+
+
+# --- Caso 10: semente, arquivo do modelo, sha256, nomes ------------------------------------------
+
+
+def test_mesma_semente_mesma_previsao():
+    X, y = _dados_sinteticos()
+    m1 = modelos.treinar_xgb(X, y, HIPER, semente=0)
+    m2 = modelos.treinar_xgb(X, y, HIPER, semente=0)
+    assert np.array_equal(modelos.prob_xgb(m1, X), modelos.prob_xgb(m2, X))
+
+
+def _metadados(X):
+    return {
+        "modelo": "3",
+        "versao_noticias": "v-teste",
+        "colunas": list(X.columns),
+        "blocos": ("preco_contexto",),
+        "hiperparametros": HIPER,
+        "semente": 0,
+        "periodo_treino": ("2026-01-01", "2026-05-31"),
+        "n_linhas_treino": 2000,
+        "dataset": "dataset-todas-2026-10-21.csv",
+        "universo": "todas",
+        "metricas_validacao": {"auc": 0.5},
+        "calibracao": {"ece": 0.1, "brier": 0.25},
+        "provisorio": True,
+        "aviso": "TESTE DE FUNCIONAMENTO",
+        "versoes": {"xgboost": "3.4.1"},
+        "gerado_em": "2026-10-23T12:00:00",
+        "teste_final": None,
+    }
+
+
+def test_salvar_e_carregar_modelo(tmp_path):
+    X, y = _dados_sinteticos()
+    modelo = modelos.treinar_xgb(X, y, HIPER, semente=0)
+    meta = _metadados(X)
+    caminho, caminho_meta = modelos.salvar_modelo(modelo, meta, tmp_path, "xgb-2026-06")
+    assert caminho.name == "xgb-2026-06.json" and caminho.exists()
+    assert caminho_meta.name == "xgb-2026-06.meta.json" and caminho_meta.exists()
+
+    carregado, meta_lido = modelos.carregar_modelo(caminho)
+    assert np.array_equal(modelos.prob_xgb(carregado, X), modelos.prob_xgb(modelo, X))
+    # tuplas viram listas depois do vaivém em JSON
+    esperado = json.loads(json.dumps(meta, indent=2, ensure_ascii=False, default=dataset._json_padrao))
+    assert meta_lido == esperado
+    assert meta_lido["colunas"] == list(X.columns)
+
+
+def test_salvar_sem_chave_obrigatoria_da_erro(tmp_path):
+    X, y = _dados_sinteticos()
+    modelo = modelos.treinar_xgb(X, y, HIPER, semente=0)
+    meta = _metadados(X)
+    del meta["semente"]
+    with pytest.raises(ValueError):
+        modelos.salvar_modelo(modelo, meta, tmp_path, "xgb-2026-06")
+
+
+def test_sha256_gabaritos(tmp_path):
+    arq_abc = tmp_path / "abc.bin"
+    arq_abc.write_bytes(b"abc")
+    assert modelos.sha256_arquivo(arq_abc) == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+
+    arq_csv = tmp_path / "amostra.csv"
+    arq_csv.write_bytes(b"data,ticker,alvo\n2026-06-18,AAAA3,1\n")
+    assert modelos.sha256_arquivo(arq_csv) == "3299a78cbf26ca7db4d569949fb37a48c530bda9e115520700648ecbbdb23220"
+
+
+def test_sha256_em_blocos_bate_com_hashlib(tmp_path):
+    conteudo = bytes(range(256)) * (10 * 1024 + 3)  # mais de 2 blocos de 1 MiB
+    arq = tmp_path / "grande.bin"
+    arq.write_bytes(conteudo)
+    assert modelos.sha256_arquivo(arq) == hashlib.sha256(conteudo).hexdigest()
+
+
+def test_nome_modelo():
+    assert modelos.nome_modelo("2026-06") == "xgb-2026-06"
+    assert modelos.nome_modelo("2026-06", "1") == "xgb-m1-2026-06"
+
+
+# --- Logística ------------------------------------------------------------------------------------
+
+
+def test_logistica_sem_aviso_com_coluna_toda_nan():
+    X, y = _dados_sinteticos()
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        pipe = modelos.treinar_logistica(X, y, c=1.0, semente=0)
+        p = modelos.prob_logistica(pipe, X)
+    assert p.shape == (2000,)
+    assert ((p > 0) & (p < 1)).all()
+
+
+# --- Caso 6: regra da volatilidade (score) --------------------------------------------------------
+
+
+def test_score_volatilidade_gabarito():
+    preparado = _caso_volatilidade()
+    score = modelos.score_volatilidade(preparado)
+    esperado = {"AAAA3": 1.0, "BBBB3": 0.25, "CCCC3": 0.625, "DDDD3": 0.5, "EEEE3": 0.625, "FFFF3": 0.0}
+    obtido = dict(zip(preparado["ticker"], score))
+    assert set(obtido) == set(esperado)
+    for ticker, valor in esperado.items():
+        assert obtido[ticker] == pytest.approx(valor, abs=1e-12), ticker
+
+
+def test_score_volatilidade_top_via_avaliacao():
+    avaliacao = pytest.importorskip("processamento.experimento.avaliacao")
+    preparado = _caso_volatilidade()
+    df = preparado.assign(score=modelos.score_volatilidade(preparado))
+
+    ordenado = avaliacao.ordenar_no_dia(df, "score")
+    assert list(ordenado["ticker"]) == ["AAAA3", "CCCC3", "EEEE3", "DDDD3", "BBBB3", "FFFF3"]
+
+    top3 = avaliacao.resumo_diario(df, 3)
+    assert top3["acerto_top"].iloc[0] == pytest.approx(2 / 3, abs=1e-12)
+    assert top3["excesso_top"].iloc[0] == pytest.approx(0.02 / 3, abs=1e-12)
+
+    top5 = avaliacao.resumo_diario(df, 5)
+    assert top5["acerto_top"].iloc[0] == pytest.approx(0.6, abs=1e-12)
+    assert top5["excesso_top"].iloc[0] == pytest.approx(0.006, abs=1e-12)

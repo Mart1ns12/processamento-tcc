@@ -79,3 +79,11 @@ def test_t1_e_o_proximo_pregao_de_cal_nao_o_dia_seguinte():
     r = alvos(precos, cal, ["AAAA3"])
     assert list(r["ret_t1"].index) == [pd.Timestamp("2026-06-18"), pd.Timestamp("2026-06-22")]
     assert r["ret_t1"].loc[pd.Timestamp("2026-06-18"), "AAAA3"] == 0.125
+
+
+def test_abertura_do_ibov_valida_so_quando_difere_do_fechamento_anterior():
+    v = alvos(_precos(), CAL, TICKERS)["alvo_abertura_valido"]
+    for t in TICKERS:                  # vale igual para todas as ações, inclusive DDDD3 (com NaN)
+        assert v.loc[D0, t] == 1.0     # abertura(D1)=64320 ≠ fechamento(D0)=64000
+        assert v.loc[D1, t] == 0.0     # abertura(D2)=68000 = fechamento(D1)=68000
+        assert pd.isna(v.loc[D2, t])   # último pregão: sem t+1

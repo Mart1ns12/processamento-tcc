@@ -6,6 +6,8 @@ Entrada: DataFrame de `fontes.ler_noticias`. Saída: `COLUNAS_PREPARADAS`, com j
 
 from __future__ import annotations
 
+import dataclasses
+
 import pandas as pd
 
 from processamento import calendario, tickers
@@ -13,7 +15,7 @@ from processamento.experimento.parametros import ParametrosExperimento
 from processamento.fatos.fundamentos import normalizar_texto
 
 COLUNAS_PREPARADAS = ["id", "ticker", "empresa", "origem", "momento", "sem_horario", "janela", "pregao_ref", "score"]
-VERSOES = ("todas", "principais")
+VERSOES = ("todas", "principais", "hora_real_noite")
 
 
 def _na_versao_principal(noticias: pd.DataFrame, params: ParametrosExperimento) -> pd.Series:
@@ -28,19 +30,24 @@ def _na_versao_principal(noticias: pd.DataFrame, params: ParametrosExperimento) 
 def filtrar_versao(
     noticias: pd.DataFrame, versao: str, params: ParametrosExperimento
 ) -> tuple[pd.DataFrame, dict]:
-    """Mantém as notícias da versão ("todas" ou "principais"); conta o que ficou de fora."""
+    """Mantém as notícias da versão ("todas", "principais" ou "hora_real_noite"); conta o que ficou de fora."""
     if versao not in VERSOES:
-        raise ValueError(f"versão de notícias inválida: {versao!r} (use 'todas' ou 'principais')")
+        raise ValueError(f"versão de notícias inválida: {versao!r} (use 'todas', 'principais' ou 'hora_real_noite')")
     contagens = {"lidas": len(noticias), "fora_versao": 0, "papel_vazio_fora": 0}
     if versao == "todas":
         dentro = pd.Series(True, index=noticias.index)
-    else:
+    elif versao == "principais":
         dentro = _na_versao_principal(noticias, params)
+    else:  # hora_real_noite: só horário real (nem "só data", nem sem hora)
+        if "precisao_hora" not in noticias.columns:
+            raise ValueError("versão hora_real_noite exige a coluna precisao_hora (fontes.aplicar_regra_so_data)")
+        dentro = noticias["precisao_hora"].eq("hora")
     fora = noticias[~dentro]
     contagens["fora_versao"] = len(fora)
-    contagens["papel_vazio_fora"] = int(
-        (fora["papel"].isna() & ~fora["origem"].isin(params.origens_principais)).sum()
-    )
+    if versao == "principais":
+        contagens["papel_vazio_fora"] = int(
+            (fora["papel"].isna() & ~fora["origem"].isin(params.origens_principais)).sum()
+        )
     return noticias[dentro].copy(), contagens
 
 
@@ -125,6 +132,8 @@ def preparar_noticias(
     proximo_ao_vivo=None,
 ) -> tuple[pd.DataFrame, dict]:
     """Encadeia versão, empresa, duplicadas e janela. Devolve `COLUNAS_PREPARADAS` e as contagens."""
+    if versao == "hora_real_noite":
+        params = dataclasses.replace(params, inicio_janela="fechamento")
     filtradas, info = filtrar_versao(noticias, versao, params)
     com_empresa = ligar_empresa(filtradas, cnpj_de, mudancas)
     unicas, info_dedup = deduplicar(com_empresa, params)

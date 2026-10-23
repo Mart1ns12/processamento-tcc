@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 import pytest
 
+from processamento import fontes
 from processamento.experimento.noticias import (
     COLUNAS_PREPARADAS,
     classificar_para_modelo,
@@ -297,3 +298,33 @@ def test_preparar_noticias_encadeia_as_etapas():
     assert info["fora_versao"] == 1
     assert info["duplicadas_id"] == 1
     assert info["preparadas"] == 1
+
+
+# ---------------------------------------------------------------- versão hora_real_noite
+
+
+def _quatro():
+    return fontes.aplicar_regra_so_data(fazer([
+        nota(1, "AAAA3", hora="2026-06-18 19:00", titulo="A"),   # hora real, noite de 18/06
+        nota(2, "AAAA3", hora="2026-06-18 11:00", titulo="B"),   # hora real, pregão
+        nota(3, "AAAA3", origem="cvm_ipe", titulo="C"),          # sem hora
+        nota(4, "AAAA3", hora="2026-06-18 04:00", titulo="D"),   # 00:00 em LA = só data
+    ]))
+
+
+def test_filtro_hora_real_noite_mantem_so_hora_real():
+    filtradas, info = filtrar_versao(_quatro(), "hora_real_noite", PARAMS)
+    assert set(filtradas["id"]) == {1, 2}
+    assert info == {"lidas": 4, "fora_versao": 2, "papel_vazio_fora": 0}
+
+
+def test_hora_real_noite_so_fica_a_noite():
+    saida, info = preparar_noticias(_quatro(), CAL, CNPJ_DE, {}, "hora_real_noite", PARAMS)
+    assert saida["id"].tolist() == [1]
+    assert saida["pregao_ref"].iloc[0] == pd.Timestamp("2026-06-18")
+    assert info["fora_versao"] == 2 and info["descartadas_fora_da_janela"] == 1 and info["preparadas"] == 1
+
+
+def test_hora_real_noite_sem_precisao_hora_levanta():
+    with pytest.raises(ValueError, match="precisao_hora"):
+        filtrar_versao(fazer([nota(1, "AAAA3", hora="2026-06-18 19:00")]), "hora_real_noite", PARAMS)

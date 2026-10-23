@@ -7,7 +7,7 @@ ficam para `preparacao.preparar`, que roda só sobre as linhas daqui.
 
 `executar` e `main` (fase 9) são a parte com I/O: leem a coleta só por `fontes.py`, montam o
 dataset e gravam o CSV e o JSON em `saida/experimento/` (fora do git).
-Uso: `python -m processamento.experimento.dataset [--versao todas|principais] [--ate AAAA-MM-DD] [--proximo AAAA-MM-DD] [--pasta PASTA]`.
+Uso: `python -m processamento.experimento.dataset [--versao todas|principais|hora_real_noite] [--ate AAAA-MM-DD] [--proximo AAAA-MM-DD] [--pasta PASTA]`.
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ import pandas as pd
 from processamento import calendario, fontes
 from processamento.exclusoes import carregar_exclusoes
 from processamento.experimento.alvo import alvos
-from processamento.experimento.noticias import preparar_noticias
+from processamento.experimento.noticias import VERSOES, preparar_noticias
 from processamento.experimento.parametros import ParametrosExperimento, carregar_parametros_experimento
 from processamento.experimento.preparacao import COLUNAS_ALVO, COLUNAS_RANK, IDENTIFICACAO
 from processamento.experimento.resultados import dias_de_resultado
@@ -132,13 +132,13 @@ def montar_dataset(
         "linhas": len(df),
         "pregoes": len(cal),
         "versao_noticias": versao_noticias,
+        "inicio_janela_efetivo": "fechamento" if versao_noticias == "hora_real_noite" else params.inicio_janela,
         "cobertura_inicio": None if cobertura is None else cobertura.date().isoformat(),
     }
     return df, info
 
 
 PASTA_PADRAO = fontes.RAIZ / "saida" / "experimento"
-VERSOES = ("todas", "principais")
 
 
 def _leitor_padrao() -> Callable[..., pd.DataFrame]:
@@ -259,7 +259,9 @@ def main(argv=None, ler=None) -> int:
         prog="python -m processamento.experimento.dataset",
         description="Monta e grava o dataset do experimento. Só lê o banco da coleta.",
     )
-    parser.add_argument("--versao", choices=VERSOES, default="todas", help="notícias: todas ou principais")
+    parser.add_argument(
+        "--versao", choices=VERSOES, default="todas", help="notícias: todas, principais ou hora_real_noite"
+    )
     parser.add_argument("--ate", type=_data_argumento, default=None, help="último pregão do dataset (AAAA-MM-DD)")
     parser.add_argument(
         "--proximo", type=_data_argumento, default=None,

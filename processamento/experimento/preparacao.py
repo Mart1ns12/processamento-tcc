@@ -15,7 +15,7 @@ COLUNAS_RANK = ESSENCIAIS_PRECO + COMPLEMENTARES_PRECO
 NOTICIAS_DIA = ["noticias_dia_qtd", "noticias_dia_tom", "noticias_dia_extremo", "mudanca_tom"]
 COMPLEMENTARES_NOTICIAS = ["tom_setor", "tom_mercado"]
 COLUNAS_BRUTAS = NOTICIAS_DIA + COMPLEMENTARES_NOTICIAS
-COLUNAS_ALVO = ["alvo", "alvo_abertura", "ret_t1", "ret_ibov_t1"]
+COLUNAS_ALVO = ["alvo", "alvo_abertura", "alvo_abertura_valido", "ret_t1", "ret_ibov_t1"]
 BLOCOS_COMPLEMENTARES = {
     "preco_contexto": ["dist_max_52s", "dist_min_52s", "amplitude", "ret_vs_setor"],
     "macro": ["exposicao_dolar", "exposicao_petroleo"],

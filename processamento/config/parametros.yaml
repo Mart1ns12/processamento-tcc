@@ -55,3 +55,24 @@ experimento:
     origens: ["cvm_ipe"]
     tipos_conteudo: ["reportagem"]
     papeis: ["protagonista", "citada_com_fato"]
+# Fase 2: treino e avaliação (seções 7.4–7.7; plano da etapa 6). Com ~1 ano de histórico: SÓ TESTE DE FUNCIONAMENTO.
+treino:
+  semente: 20261023
+  inicio_experimento: "cobertura"   # "cobertura" = cobertura_inicio do JSON do dataset (1ª data com notícias) ou "AAAA-MM-DD"
+  treino_minimo_meses: 3            # meses de treino antes da 1ª dobra de teste
+  embargo_pregoes: 1
+  teste_final:
+    inicio: "2026-06-23"            # 1º dia do teste final (o período reservado na v1 e nunca usado)
+    fim: null                       # véspera da entrada em produção (etapa 8), "AAAA-MM-DD"; vazio = trava ativa. Depois: teste ao vivo
+    liberado: false                 # true SÓ por decisão do usuário; mesmo assim exige --teste-final; uso único
+  topk: [5, 3]                      # o primeiro é o corte principal
+  xgboost: {n_estimators: 300, max_depth: 3, learning_rate: 0.03, subsample: 0.8, colsample_bytree: 0.8, min_child_weight: 50, reg_lambda: 5}
+  grade: {max_depth: [2, 3], min_child_weight: [50, 200]}   # escolhida só nas dobras de desenvolvimento
+  ganho_minimo_bloco: 0.005         # AUC médio por pregão; o bloco entra se o ganho passar disso
+  logistica_c: 1.0
+  acaso_sorteios: 10000
+  bootstrap_reamostragens: 2000
+  bootstrap_bloco_pregoes: 5
+  motivos_qtd: 3
+  motivos_limiar: 0.01              # |contribuição| (escala log-odds) até isto = "neutro"
+  calibracao: {bins: 10, ece_maximo: 0.02, linhas_minimas: 5000, liberar_chance: false}

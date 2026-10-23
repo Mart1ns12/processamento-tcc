@@ -45,6 +45,9 @@ def alvos(precos: pd.DataFrame, cal: list, tickers: list[str]) -> dict[str, pd.D
     `alvo` compara o fechamento ajustado; `alvo_abertura`, a abertura ajustada (abertura · aj /
     fech, também para o IBOV) com a base do fechamento ajustado de t. No último pregão de `cal`,
     t+1 não existe e o alvo é NaN.
+
+    `alvo_abertura_valido`: 1.0 se a abertura do IBOV em t+1 ≠ o fechamento do IBOV em t (abertura
+    informada); 0.0 se igual (defeito do Yahoo); NaN se faltar algum lado ou no último pregão.
     """
     tickers = list(tickers)
     aj = grade_de_precos(precos, cal, "fechamento_ajustado", tickers)
@@ -60,10 +63,14 @@ def alvos(precos: pd.DataFrame, cal: list, tickers: list[str]) -> dict[str, pd.D
     ibov_ab_aj = _abertura_ajustada(ibov_ab, ibov_aj, ibov_fech)
     ret_ab_t1 = _retorno(ab_aj, aj)
     ret_ibov_ab_t1 = _repetir_ibov(_retorno(ibov_ab_aj, ibov_aj), aj)
+    ibov_ab_t1 = ibov_ab.shift(-1)
+    igual = pd.Series(np.isclose(ibov_ab_t1, ibov_fech, rtol=0.0, atol=1e-9), index=ibov_fech.index)
+    valido = (~igual).astype(float).where(ibov_ab_t1.notna() & ibov_fech.notna())
 
     return {
         "alvo": _comparar(ret_t1, ret_ibov_t1),
         "alvo_abertura": _comparar(ret_ab_t1, ret_ibov_ab_t1),
+        "alvo_abertura_valido": _repetir_ibov(valido, aj),
         "ret_t1": ret_t1,
         "ret_ibov_t1": ret_ibov_t1,
     }

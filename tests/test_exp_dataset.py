@@ -99,6 +99,18 @@ def test_versao_principais_so_muda_colunas_de_noticia(caso):
     pd.testing.assert_frame_equal(caso["df"][fora_das_noticias], principais[fora_das_noticias])
 
 
+def test_versao_hora_real_noite(caso):
+    df, info = montar_dataset(caso["dados"], caso["cal"], versao_noticias="hora_real_noite")
+    c = caso["cal"]
+    assert info["inicio_janela_efetivo"] == "fechamento" and info["preparadas"] == 1 and info["fora_versao"] == 1
+    assert _dia(df, c[3], "BBBB3").iloc[0]["noticias_dia_qtd"] == 0      # em "todas" é 1
+    for t in ["AAAA3", "AAAA4"]:
+        assert _dia(df, c[20], t).iloc[0]["noticias_dia_qtd"] == 1
+        assert _dia(df, c[20], t).iloc[0]["noticias_dia_tom"] == pytest.approx(0.6, abs=1e-9)
+    fora = [col for col in COLUNAS_DATASET if col not in COLUNAS_NOTICIAS]
+    pd.testing.assert_frame_equal(caso["df"][fora], df[fora])
+
+
 def test_versao_invalida_levanta(caso):
     with pytest.raises(ValueError):
         montar_dataset(caso["dados"], caso["cal"], versao_noticias="xyz")
