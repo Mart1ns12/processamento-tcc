@@ -37,3 +37,21 @@ fundamentos:
   meses_janela: 12              # yield e payout: data_com em (t − 12 meses, t]
   anos_payout: 5                # payout_por_ano: últimos N exercícios (DFP) entregues até t
   anos_historico_proventos: 5   # soma por ano: ano de t e os N − 1 anteriores
+# Fase 2: dataset do experimento (seção 7.3; plano da etapa 5). Volatilidade, volume, beta e
+# setor_excluir vêm do bloco fase1 (mesma conta do painel).
+experimento:
+  retornos: {ret_1d: 1, ret_5d: 5, ret_20d: 20}
+  exposicao_pregoes: 120
+  exposicao_minimo: 60
+  extremos_pregoes: 252
+  extremos_minimo: 120
+  mudanca_tom_pregoes: 30
+  mudanca_tom_minimo: 5
+  sem_horario_na_noite: true
+  # "manha": janela = 08:00:01 de t até 08:00 do próximo pregão (dia + noite; usada porque ~89% das notícias só têm a data). "fechamento": só a noite (fechamento de t até 08:00), descartando pregão e pré-abertura — usar quando a coleta trouxer o horário real.
+  inicio_janela: "manha"
+  deduplicar_titulo: true
+  principais:
+    origens: ["cvm_ipe"]
+    tipos_conteudo: ["reportagem"]
+    papeis: ["protagonista", "citada_com_fato"]

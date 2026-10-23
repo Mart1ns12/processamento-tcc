@@ -220,6 +220,7 @@ def executar_leitura(
 # ---------------------------------------------------------------------------
 
 SP = ZoneInfo("America/Sao_Paulo")
+PACIFICO = ZoneInfo("America/Los_Angeles")
 
 
 class ErroLeitura(Exception):
@@ -425,6 +426,8 @@ def ler_noticias(
     """Lê `v1-noticias` na janela (seção 7.2) e devolve também `momento_ref` (horário de São Paulo).
 
     `momento_ref` é `data_hora_publicacao`; sem ela, 23:59:59 do dia de `data_publicacao`.
+    Notícias "só data" (meia-noite do Pacífico) passam por `aplicar_regra_so_data` antes de
+    qualquer filtro; `precisao_hora` diz de onde veio cada horário.
     O filtro grosso vai ao SQL pela data; o filtro fino é feito em `momento_ref`.
     `ate` precisa ter fuso horário.
     """
@@ -446,13 +449,57 @@ def ler_noticias(
         params["desde_menos_1"] = _data_texto(pd.Timestamp(desde) - pd.Timedelta(days=1))
     df = _selecionar(tabela, colunas, condicoes, params or None, ler)
     df = _tratar(tabela, df, ler, unir_mudancas)
-    fim_do_dia = df["data_publicacao"].dt.tz_localize(SP) + pd.Timedelta(hours=23, minutes=59, seconds=59)
-    df["momento_ref"] = df["data_hora_publicacao"].fillna(fim_do_dia)
+    df = aplicar_regra_so_data(df)
     if ate_sp is not None:
         df = df[df["momento_ref"] <= ate_sp]
     if desde is not None:
         df = df[df["momento_ref"] >= pd.Timestamp(desde).tz_localize(SP)]
     return df.sort_values(["momento_ref", "id", "ticker"]).reset_index(drop=True)
+
+
+def meia_noite_pacifico(instantes: pd.Series) -> pd.Series:
+    """True onde o instante, em Los Angeles, é exatamente 00:00:00.
+
+    O Google News chega como 04:00 (PDT) ou 05:00 (PST) de São Paulo quando a fonte deu só a
+    data: isso é meia-noite do Pacífico. A hora não é real. NaT vira False.
+    """
+    la = instantes.dt.tz_convert(PACIFICO)
+    zerado = (la.dt.hour == 0) & (la.dt.minute == 0) & (la.dt.second == 0) & (la.dt.microsecond == 0)
+    return zerado.fillna(False).astype(bool)
+
+
+def _fim_do_dia(datas: pd.Series) -> pd.Series:
+    """23:59:59 de cada data (horário de São Paulo)."""
+    return datas.dt.tz_localize(SP) + pd.Timedelta(hours=23, minutes=59, seconds=59)
+
+
+def aplicar_regra_so_data(noticias: pd.DataFrame) -> pd.DataFrame:
+    """Marca `precisao_hora` e trata as notícias "só data" (ver `meia_noite_pacifico`).
+
+    "hora": tem `data_hora_publicacao` real. "sem_hora": nunca teve (ex.: cvm_ipe).
+    "meia_noite_pacifico": vira só data. `data_publicacao` passa a ser a data em Los Angeles,
+    `data_hora_publicacao` fica nula e `momento_ref` é 23:59:59 dessa data (a mesma regra das
+    sem horário). Idempotente; as linhas "hora" ficam intactas.
+    """
+    df = noticias.copy()
+    tem_hora = df["data_hora_publicacao"].notna()
+    meia = meia_noite_pacifico(df["data_hora_publicacao"])
+    if "precisao_hora" in df.columns:
+        meia = meia | df["precisao_hora"].eq("meia_noite_pacifico")
+    datas_la = df["data_hora_publicacao"].dt.tz_convert(PACIFICO).dt.tz_localize(None).dt.normalize()
+    data_pub = df["data_publicacao"].where(~(meia & tem_hora), datas_la)
+    fim = _fim_do_dia(data_pub)
+    if "momento_ref" in df.columns:
+        momento = df["momento_ref"].where(~meia, fim)
+    else:
+        momento = df["data_hora_publicacao"].where(~meia, fim).fillna(fim)
+    precisao = pd.Series("sem_hora", index=df.index).where(~tem_hora, "hora").where(~meia, "meia_noite_pacifico")
+    return df.assign(
+        data_publicacao=data_pub,
+        data_hora_publicacao=df["data_hora_publicacao"].where(~meia),
+        momento_ref=momento,
+        precisao_hora=precisao,
+    )
 
 
 def ler_raw_b3_cadastro(ler: Callable[..., pd.DataFrame] | None = None) -> pd.DataFrame:
@@ -467,6 +514,38 @@ def ler_raw_b3_cadastro(ler: Callable[..., pd.DataFrame] | None = None) -> pd.Da
     except ValueError as erro:
         raise ErroLeitura(f"v1-raw_b3_cadastro.other_codes: {erro}") from erro
     return df
+
+
+def ler_raw_articles(ler: Callable[..., pd.DataFrame] | None = None) -> pd.DataFrame:
+    """Lê `raw_articles` só para conferir os horários (E1): só leitura, nunca grava.
+
+    `id_noticia` é a ligação com `v1-noticias.id` ("n" + id com zeros à esquerda, 6 dígitos ou
+    mais). `publicado_em_sp` vem do UTC; `meia_noite_pacifico` diz se é a hora da fonte "só data".
+    """
+    if ler is None:
+        ler = _ler_padrao
+    colunas = _conferir_tabela("raw_articles", ler)
+    df = _selecionar("raw_articles", colunas, [], None, ler)
+    for c in ("lang", "published_precision", "origem"):
+        df[c] = _vazio_como_nulo(df[c])
+    ids = pd.to_numeric(df["id"], errors="coerce")
+    if ids.isna().any():
+        raise ErroLeitura(f"raw_articles.id: {int(ids.isna().sum())} valores nulos ou não numéricos")
+    try:
+        publicado = para_sao_paulo_de_utc(df["published_at"])
+    except (ValueError, TypeError) as erro:
+        raise ErroLeitura(f"raw_articles.published_at: {erro}") from erro
+    return pd.DataFrame(
+        {
+            "id": ids.astype("int64"),
+            "id_noticia": ids.astype("int64").map(lambda v: f"n{v:06d}"),
+            "lang": df["lang"],
+            "published_precision": df["published_precision"],
+            "origem": df["origem"],
+            "publicado_em_sp": publicado,
+            "meia_noite_pacifico": meia_noite_pacifico(publicado),
+        }
+    )
 
 
 def para_sao_paulo_iso(serie: pd.Series, rotulo: str) -> pd.Series:

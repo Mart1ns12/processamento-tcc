@@ -66,6 +66,9 @@ Ver a seção 2.1 da especificação (`processamento/`, `config/`, `tests/`, `sa
 12. **Credenciais só no `.env`** (fora do git). Variáveis: `IP_BANCO`, `PORTA_BANCO`, `NOME_BANCO`, `USER_BANCO`, `SENHA_BANCO`.
 12b. **YAML lê `ON`, `OFF`, `YES`, `NO` sem aspas como booleano.** Em `config/*.yaml`, valores como tipo de ação vão entre aspas (`"ON"`); CNPJ também (zero à esquerda).
 13. **O modelo não é treinado "para valer"** até o histórico completo chegar. Com o 1 ano atual, só teste de funcionamento.
+14. **Google News com 04:00:00/05:00:00 em ponto (SP) = meia-noite do Pacífico = "só data"** (~89% das notícias; regra N1-A, seção 7.2, `fontes.aplicar_regra_so_data`). A `published_precision` NÃO identifica esses casos (vem `datetime`).
+15. **Janela única de notícias no modelo:** 08:00:01 de t até 08:00 do próximo pregão (`experimento.inicio_janela` no `parametros.yaml`, seção 7.2); colunas `noticias_dia_*`. O modelo 2 e o `noticias_pregao_tom` foram removidos.
+16. **Abertura do IBOV = fechamento anterior em ~32% dos dias** (defeito do Yahoo): só afeta o `alvo_abertura`; avaliá-lo só nos dias válidos (seção 10). Nenhuma variável usa a abertura do IBOV.
 
 ## Como trabalhar neste projeto
 - Responder em português, de forma simples e direta. Uma etapa por vez (seção 9 da especificação): mostrar o plano e esperar aprovação.

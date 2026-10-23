@@ -41,7 +41,7 @@ O processamento tem duas frentes:
 | **Fase 1: painel de fatos** | Calcula indicadores 100% confirmados (cotação, rentabilidade, comparações, risco, valuation, dividendos). **Nenhuma previsão** |
 | **Fase 2: experimento** | XGBoost + sentimento do FinBERT estimam quais ações têm maior chance de **superar o Ibovespa no próximo pregão**. Mostrado como **"5 ações com maior chance de superar o Ibovespa (experimento)"**, com selo "em avaliação" e histórico de acertos contra o acaso |
 
-**Pergunta do TCC:** o sentimento das notícias, lido pelo FinBERT, ajuda a prever o desempenho das ações? Foco nas **notícias publicadas entre o fechamento e a manhã seguinte**.
+**Pergunta do TCC:** o sentimento das notícias, lido pelo FinBERT, ajuda a prever o desempenho das ações? Foco nas **notícias do dia t e da noite, até as 8h de t+1** (antes da abertura do pregão previsto). Como ~89% das notícias só têm a data (seção 7.2), não dá para isolar as publicadas depois do fechamento; esse efeito é medido num teste extra só com as notícias de hora real (seção 7.5).
 
 ---
 
@@ -208,8 +208,12 @@ Fonte dos dados: tabelas da seção 3. `fech` = `fechamento`; `aj` = `fechamento
 ### 7.2 Janelas de notícias (horário de São Paulo)
 - **Noite:** `data_hora_publicacao` **depois do fechamento da B3 no pregão t** e **até as 8h do pregão t+1** (inclui fins de semana e feriados: sexta à noite até segunda 8h). O horário de fechamento da B3 varia ao longo do ano: guardar em `config/parametros.yaml` e conferir os horários oficiais.
 - **Pregão:** entre a abertura e o fechamento de t.
-- **Sem horário:** notícias sem `data_hora_publicacao` (ex.: documentos da CVM) ficam num grupo à parte, pela data.
-- O mesmo corte das 8h vale no **treino** e **ao vivo**.
+- **Sem horário:** notícias sem `data_hora_publicacao` (ex.: documentos da CVM) valem como publicadas às **23:59:59 da sua data** e entram na **noite** do pregão daquela data (fim de semana/feriado → noite do último pregão antes). É o horário mais tarde possível, então nunca adianta informação (E3, etapa 5). No painel (`noticias_dia`) continuam marcadas `sem_horario`.
+- **Meia-noite do Pacífico = só data (decidido em 23/10/2026, N1-A):** ~91% das notícias do Google News chegam com `data_hora_publicacao` exatamente às 04:00:00 (horário de verão dos EUA) ou 05:00:00 (inverno) de São Paulo, ou seja, 00:00:00 em `America/Los_Angeles`: a fonte só deu a data. Usar esse horário jogaria a notícia do dia D na noite de D−1 (**vazamento**). Regra, aplicada na camada de leitura (`fontes.aplicar_regra_so_data`, vale para `v1-noticias` e `raw_articles`): instante que é 00:00:00 em Los Angeles → `precisao_hora = meia_noite_pacifico`, data = data em Los Angeles, sem hora, e segue a regra "sem horário" acima (23:59:59 da data → noite do pregão daquela data). 04:00:00 no inverno dos EUA (= 23:00 em LA) e qualquer outro horário (ex.: 04:00:01, 10:30) continuam com a hora real. Consequência: para essas notícias não há como separar pregão de noite; a janela efetiva delas é o dia t inteiro mais a noite, até 08:00 de t+1.
+- **Janela do modelo (decidido em 23/10/2026, N2-A):** o modelo usa **uma janela só** por pregão t: **de 08:00:01 de t até 08:00:00 do próximo pregão** (pré-abertura + pregão + noite de t; fins de semana e feriados vão para o último pregão antes). As notícias "só data" e as de hora real são tratadas igual. O início da janela é parâmetro (`parametros.yaml`, `experimento.inicio_janela`: `"manha"` = esta janela; `"fechamento"` = só a noite, do fechamento de t até 08:00, para usar se a coleta trouxer o horário real). As definições de noite, pregão e pré-abertura abaixo continuam valendo para o painel (`noticias_dia`) e para o teste extra da 7.5.
+- **Pré-abertura:** notícia entre 08:00:01 e a abertura de t+1 entra no **pregão de t+1** (E2, etapa 5). Bordas: fechamento exato (ex.: 17:00:00) = pregão; 08:00:00 = noite; 08:00:01 = pré-abertura do dia.
+- O mesmo corte das 8h vale no **treino** e **ao vivo**. O daily da coleta começa às 8h (confirmado pelo painel em 22/10/2026: 11:00 UTC). **Limitação:** notícia publicada pouco antes das 8h pode ainda não ter sido capturada ao vivo, embora esteja no histórico do treino.
+- Horário que manda: `v1-noticias.data_hora_publicacao` (contrato, fuso de SP); `raw_articles.published_at` (UTC) só para conferência (E1, etapa 5).
 
 ### 7.3 Colunas do dataset (uma linha por ação por pregão t)
 
@@ -219,13 +223,14 @@ Fonte dos dados: tabelas da seção 3. `fech` = `fechamento`; `aj` = `fechamento
 
 | Variável | Cálculo | Grupo |
 |---|---|---|
-| `noticias_noite_qtd` | Nº de notícias da janela da noite | Essencial |
-| `noticias_noite_tom` | Média de `prob_positivo − prob_negativo` na janela | Essencial |
-| `noticias_noite_extremo` | O score de maior valor absoluto na janela | Essencial |
-| `mudanca_tom` | Tom da noite − tom médio da empresa nos 30 pregões anteriores | Essencial |
-| `noticias_pregao_tom` | Tom das notícias da janela do pregão | Essencial |
-| `tom_setor` | Tom médio das notícias das outras empresas do setor (janela da noite) | Complementar |
-| `tom_mercado` | Tom médio de todas as notícias da janela da noite | Complementar |
+| `noticias_dia_qtd` | Nº de notícias da janela do modelo (08:00:01 de t até 08:00 de t+1, seção 7.2) | Essencial |
+| `noticias_dia_tom` | Média de `prob_positivo − prob_negativo` na janela | Essencial |
+| `noticias_dia_extremo` | O score de maior valor absoluto na janela | Essencial |
+| `mudanca_tom` | Tom da janela − tom médio da empresa nos 30 pregões anteriores | Essencial |
+| `tom_setor` | Tom médio das notícias das outras empresas do setor (mesma janela) | Complementar |
+| `tom_mercado` | Tom médio de todas as notícias da janela | Complementar |
+
+(`noticias_pregao_tom` saiu em 23/10/2026, N2-A: com ~89% das notícias só com data, ele mediria só a minoria com hora real.)
 | `ret_1d`, `ret_5d`, `ret_20d` | Retornos de `aj` | Essencial |
 | `volatilidade_20d` | Desvio-padrão de 20 retornos | Essencial |
 | `beta` | 252 pregões contra o IBOV | Essencial |
@@ -239,15 +244,17 @@ Fonte dos dados: tabelas da seção 3. `fech` = `fechamento`; `aj` = `fechamento
 
 **Alvo:** `alvo` (7.1).
 
-- Variáveis de preço, volume e mercado entram como **rank** dentro do pregão (percentil 0–1; empates pela média; vazio continua vazio).
-- Filtro do universo por data (3.5) antes de calcular os ranks.
+- Variáveis de preço, volume e mercado entram como **rank** dentro do pregão: `(posição média − 1) ÷ (n − 1)`, menor = 0, maior = 1, empates pela média, um único valor = 0,5, vazio continua vazio (E6, etapa 5). As 6 variáveis de notícias ficam **brutas** (E5); `tom_mercado` é igual para todas as ações do dia e também fica bruta.
+- Filtro do universo **do modelo** por data (3.5: sem BDR, sem `tickers_excluidos`, sem ação sem preço no dia) antes de calcular os ranks; o rank usa **todas** as linhas do pregão, antes de descartar as linhas sem alvo.
+- Detalhes das colunas (etapa 5): notícia da empresa vale para todas as suas ações (mesmo `id` conta 1 vez por empresa); `score = prob_positivo − prob_negativo`; `noticias_dia_extremo` = score de maior módulo, com sinal (empate de módulo = média dos empatados); `ret_1d/5d/20d` com base "as-of" (igual à rentabilidade do painel); `salto_abertura` exige o pregão anterior (E13); `dist_max_52s`/`dist_min_52s` com 252 pregões incluindo t, mínimo 120; `exposicao_*` = beta de 120 pregões (mínimo 60 pares) × variação do fator em t (E12); `ret_vs_setor` exclui a **empresa** inteira (E14, regra D10). Colunas de identificação: `data`, `ticker`, `empresa`, `setor`, `universo`, `dia_resultado`. Alvos guardados: `alvo`, `alvo_abertura`, `ret_t1`, `ret_ibov_t1`.
 
 ### 7.4 Modelos (definidos antes de rodar)
 | Modelo | Variáveis | Responde |
 |---|---|---|
 | 1. Base | Preço, volume e mercado | Quanto o preço sozinho explica |
-| 2. + notícias do pregão | 1 + `noticias_pregao_tom` | Notícias do dia ajudam? |
-| 3. + notícias da noite | 2 + notícias da noite + `mudanca_tom` | **Hipótese principal** |
+| 3. + notícias | 1 + `noticias_dia_qtd`, `noticias_dia_tom`, `noticias_dia_extremo` + `mudanca_tom` | **Hipótese principal:** as notícias **do dia t e da noite, até 08:00 de t+1**, ajudam a prever se a ação supera o Ibovespa em t+1? |
+
+O **modelo 2** (+ notícias do pregão) **saiu** em 23/10/2026 (N2-A): com ~89% das notícias só com data, não há como separar pregão de noite (seção 7.2). A numeração 1/3/3b foi mantida para não confundir com o histórico.
 | 3b. Dias de resultado | Modelo 3 só nos dias com balanço divulgado na janela | O efeito é maior em dia de balanço? |
 
 **Notícias usadas pelo modelo (decidido em 21/10/2026):**
@@ -263,6 +270,7 @@ XGBoost, ponto de partida: `n_estimators=300, max_depth=3, learning_rate=0.03, s
 - **Conjunto de teste final** separado e usado **uma única vez**.
 - **Corte principal: top 5** (o que vai para a tela). Avaliar também o **top 3** com as mesmas métricas, para mostrar que o resultado não depende do corte.
 - Métricas: acerto do top 5 × **faixa do acaso** (10 mil sorteios aleatórios de 5 ações por dia, faixa de 95%); retorno médio do top 5 − IBOV; **top 5 × últimos 5**; AUC geral e AUC médio por pregão; IC por bootstrap em blocos de pregão; **robustez por ano**; se o universo for o atual, **análise de sensibilidade** (último ano × anteriores).
+- **Teste extra "notícia depois do fechamento" (pedido em 23/10/2026; implementar na etapa 6):** recalcular as variáveis de notícias usando **só as notícias com hora real** (`precisao_hora = 'hora'`) e **só a noite** (do fechamento de t até 08:00 de t+1; `inicio_janela = "fechamento"`), e comparar com o modelo 3 na mesma validação. Mede o efeito das notícias publicadas depois do fechamento. Amostra pequena (~9% das notícias têm hora real, ~47% delas na noite): informar as contagens e tratar como exploratório.
 - **Referências de comparação** (rodadas com a mesma validação): escolha ao acaso (faixa acima), regra simples só com a volatilidade (ações mais calmas primeiro) e **regressão logística** com as mesmas variáveis. O XGBoost só "ganha" se superar as três.
 - Diferença dentro da faixa do acaso = "ainda não mostrou vantagem sobre o acaso".
 
@@ -274,7 +282,7 @@ XGBoost, ponto de partida: `n_estimators=300, max_depth=3, learning_rate=0.03, s
 - No dia seguinte, fechar o resultado: `superou` = retorno da ação > retorno do IBOV no pregão previsto.
 
 ### 7.7 Modelo em uso no dia a dia
-- **Qual modelo gera o top 5:** o **modelo 3** (com as notícias da noite), porque é ele que testa a hipótese do TCC. Ele é mostrado mesmo que não supere o acaso: o selo "em avaliação" e o histórico existem para isso.
+- **Qual modelo gera o top 5:** o **modelo 3** (com as notícias do dia e da noite, até 08:00 de t+1), porque é ele que testa a hipótese do TCC. Ele é mostrado mesmo que não supere o acaso: o selo "em avaliação" e o histórico existem para isso.
 - **Comparação ao vivo:** todo dia, gravar também (sem mostrar na tela) o top 5 do **modelo 1** (sem notícias) e o da **regra da volatilidade**. Assim, o histórico mostra, com dados de verdade e daqui para frente, se as notícias fazem diferença.
 - **Retreino mensal:** no primeiro dia útil de cada mês, treinar de novo com todo o histórico até o fim do mês anterior (o mesmo esquema do walk-forward). Os hiperparâmetros só mudam numa nova avaliação completa, nunca no retreino automático.
 - **Arquivo do modelo:** salvar em `modelos/xgb-AAAA-MM.json`, com um arquivo de metadados ao lado: variáveis usadas, período de treino, hiperparâmetros, métricas da validação, universo (`composicao_atual` ou histórica) e um hash do dataset. O `modelo_versao` do pacote `experimento_top` aponta para esse arquivo.
@@ -434,6 +442,26 @@ Todas as 23 informações da planilha (`docs/planilha_final.xlsx`; cálculos na 
 - **Payout por ano:** usa o lucro líquido da própria DFP do exercício.
 - **Lista de proventos:** mostra o ticker atual.
 
+**Decisões da etapa 5 (22/10/2026)**
+- **E1 Horário:** vale `v1-noticias`; `raw_articles` só confere.
+- **E2 Pré-abertura:** 08:00:01 até a abertura → pregão do mesmo dia (no painel). No modelo, desde N2-A, pré-abertura, pregão e noite formam uma janela só (seção 7.2).
+- **E3 Sem horário:** 23:59:59 da data → noite do pregão daquela data (seção 7.2).
+- **E4 Janela sem notícia:** `noticias_dia_qtd = 0`, tom/extremo vazios. Antes do início da cobertura de notícias (menor data de publicação no banco), todas as colunas de notícia ficam vazias, inclusive a quantidade.
+- **E5 / E6 Ranks:** notícias brutas; preço, volume e mercado em rank `(pos − 1)/(n − 1)`, só entre as ações do universo do modelo no pregão, antes de descartar as linhas sem alvo.
+- **E7 `mudanca_tom`:** base = todas as notícias da empresa (noite, pregão, pré-abertura) com pregão de referência nos 30 pregões anteriores a t (sem t); mínimo de 5 notícias com score.
+- **E8 `tom_setor`:** média, entre as outras empresas do setor (sem o próprio CNPJ) presentes no universo do dia, do tom da janela (`noticias_dia_tom`) de cada empresa; cada empresa 1 voto.
+- **E9 `tom_mercado`:** média dos scores da janela das empresas do universo do dia, cada `id` uma vez.
+- **E10 Repetidas:** mesma empresa, mesma data de publicação e mesmo título normalizado contam uma vez (a mais cedo); documentos `cvm_ipe` não são deduplicados.
+- **E11 Dias de resultado (modelo 3b):** `v1-balancos.data_entrega`, com a regra das 23:59:59 → `dia_resultado = true` no pregão cuja noite contém a entrega. Limitações: balanço reapresentado fica com a data da última versão; divulgação antes da abertura cai um pregão depois.
+- **E12 Histórico mínimo:** retornos exigem o preço base; volatilidade e volume relativo 20 pregões completos; beta 252/120; exposições 120/60; 52 semanas 252/120; `mudanca_tom` 30 pregões.
+- **E13** `ret_1d` usa o último preço disponível; `salto_abertura` exige o pregão anterior.
+- **E14** `ret_vs_setor` exclui a empresa inteira (D10).
+- **E15 Saída:** CSV + JSON (contagens, sha256, parâmetros) em `saida/experimento/` (fora do git).
+- **E16 Última linha:** fica no dataset sem alvo (é a linha da previsão ao vivo); o treino a descarta. As variáveis da noite dela exigem a data do próximo pregão (informada pela rotina); sem ela, ficam vazias.
+- **N1-A Meia-noite do Pacífico (23/10/2026):** notícias com 00:00:00 em Los Angeles (04:00/05:00 de SP; ~89% das notícias) viram "só data" na camada de leitura (`fontes.aplicar_regra_so_data`, coluna `precisao_hora`), em `v1-noticias` e `raw_articles`. `raw_articles.published_precision` não ajuda: marca `date` só nos documentos da CVM (as 131.616 de meia-noite vêm como `datetime`). Pedido de horário real à coleta na seção 10.
+- **N2-A Janela única (23/10/2026):** colunas `noticias_dia_*` na janela 08:00:01 de t → 08:00 do próximo pregão; `noticias_pregao_tom` e o modelo 2 saem; `experimento.inicio_janela` no `parametros.yaml`.
+- **Horários da B3 antes de 03/2024:** ainda não cadastrados; com o histórico de 5 anos o código para com aviso, e os horários de 2021–2024 serão cadastrados quando o histórico chegar.
+
 **Pendências internas por etapa**
 - **Etapa 7 (vindos da etapa 3, não implementados nela):** (a) `mercado_dia`: `fechamento` e `variacao_dia` de `IBOV`, `USDBRL` e `BRENT` (reusar `grade_de_precos` + `variacao(g_fech, 1)` de `processamento/fatos/precos.py`); (b) `series_diarias` (seção 8.3, pacote 4): `fechamento`, `indice_retorno_total` base 100 (`aj(t)/aj(início) × 100`), `volume`, para cada ação, `IBOV`, `SETOR:<nome>` e índices (`CDI`, `IPCA`, `IDIV`, `SMLL`, `IFIX`, `IVVB11`) em base 100 acumulada (reusar o acumulado de CDI/IPCA de `processamento/fatos/indices.py`). Os cálculos ficam em `processamento/fatos/` (funções puras com teste); a etapa 7 só empacota. **A decidir no plano da etapa 7:** como montar a série `SETOR:<nome>` (média dos retornos diários das ações do setor, encadeada em base 100, é o candidato) e o que fazer com ações que entram/saem do setor no meio da série.
 - **Etapa 4 (payout), resolvida:** `v1-acoes_emitidas` só separa ON e PN. Em empresas com **duas classes PN** (ex.: USIM5 e USIM6), a quantidade de cada classe não é conhecida: regra de aproximação D2 (decisões da etapa 4; limitação na seção 10).
@@ -454,6 +482,10 @@ Todas as 23 informações da planilha (`docs/planilha_final.xlsx`; cálculos na 
 | Validação do FinBERT: já feita pelo usuário; registrar os números (manchetes, % de acerto, por idioma) | Usuário |
 | Empresa com duas classes PN (ex.: USIM5/USIM6, BRKM5/BRKM6): `v1-acoes_emitidas` traz só o total de PN, então o payout usa, em cada provento, a média das classes PN que pagaram naquele evento × qtd_pn. É exato quando as classes pagam igual; limitação registrada no TCC. Resolve-se com a quantidade por classe | Coleta |
 | Balanço reapresentado: `v1-balancos` guarda só a última versão, com a sua `data_entrega`. Antes dessa data o período fica sem dado (`historico_insuficiente`); não há vazamento, mas a versão original não é recuperável. Limitação registrada no TCC. Resolve-se guardando as versões | Coleta |
+| **Horário real das notícias do Google News:** ~91% vêm com 00:00 de Los Angeles (só a data). O processamento trata como "só data" (seção 7.2), o que impede separar pregão de noite. Pedido à coleta: obter o horário real de publicação (ex.: pela página da notícia, no enriquecimento) e marcar `published_precision = 'date'` quando só a data for conhecida | Coleta |
+| Notícias coletadas retroativamente: `data_hora_coleta` começa em 07/09/2026 (mediana de ~133 dias entre publicação e coleta). O conjunto histórico pode diferir do que estaria disponível ao vivo em cada data (notícias apagadas ou que só apareceram depois). Limitação registrada no TCC; ao vivo, o corte vale desde set/2026 | Coleta |
+| Abertura da ação = fechamento do pregão anterior em ~11% dos pares (ação, dia) (5.021 de 45.839, medido em 23/10/2026; maior em ações de preço baixo, ex.: RAIZ4 48%). Provável igualdade real (passo mínimo de R$ 0,01), **não confirmada**; afeta o `salto_abertura`. Limitação registrada no TCC | Coleta |
+| Abertura do IBOV em `v1-precos` (fonte Yahoo): em 32,5% dos pares de pregões consecutivos (557 pares medidos em 23/10/2026), a `abertura` do IBOV é igual ao `fechamento` do pregão anterior (abertura não informada pela fonte). Nesses dias o `alvo_abertura` vira "a ação abriu em alta?", e não "abriu melhor que o Ibovespa?". **Na etapa 6, o `alvo_abertura` é avaliado só nos dias em que a abertura do IBOV ≠ fechamento anterior.** Nenhuma variável do modelo usa a abertura do IBOV (só o `alvo_abertura`); o alvo principal usa o fechamento e não é afetado. Limitação registrada no TCC. Resolve-se com a abertura real do índice | Coleta |
 | Desdobramento ou bonificação entre o último balanço e t: o valor de mercado usa o preço já ajustado × a quantidade antiga de `v1-acoes_emitidas` e fica errado pelo fator. Limitação registrada no TCC. Pode ser conferido no futuro com `v1-raw_b3_suplemento` | Coleta |
 
 **Resolvidas em 22/10/2026** (as fontes não tinham os dados; não foi erro da coleta):
