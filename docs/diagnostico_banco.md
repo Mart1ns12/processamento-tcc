@@ -1,6 +1,6 @@
 # Diagnóstico do banco da coleta (só leitura)
 
-- Gerado em: 2026-10-23 21:31 (America/Sao_Paulo)
+- Gerado em: 2026-10-24 00:39 (America/Sao_Paulo)
 - Banco: tcc_scraper
 - MySQL: 8.0.46-0ubuntu0.24.04.4
 - Comando: `python -m processamento.diagnostico`
