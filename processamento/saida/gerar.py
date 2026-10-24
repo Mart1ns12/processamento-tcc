@@ -39,6 +39,9 @@ COLETA_NAO_CONSULTADA = {"consultado": False, "nota": "gatilho da coleta não co
 AVISO_SEM_MODELO = "sem arquivo de modelo em {pasta}: experimento_top não gerado"
 AVISO_RETREINO = "Retreino de {mes} falhou ({tipo}): usando o modelo anterior."
 AVISO_CHECAGEM = "falha na checagem diária ({tipo}): avisos de checagem não gerados."
+AVISO_COMPLETO = ("Carga completa: pacotes inteiros, sem o envio incremental; o estado do envio e os registros "
+                  "do experimento não foram alterados.")
+PASTA_COMPLETA_PADRAO = fontes.RAIZ / "saida_completa"
 
 
 def _data_argumento(texto: str) -> date:
@@ -77,7 +80,7 @@ def gerar(d: date, *, ler=None, pasta_saida: Path | None = None, pasta_modelos: 
           agora: datetime | None = None, coleta_status: dict | None = None, avisos_coleta: list[str] = (),
           existe_composicao: bool | None = None, params_treino=None, params_saida=None,
           retreinar: Callable[[pd.DataFrame, dict, list[date], date], list[str]] | None = None,
-          checagem: ParametrosChecagem | None = None) -> Path:
+          checagem: ParametrosChecagem | None = None, completo: bool = False) -> Path:
     """Gera os pacotes da saída de D e devolve a pasta (`pasta_saida`, que é a pasta de D).
 
     `ler`: leitor injetado (testes e etapa 8); sem ele usa a conexão somente leitura da coleta.
@@ -85,6 +88,8 @@ def gerar(d: date, *, ler=None, pasta_saida: Path | None = None, pasta_modelos: 
     `retreinar`: gancho do retreino mensal (seção 7 do plano da etapa 8); chamado no top 5, antes de escolher o
     modelo, com (df do dataset, info, calendário, D). Exceção vira aviso e a rodada segue.
     `checagem`: limites da checagem diária (seção 9 do plano da etapa 8); sem ele, nenhum aviso de checagem.
+    `completo`: carga completa (seção 8.7 da especificação): os pacotes inteiros, sem ler nem gravar o estado do
+    envio incremental (ignora `usar_estado`), sem fechar dias nem gravar registros do experimento e sem retreino.
     Levanta `ErroSaida` (depois de gravar `execucao.json` com status `falhou`) se não há pregão antes de D.
     `fontes.ErroSomenteLeitura` sobe sem ser convertido (o chamador devolve código 3).
     """
@@ -94,7 +99,7 @@ def gerar(d: date, *, ler=None, pasta_saida: Path | None = None, pasta_modelos: 
     pasta_modelos = Path(pasta_modelos) if pasta_modelos is not None else treino.PASTA_MODELOS_PADRAO
     pasta_registros = Path(pasta_registros) if pasta_registros is not None else params_saida.pasta_registros
     estado_dir = None
-    if usar_estado:
+    if usar_estado and not completo:
         estado_dir = Path(pasta_estado) if pasta_estado is not None else params_saida.pasta_estado
     if ler is None:
         ler = exp_dataset._leitor_padrao()
@@ -103,7 +108,7 @@ def gerar(d: date, *, ler=None, pasta_saida: Path | None = None, pasta_modelos: 
     dados_ate = contrato.data_hora_txt(calendario.corte_manha(d))
     coleta = COLETA_NAO_CONSULTADA if coleta_status is None else coleta_status
     rodada = _rodada_anterior(pasta) + 1
-    avisos: list[str] = []
+    avisos: list[str] = [AVISO_COMPLETO] if completo else []
 
     # 1) execução em andamento (a rodada é a do execucao.json que já existe, + 1)
     _gravar_execucao(pasta, _execucao(d, rodada, gerado_em, None, "em_andamento", gerado_em, dados_ate,
@@ -190,7 +195,9 @@ def gerar(d: date, *, ler=None, pasta_saida: Path | None = None, pasta_modelos: 
 
     def historico():
         fim = params_treino.teste_final_fim
-        avisos.extend(pacotes_experimento.fechar_pendentes(pasta_registros, ins.precos, ins.cal, ins.t, fim, agora))
+        if not completo:   # a carga completa só lê os resultados já fechados
+            avisos.extend(pacotes_experimento.fechar_pendentes(pasta_registros, ins.precos, ins.cal, ins.t, fim,
+                                                               agora))
         resultados = pacotes_experimento.ler_resultados(pasta_registros)
         u = universo()
         universo_t = str(u.loc[pd.to_datetime(u["data"]).dt.date == ins.t, "universo"].iloc[0])
@@ -201,11 +208,15 @@ def gerar(d: date, *, ler=None, pasta_saida: Path | None = None, pasta_modelos: 
 
     def top():
         fim = params_treino.teste_final_fim
-        existente = pacotes_experimento.registro_existente(pasta_registros, d, fim)
+        if completo:   # o top já gravado de D, se houver (mesmo com `fim` vazio); senão, gerado sem gravar
+            registro = pacotes_experimento.ler_registro_top(pasta_registros, d)
+            existente = None if registro is None else registro["pacote"]
+        else:
+            existente = pacotes_experimento.registro_existente(pasta_registros, d, fim)
         if existente is not None:
             avisos.extend(existente["avisos"])
             return [existente], [], None
-        if retreinar is not None:
+        if retreinar is not None and not completo:
             df_treino, info_treino = dataset()
             try:
                 avisos.extend(retreinar(df_treino, info_treino, ins.cal, d))
@@ -222,7 +233,8 @@ def gerar(d: date, *, ler=None, pasta_saida: Path | None = None, pasta_modelos: 
             dataset()[0], ins.t, d, modelo, meta, modelo_m1, meta_m1, janela(), cnpj_de, params_treino, params_saida,
             agora, dados_ate, caminho.stem, avisos_modelo,
         )
-        pacote, _gravou = pacotes_experimento.gravar_registro_top(pasta_registros, pacote, interno, fim)
+        if not completo:
+            pacote, _gravou = pacotes_experimento.gravar_registro_top(pasta_registros, pacote, interno, fim)
         avisos.extend(pacote["avisos"])
         return [pacote], [], None
 
@@ -311,8 +323,17 @@ def main(argv=None, ler=None, existe_composicao: bool | None = None) -> int:
                         help="pasta dos registros do experimento (padrão: parametros.yaml)")
     parser.add_argument("--sem-estado", action="store_true",
                         help="não lê nem grava o estado do envio (manda tudo)")
+    parser.add_argument("--completo", action="store_true",
+                        help="carga completa: os 10 pacotes inteiros em outra pasta (padrão: saida_completa), sem "
+                             "mexer no estado do envio nem nos registros do experimento")
     args = parser.parse_args(argv)
     d = args.data
+    if args.completo:
+        if args.pasta is None:
+            args.pasta = PASTA_COMPLETA_PADRAO
+        if Path(args.pasta).resolve() == Path(carregar_parametros_saida().pasta).resolve():
+            print("A carga completa precisa de outra pasta (--pasta): a pasta do envio diário não é alterada.")
+            return 2
 
     if ler is None:
         try:
@@ -333,7 +354,7 @@ def main(argv=None, ler=None, existe_composicao: bool | None = None) -> int:
         pasta = gerar(
             d, ler=ler, pasta_saida=pasta_d, pasta_modelos=args.pasta_modelos,
             pasta_registros=args.pasta_registros, usar_estado=not args.sem_estado,
-            existe_composicao=existe_composicao,
+            existe_composicao=existe_composicao, completo=args.completo,
         )
     except ErroSaida as e:
         print(f"Saída não gerada: {e}")

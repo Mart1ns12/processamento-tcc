@@ -426,6 +426,17 @@ Nomes dos arquivos: `execucao.json`, `acoes.json`, `series_diarias.json`, `merca
 - Como o banco da interface guarda cada pacote (pode ser uma tabela por pacote, com a mesma chave).
 - O processamento só garante: **mesmo formato, mesma chave e reenvio seguro (upsert)**.
 
+### 8.7 Carga completa (carga inicial e recarga do zero)
+Decidido em 24/10/2026.
+
+- **Por que existe:** o envio "quando muda" (8.1 e S4) marca o que já foi enviado em `saida/estado/`, mesmo sem API. Se a interface for ligada depois, ou se o banco dela for recriado, ela fica sem o histórico: séries, fundamentos e proventos só saem uma vez.
+- **Comando:** `python -m processamento.saida --data AAAA-MM-DD --completo`. Sem `--pasta`, a saída vai para `saida_completa/AAAA-MM-DD/`. Se `--pasta` for a pasta do envio diário, o comando recusa (código 2) e não grava nada.
+- **O que sai:** os 10 pacotes inteiros: todas as ações; séries de 253 pregões com `substituir_serie: true`; 8 trimestres de fundamentos; 5 anos de proventos; `removidos` vazio.
+- **O que NÃO muda:** o estado do envio (`saida/estado/`), os registros do experimento (`registros/`), nenhum retreino e nenhum dia fechado (não grava `.resultado.json` nem `.descartado.json`). O top 5 de D: se `<D>.top.json` já existe, sai esse mesmo registro; se não existe, é gerado na hora, sem ser gravado.
+- **Carga inicial:** rodar com D = o dia da rotina diária mais recente; enviar os 10 arquivos pela ordem da 8.5. Daí em diante o envio diário segue de `saida/`.
+- **Recarga do zero:** apagar o banco da interface; rodar a carga completa com o D mais recente; enviar os 10 arquivos. Não precisa apagar `saida/estado/`: o upsert da API (8.6) torna o reenvio seguro.
+- **Limitação:** o `experimento_historico` traz o histórico inteiro dos resultados já gravados (não há corte). Quem recarrega do zero recebe esse histórico todo.
+
 ---
 
 ## 9. Ordem de implementação
@@ -554,6 +565,9 @@ Com ~1 ano de histórico, a etapa 6 é **só teste de funcionamento** (3.4): o r
 **Pendências internas por etapa**
 - **Etapa 4 (payout), resolvida:** `v1-acoes_emitidas` só separa ON e PN. Em empresas com **duas classes PN** (ex.: USIM5 e USIM6), a quantidade de cada classe não é conhecida: regra de aproximação D2 (decisões da etapa 4; limitação na seção 10).
 - **Etapa 8 (vindos da etapa 7):** (a) dia de pregão: resolvido (R1); (b) checagem diária: resolvida (seção 6, R10); (c) **entrada em produção** só depois do histórico completo (5 anos) e de `treino.modelo_oficial: true`; então `python -m processamento.producao --inicio D0` confere e arquiva, o usuário fixa `treino.teste_final.fim` e o teste final roda uma vez (R11). **Onde rodar na produção (R13): a decidir.** (d) retreino mensal: resolvido (R6, 7.7); (e) limpar `registros/experimento/` dos testes de funcionamento: pendente, junto com (c), antes da produção; (f) tempo da rodada contra o prazo das 9h45: `gerar` levou ~2 min (medido em 23/10/2026); conferir o tempo no `execucao.json` da primeira rodada real.
+
+**Acréscimo de 24/10/2026 (carga completa, seção 8.7)**
+- **Carga completa:** `gerar(..., completo=True)` e `python -m processamento.saida --completo`. Não muda o contrato (versão `1.0`) nem os 10 pacotes; não mexe no estado do envio, nos registros do experimento, nem faz retreino ou fechamento de dias.
 
 ---
 

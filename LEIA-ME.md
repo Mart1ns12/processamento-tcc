@@ -82,3 +82,23 @@ Em sábado, domingo ou feriado, a rotina sai com código 0 e não grava nada. Is
 | 3 | Conexão com o banco, ou sessão que não é só leitura |
 | 4 | `falhou`: a coleta não ficou pronta até 09:45 (ou o `gerar` não gerou nenhum pacote) |
 | 5 | Outra rotina em andamento (trava). A trava vence sozinha depois de 6 horas |
+
+## Carga completa da interface
+
+Use quando a interface é ligada depois da rotina diária, ou quando o banco dela foi recriado. A rotina diária só manda o que mudou desde o último envio; a carga completa manda tudo: todas as ações, séries de 253 pregões, 8 trimestres de fundamentos e 5 anos de proventos. Detalhes na seção 8.7 da especificação.
+
+1. Veja qual é a data da rotina diária mais recente (a pasta `saida\AAAA-MM-DD` com a data mais nova).
+2. Na pasta do projeto, gere a carga com essa data:
+
+```
+.venv\Scripts\python.exe -m processamento.saida --data AAAA-MM-DD --completo --pasta saida_completa
+```
+
+Os 10 arquivos saem em `saida_completa\AAAA-MM-DD\`. A carga não mexe no envio diário, no `saida\estado\` nem nos registros do experimento, e não retreina o modelo. Não use `--pasta saida`: é a pasta do envio diário, e o comando recusa (código 2).
+
+3. Envie os 10 arquivos para a interface nesta ordem: `acoes`, `series_diarias`, `mercado_dia`, `resumo_acao`, `fundamentos_trimestrais`, `proventos`, `noticias_dia`, `experimento_historico`, `experimento_top` e, por último, `execucao`.
+4. Daí em diante, o envio diário segue de `saida\` como antes.
+
+**Recarga do zero** (o banco da interface foi apagado ou recriado): apague o banco da interface, rode o comando do passo 2 com a data mais recente e envie os 10 arquivos de novo. Não precisa apagar `saida\estado\`: a interface recebe por substituição, então reenviar é seguro.
+
+Limitação: o `experimento_historico` traz todo o histórico dos resultados já fechados (não há corte).
