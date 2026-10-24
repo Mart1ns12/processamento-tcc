@@ -310,3 +310,20 @@ def test_ler_composicao_erro_coluna_ausente():
     _afirmar_erro(
         lambda: fontes.ler_composicao(ler=ler, existe=True), "v1-composicao_ibov", "participacao"
     )
+
+
+def test_composicao_usa_ler_mudancas_sem_a_troca_para_bdr(monkeypatch):
+    # Caso 6D (plano Fase 6): a composição aplica o mapa de união de `ler_mudancas` (sem as trocas para BDR).
+    monkeypatch.setattr(fontes, "ler_mudancas", lambda ler=None: {"CCRO3": "MOTV3"})
+    linhas = pd.DataFrame(
+        {
+            "ticker": ["JBSS3", "CCRO3"],
+            "data_inicio": ["2025-01-01", "2025-10-20"],
+            "data_fim": [None, None],
+            "participacao": ["1.5", "2.25"],
+            "fonte": ["b3", "b3"],
+        }
+    )
+    ler = _ler_composicao_falso(COLUNAS_COMPOSICAO_REAIS, linhas, [])
+    out = fontes.ler_composicao(ler=ler, existe=True)
+    assert out["ticker"].tolist() == ["JBSS3", "MOTV3"]

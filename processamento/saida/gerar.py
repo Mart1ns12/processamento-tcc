@@ -42,6 +42,10 @@ AVISO_CHECAGEM = "falha na checagem diária ({tipo}): avisos de checagem não ge
 AVISO_SUSPEITOS_FALHA = "falha na checagem de retornos suspeitos ({tipo}): aviso não gerado."
 AVISO_COMPLETO = ("Carga completa: pacotes inteiros, sem o envio incremental; o estado do envio e os registros "
                   "do experimento não foram alterados.")
+NAO_PUBLICADOS = ("experimento_historico", "experimento_top")   # só com modelo oficial ou publicar_top_provisorio
+NOTA_TOP_NAO_PUBLICADO = ("Top 5 gerado e registrado só como teste de funcionamento (modelo não oficial): "
+                          "experimento_top e experimento_historico não enviados à interface "
+                          "(saida.publicar_top_provisorio = false).")
 PASTA_COMPLETA_PADRAO = fontes.RAIZ / "saida_completa"
 
 
@@ -93,6 +97,8 @@ def gerar(d: date, *, ler=None, pasta_saida: Path | None = None, pasta_modelos: 
     envio incremental (ignora `usar_estado`), sem fechar dias nem gravar registros do experimento e sem retreino.
     Levanta `ErroSaida` (depois de gravar `execucao.json` com status `falhou`) se não há pregão antes de D.
     `fontes.ErroSomenteLeitura` sobe sem ser convertido (o chamador devolve código 3).
+    Sem modelo oficial e sem `saida.publicar_top_provisorio`, `experimento_top` e `experimento_historico` são gerados
+    (e o top registrado) mas não gravados na pasta (seção 8.5).
     """
     params_saida = carregar_parametros_saida() if params_saida is None else params_saida
     params_treino = carregar_parametros_treino() if params_treino is None else params_treino
@@ -110,6 +116,7 @@ def gerar(d: date, *, ler=None, pasta_saida: Path | None = None, pasta_modelos: 
     coleta = COLETA_NAO_CONSULTADA if coleta_status is None else coleta_status
     rodada = _rodada_anterior(pasta) + 1
     avisos: list[str] = [AVISO_COMPLETO] if completo else []
+    publicar_top = bool(params_treino.modelo_oficial or params_saida.publicar_top_provisorio)
 
     # 1) execução em andamento (a rodada é a do execucao.json que já existe, + 1)
     _gravar_execucao(pasta, _execucao(d, rodada, gerado_em, None, "em_andamento", gerado_em, dados_ate,
@@ -239,7 +246,7 @@ def gerar(d: date, *, ler=None, pasta_saida: Path | None = None, pasta_modelos: 
         cnpj_de = mapas_cadastro(ins.cadastro)[1]
         pacote, interno = pacotes_experimento.gerar_top(
             dataset()[0], ins.t, d, modelo, meta, modelo_m1, meta_m1, janela(), cnpj_de, params_treino, params_saida,
-            agora, dados_ate, caminho.stem, avisos_modelo,
+            agora, dados_ate, caminho.stem, avisos_modelo, mudancas=ins.mudancas,
         )
         if not completo:
             pacote, _gravou = pacotes_experimento.gravar_registro_top(pasta_registros, pacote, interno, fim)
@@ -263,9 +270,11 @@ def gerar(d: date, *, ler=None, pasta_saida: Path | None = None, pasta_modelos: 
                 incompleta = True
                 continue
             registros, removidos, novo_estado = produzido
-            arquivo = contrato.gravar_lote(
-                pasta, contrato.lote(nome, registros, gerado_em, dados_ate, removidos), compacto=nome in COMPACTOS
-            )
+            lote = contrato.lote(nome, registros, gerado_em, dados_ate, removidos)
+            if nome in NAO_PUBLICADOS and not publicar_top:
+                contrato.validar_lote(lote)   # confere o pacote, mas não grava nem lista em pacotes_enviados
+                continue
+            arquivo = contrato.gravar_lote(pasta, lote, compacto=nome in COMPACTOS)
             if novo_estado is not None:
                 contrato.gravar_estado(estado_dir, nome, novo_estado)
             produzidos[nome] = registros
@@ -274,6 +283,8 @@ def gerar(d: date, *, ler=None, pasta_saida: Path | None = None, pasta_modelos: 
         except Exception as erro:
             avisos.append(f"falha ao gerar {nome}: {type(erro).__name__}: {erro}")
             incompleta = True
+    if not publicar_top:
+        avisos.append(NOTA_TOP_NAO_PUBLICADO)
 
     # 4b) checagem diária (seção 9 do plano da etapa 8): só avisos, nunca bloqueia nada
     if checagem is not None:

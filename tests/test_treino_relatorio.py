@@ -269,3 +269,14 @@ def test_pct():
     assert pct(None) == "n/d"
     assert pct(0.0008, 2) == "0,08%"
     assert pct(-0.0028, 2) == "-0,28%"
+
+
+def test_aviso_usa_o_periodo_real_lido_dos_dados():
+    """Aviso do relatório (24/10/2026): período de desenvolvimento dos dados, não um texto fixo."""
+    from processamento.experimento.relatorio import _linha_historico
+
+    assert _linha_historico({"inicio": "2024-01-02", "fim": "2026-06-19", "n_pregoes": 616}) == (
+        "> Gerado com o período de desenvolvimento de 2024-01-02 a 2026-06-19 (cerca de 2,5 anos, 616 pregões); "
+        "o modelo só vale como oficial com `treino.modelo_oficial: true` (ESPECIFICACAO 3.4)."
+    )
+    assert _linha_historico({}) == "> Período de desenvolvimento não informado (ESPECIFICACAO 3.4)."

@@ -369,22 +369,38 @@ def resumo_vazios(total, nulos) -> dict:
 
 
 def divergencias_coluna(tabela, coluna, situacao, texto_vazio, zeros,
-                        vazia_conhecida, zero_proibido) -> list:
+                        vazia_conhecida, zero_proibido, so_nota_preenchimento=False,
+                        so_nota_texto_vazio=False) -> list:
     """Lista as divergências de uma coluna em relação à especificação (strings do relatório)."""
     ref = f"`{tabela}.{coluna}`"
     saida = []
     if situacao == "tabela_vazia":  # sem linhas: nada a julgar por coluna
         return saida
-    if vazia_conhecida:
+    if so_nota_preenchimento:  # só nota (consultas.secao_vazios)
+        pass
+    elif vazia_conhecida:
         if situacao != "vazia":
             saida.append(f"{ref}: esperada vazia (seção 3.1), mas tem dados ({situacao})")
     elif situacao == "vazia":
         saida.append(f"{ref}: 100% vazia")
-    if inteiro(texto_vazio) > 0:
+    if inteiro(texto_vazio) > 0 and not so_nota_texto_vazio:
         saida.append(f"{ref}: {inteiro(texto_vazio)} textos vazios ('') em vez de NULL")
     if zero_proibido and inteiro(zeros) > 0:
         saida.append(f"{ref}: {inteiro(zeros)} zeros (ausência deve ser NULL)")
     return saida
+
+
+def nota_preenchimento(tabela, coluna, total, nulos) -> str:
+    """Nota de coluna acompanhada só por contagem (ex.: data_mudanca): preenchida em N de M linhas."""
+    total, nulos = inteiro(total), inteiro(nulos)
+    nota = f"`{tabela}.{coluna}` preenchida em {total - nulos} de {total} linhas"
+    return nota + (f" ({nulos} vazias)" if nulos else "")
+
+
+def nota_texto_vazio(tabela, coluna, n, ids) -> str:
+    """Nota de textos vazios numa coluna em que eles são só informação (ex.: título da notícia)."""
+    return (f"`{tabela}.{coluna}`: {inteiro(n)} textos vazios ('') (a leitura trata como vazio); "
+            f"ids (até 10): {', '.join(str(i) for i in ids)}")
 
 
 # ---------------------------------------------------------------------------

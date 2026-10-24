@@ -21,7 +21,7 @@ from dotenv import load_dotenv
 from sqlalchemy import URL, Engine, create_engine, event, text
 from sqlalchemy.exc import SQLAlchemyError
 
-from processamento.tickers import aplicar_mudancas, parse_other_codes
+from processamento.tickers import aplicar_mudancas, parse_other_codes, troca_acao_para_bdr
 
 RAIZ = Path(__file__).resolve().parent.parent
 CAMINHO_MAPA = Path(__file__).resolve().parent / "config" / "fontes.yaml"
@@ -367,7 +367,7 @@ def _tratar(
         if fora:
             raise ErroLeitura(f"{nome}.{c}: valor fora do contrato: {fora[0]!r}")
     if unir_mudancas and tabela in TABELAS_COM_TICKER:
-        mudancas = mudancas_como_dict(ler_tabela("mudancas_ticker", ler=ler, unir_mudancas=False))
+        mudancas = ler_mudancas(ler)
         df = unir_historicos(df, mudancas, ent["chave"])
     chave = ent["chave"]
     repetida = df.duplicated(subset=chave, keep=False)
@@ -594,15 +594,36 @@ def normalizar_cnpj(serie: pd.Series, rotulo: str) -> pd.Series:
     return serie.map(_um)
 
 
-def mudancas_como_dict(mudancas: pd.DataFrame) -> dict[str, str]:
-    """Monta {ticker antigo: ticker novo} a partir de `v1-mudancas_ticker`, ignorando linhas sem destino."""
+def mudancas_como_dict(
+    mudancas: pd.DataFrame, tipo_de: dict[str, str] | None = None
+) -> dict[str, str]:
+    """Monta {ticker antigo: ticker novo} de `v1-mudancas_ticker`, sem linhas sem destino.
+
+    Troca de ação por BDR fica de fora (não une os históricos; seção 6): `tipo_de` é ticker -> tipo_acao do
+    cadastro; sem ele, vale só a classe do código.
+    """
     antigos = normalizar_ticker(mudancas["ticker_antigo"])
     novos = normalizar_ticker(mudancas["ticker_novo"])
+    tipos = tipo_de or {}
     return {
         a: n
         for a, n in zip(antigos, novos, strict=True)
-        if isinstance(a, str) and isinstance(n, str) and a != n
+        if isinstance(a, str) and isinstance(n, str) and a != n and not troca_acao_para_bdr(a, n, tipos)
     }
+
+
+def ler_mudancas(ler: Callable[..., pd.DataFrame] | None = None) -> dict[str, str]:
+    """Mapa de união dos históricos (antigo -> novo) lido do banco, sem as trocas de ação por BDR.
+
+    Lê o cadastro só quando há mudanças (o tipo BDR vem dele).
+    """
+    mudancas = ler_tabela("mudancas_ticker", ler=ler, unir_mudancas=False)
+    if mudancas.empty:
+        return {}
+    cadastro = ler_tabela("cadastro", ler=ler)
+    tipo_de = {t: tp for t, tp in zip(cadastro["ticker"], cadastro["tipo_acao"])
+               if isinstance(t, str) and isinstance(tp, str)}
+    return mudancas_como_dict(mudancas, tipo_de)
 
 
 def unir_historicos(df: pd.DataFrame, mudancas: dict[str, str], chave: list[str]) -> pd.DataFrame:
@@ -699,7 +720,7 @@ def ler_composicao(
             existe = tabela_existe(ent["nome_real"], ler)
         if not existe:
             return None
-    mudancas = mudancas_como_dict(ler_tabela("mudancas_ticker", ler=ler, unir_mudancas=False))
+    mudancas = ler_mudancas(ler)
     if formato == "cadastro":
         cadastro = ler_tabela("cadastro", ler=ler)
         intervalos = intervalos_de_cadastro(cadastro, "data_inicio", "data_fim")

@@ -55,6 +55,14 @@ def _yaml_trocado(tmp_path: Path, trocas: list[tuple[str, str]]) -> str:
         (date(2027, 2, 8), False),
         (date(2027, 2, 9), False),
         (date(2027, 2, 10), True),  # quarta de cinzas: abre às 13h, mas tem pregão
+        (date(2019, 12, 31), False),  # último dia útil do ano sem pregão
+        (date(2020, 2, 25), False),  # Carnaval
+        (date(2020, 2, 26), True),  # quarta de cinzas (histórico novo)
+        (date(2021, 1, 25), False),
+        (date(2021, 7, 9), False),
+        (date(2022, 1, 25), True),
+        (date(2023, 12, 29), False),
+        (date(2024, 5, 30), False),  # Corpus Christi
     ],
 )
 def test_e_pregao_previsto(dia, esperado):
@@ -76,6 +84,7 @@ def test_e_pregao_previsto_depois_da_validade_levanta_erro():
         (date(2027, 1, 4), date(2026, 12, 30)),  # 31/12 e 01/01 fechados
         (date(2027, 2, 10), date(2027, 2, 5)),  # carnaval 08 e 09
         (date(2025, 10, 22), date(2025, 10, 21)),
+        (date(2020, 2, 26), date(2020, 2, 21)),  # Carnaval 24 e 25
     ],
 )
 def test_pregao_anterior_previsto(dia, esperado):
@@ -139,6 +148,10 @@ def test_feriados_b3_tem_datas_e_motivos():
     lista = feriados_b3()
     assert all(isinstance(k, date) and isinstance(v, str) and v for k, v in lista.items())
     assert date(2026, 10, 12) in lista
+
+
+def test_feriados_b3_yaml_real_tem_99_datas():
+    assert len(feriados_b3()) == 99
 
 
 def test_yaml_real_passa_na_validacao():
@@ -209,5 +222,5 @@ def test_banco_feriados_conferem_com_pregoes_reais():
     from processamento import fontes
 
     pregoes = calendario.pregoes(fontes.ler_tabela("precos"))
-    resultado = conferir_feriados(pregoes, date(2024, 8, 1), pregoes[-1])
+    resultado = conferir_feriados(pregoes, date(2019, 12, 30), pregoes[-1])
     assert resultado == {"sem_pregao_fora_da_lista": [], "listados_com_pregao": []}

@@ -7,6 +7,7 @@ Ausência é NaN + `status` (nunca 0). Os parâmetros vêm do bloco `fundamentos
 
 from __future__ import annotations
 
+import dataclasses
 import math
 import unicodedata
 from dataclasses import dataclass
@@ -49,6 +50,7 @@ LUCRO_NEGATIVO = "lucro_negativo"
 
 _CHAVES_FUNDAMENTOS = {
     "subsetores_financeiros", "meses_janela", "anos_payout", "anos_historico_proventos", "pvp_minimo_plausivel",
+    "balanco_idade_max_meses",
 }
 
 
@@ -65,6 +67,7 @@ class ParametrosFundamentos:
     anos_payout: int
     anos_historico_proventos: int
     pvp_minimo_plausivel: float
+    balanco_idade_max_meses: int = 15
 
 
 def _inteiro_positivo(valor: object, onde: str) -> int:
@@ -110,6 +113,9 @@ def carregar_parametros_fundamentos(caminho: str | None = None) -> ParametrosFun
             bloco["anos_historico_proventos"], "fundamentos.anos_historico_proventos"
         ),
         pvp_minimo_plausivel=_numero_entre_zero_e_um(bloco["pvp_minimo_plausivel"], "fundamentos.pvp_minimo_plausivel"),
+        balanco_idade_max_meses=_inteiro_positivo(
+            bloco["balanco_idade_max_meses"], "fundamentos.balanco_idade_max_meses"
+        ),
     )
 
 
@@ -210,6 +216,29 @@ def quantidade_suspeita(vm: tuple[float, str], foto: FotoBalanco, limite: float)
     if vm_s != OK or pl_s != OK or not pl > 0:
         return False
     return valor_mercado / pl < limite
+
+
+def balanco_velho(data_fim_periodo, t, meses: int) -> bool:
+    """True se o balanço de referência é velho em t: fim do mês de (data_fim_periodo + `meses` meses) < t.
+
+    Estrito: no último dia desse mês o balanço ainda vale (ex.: 2024-09-30 + 15 meses -> 2025-12-31, velho
+    a partir de 2026-01-01). Sem data (None/NaT) não é velho.
+    """
+    if data_fim_periodo is None or pd.isna(data_fim_periodo):
+        return False
+    limite = pd.Timestamp(data_fim_periodo).normalize() + pd.DateOffset(months=meses) + pd.offsets.MonthEnd(0)
+    return bool(limite < pd.Timestamp(t).normalize())
+
+
+def foto_dentro_do_prazo(foto: FotoBalanco, t, meses: int) -> FotoBalanco:
+    """A própria foto, ou uma cópia com `status_base = indisponivel` se o balanço de referência é velho em t.
+
+    Usada só no painel do dia e nos múltiplos diários (seção 6, "Balanço velho"); payout por ano, tabela
+    trimestral e balanço de referência continuam com a foto original.
+    """
+    if foto.status_base == OK and balanco_velho(foto.data_fim_periodo, t, meses):
+        return dataclasses.replace(foto, status_base=INDISPONIVEL)
+    return foto
 
 
 def indicadores_empresa(
@@ -475,7 +504,7 @@ def calcular_fundamentos_no_dia(t, cal, dados: DadosFundamentos, exclusoes: Excl
     por_empresa: dict[str, dict[str, tuple[float, str]]] = {}
     financeira_cnpj: dict[str, bool] = {}
     for cnpj in sorted({cnpj_de[k] for k in tickers if cnpj_de.get(k)}):
-        foto = foto_balanco(dados.balancos, cnpj, ts, exclusoes)
+        foto = foto_dentro_do_prazo(foto_balanco(dados.balancos, cnpj, ts, exclusoes), ts, params.balanco_idade_max_meses)
         vm = valor_de_mercado(cnpj, fech, dados.cadastro, tickers, acoes_na_data(disp, cnpj, ts))
         if cnpj in cnpjs_com_classe_paga:
             pago = total_pago(ligados, disp, cnpj, inicio_janela(ts, params.meses_janela), ts)

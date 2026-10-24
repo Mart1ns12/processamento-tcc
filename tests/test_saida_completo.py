@@ -10,6 +10,7 @@ Cenário: D = 2025-10-22, t = 2025-10-21 (banco de teste).
 
 from __future__ import annotations
 
+import dataclasses
 import importlib
 import json
 import shutil
@@ -27,7 +28,8 @@ from processamento.experimento import modelos, preparacao
 from processamento.experimento import dataset as exp_dataset
 from processamento.experimento.modelos import CHAVES_METADADOS
 from processamento.saida import contrato
-from processamento.saida.gerar import AVISO_COMPLETO, gerar, main
+from processamento.saida.gerar import AVISO_COMPLETO, NOTA_TOP_NAO_PUBLICADO, gerar, main
+from processamento.saida.parametros import carregar_parametros_saida
 
 D = date(2025, 10, 22)
 ORDEM_PACOTES = ["acoes", "series_diarias", "mercado_dia", "resumo_acao", "fundamentos_trimestrais", "proventos",
@@ -35,6 +37,9 @@ ORDEM_PACOTES = ["acoes", "series_diarias", "mercado_dia", "resumo_acao", "funda
 ARQUIVOS = [*ORDEM_PACOTES, "execucao"]
 PARAMS = params_teste()  # teste final trancado (fim None)
 PARAMS_FIM = params_teste(teste_final_fim=date(2025, 10, 21))  # produção simulada (teste final já passou)
+SAIDA_NAO = dataclasses.replace(carregar_parametros_saida(), publicar_top_provisorio=False)
+SAIDA_SIM = dataclasses.replace(carregar_parametros_saida(), publicar_top_provisorio=True)
+SETE = ORDEM_PACOTES[:-2]  # sem os dois pacotes do experimento (top não publicado)
 
 
 class _BancoRealProibido(BaseException):
@@ -76,6 +81,7 @@ def modelos_dir(tmp_path_factory):
 def _gerar_em(pasta: Path, *, ler, modelos: Path, registros: Path, estado: Path | None = None,
               usar_estado: bool = False, params=None, d: date = D, **kw) -> Path:
     """Chama `gerar` com as pastas dadas (saída é a pasta de D; registros e estado explícitos)."""
+    kw.setdefault("params_saida", SAIDA_SIM)  # o yaml real traz publicar_top_provisorio: false; estes testes esperam os 10
     return gerar(
         d, ler=ler, pasta_saida=pasta, pasta_modelos=modelos, pasta_registros=registros, pasta_estado=estado,
         usar_estado=usar_estado, agora=AGORA, existe_composicao=False,
@@ -265,16 +271,45 @@ def test_caso_5_execucao_com_aviso_e_todos_os_arquivos_passam_no_contrato(banco_
         contrato.validar_lote(_ler_json(pasta, nome))
 
 
+# ---------------------------------------------------------------- Fase 7: top não publicado na carga completa (seção 8.5)
+
+def test_caso_7e_carga_completa_sem_top_publicado_manda_os_sete_e_nao_grava_registro(banco_teste, tmp_path,
+                                                                                    modelos_dir):
+    pasta = _gerar_em(tmp_path / "saida" / D.isoformat(), ler=banco_teste(), modelos=modelos_dir,
+                      registros=tmp_path / "registros", completo=True, params_saida=SAIDA_NAO)
+
+    assert {p.name for p in pasta.iterdir()} == {f"{nome}.json" for nome in [*SETE, "execucao"]}
+    ex = _execucao(pasta)
+    assert ex["status"] == "ok"
+    assert [p["pacote"] for p in ex["pacotes_enviados"]] == SETE
+    assert AVISO_COMPLETO in ex["avisos"]
+    assert ex["avisos"].count(NOTA_TOP_NAO_PUBLICADO) == 1
+    assert not (tmp_path / "registros" / "2025-10-22.top.json").exists()
+
+
+def test_caso_7f_carga_completa_com_top_publicado_manda_os_dez_e_nao_grava_registro(banco_teste, tmp_path,
+                                                                                   modelos_dir):
+    pasta = _gerar_em(tmp_path / "saida" / D.isoformat(), ler=banco_teste(), modelos=modelos_dir,
+                      registros=tmp_path / "registros", completo=True, params_saida=SAIDA_SIM)
+
+    assert {p.name for p in pasta.iterdir()} == {f"{nome}.json" for nome in ARQUIVOS}
+    ex = _execucao(pasta)
+    assert [p["pacote"] for p in ex["pacotes_enviados"]] == ORDEM_PACOTES
+    assert NOTA_TOP_NAO_PUBLICADO not in ex["avisos"]
+    assert not (tmp_path / "registros" / "2025-10-22.top.json").exists()
+
+
 # ---------------------------------------------------------------- caso 6: CLI
 
-def test_caso_6_cli_cria_os_dez_arquivos_na_pasta_dada(banco_teste, tmp_path, modelos_dir):
+def test_caso_6_cli_cria_os_oito_arquivos_na_pasta_dada(banco_teste, tmp_path, modelos_dir):
+    # 7G: o CLI lê o yaml real (publicar_top_provisorio: false), então sem os dois pacotes do experimento
     raiz = tmp_path / "completa"
     argv = ["--data", "2025-10-22", "--completo", "--pasta", str(raiz), "--pasta-modelos", str(modelos_dir),
             "--pasta-registros", str(tmp_path / "registros")]
 
     assert main(argv, ler=banco_teste(), existe_composicao=False) == 0
 
-    assert {p.name for p in (raiz / "2025-10-22").iterdir()} == {f"{nome}.json" for nome in ARQUIVOS}
+    assert {p.name for p in (raiz / "2025-10-22").iterdir()} == {f"{nome}.json" for nome in [*SETE, "execucao"]}
 
 
 def test_caso_6_cli_recusa_a_pasta_do_envio_diario_sem_gravar(banco_teste, tmp_path, modelos_dir, monkeypatch):

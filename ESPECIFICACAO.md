@@ -102,7 +102,7 @@ Nomes reais (com crase): `v1-noticias`, `v1-precos`, `v1-cadastro`, `v1-mudancas
 | `v1-noticias` | `id`, `ticker` | `id`, `ticker`, `data_hora_publicacao`, `data_hora_coleta`, `titulo`, `fonte`, `link`, `prob_positivo`, `prob_neutro`, `prob_negativo`, `origem`, `papel`, `tipo_conteudo` | Datas são **texto ISO com fuso de São Paulo** (converter e validar). `data_hora_publicacao` vazia nos documentos da CVM (`origem = cvm_ipe`, só com a data). **Ignorar `momento_pregao`** (usa 18h fixo); calcular a própria janela. `papel`/`tipo_conteudo`/`evento`/`qualidade` vêm de uma IA sem busca ("juíza"), ainda não avaliada; filtro desligado na coleta (entram panoramas e opiniões) |
 | `v1-precos` | `data`, `ticker` | todas | `fechamento` = sem dividendos (ajustado só por desdobramento); `fechamento_ajustado` = com dividendos. Inclui `IBOV`, `USDBRL`, `BRENT`, `IVVB11`. Volume vazio nos não-ações. **O histórico inteiro é regravado a cada dia** (o ajustado do passado pode mudar) |
 | `v1-cadastro` | `ticker` | todas | `tipo_acao`: ON, PN, UNIT ou BDR. Units: KLBN11, BPAC11, ENGI11, IGTI11, SANB11, TAEE11. CRFB3 sem CNPJ nem setor |
-| `v1-mudancas_ticker` | `ticker_antigo` | todas | `data_mudanca` hoje vazia |
+| `v1-mudancas_ticker` | `ticker_antigo` | todas | `data_mudanca` preenchida nas 10 linhas desde 24/10/2026 (só informativa: a união dos históricos não depende dela). Troca de ação por BDR não une (seção 6, "Mudança de ticker") |
 | `v1-balancos` | `cnpj`, `tipo_documento`, `data_inicio_periodo`, `data_fim_periodo` | todas | Consolidado, em reais. Trimestre e acumulado do ano em linhas separadas. `data_entrega` = da última versão do documento. **Desde 22/10/2026 todas as colunas vêm preenchidas** (~90%, como `lucro_bruto`): `ebit`, `depreciacao_amortizacao` (sempre positiva), `emprestimos_*`, `caixa`, `aplicacoes_financeiras`; vazias nos bancos e seguradoras. Zeros suspeitos em `emprestimos_*` e `aplicacoes_financeiras`: ver seção 10 |
 | `v1-acoes_emitidas` | `cnpj`, `data_referencia` | todas | — |
 | `v1-proventos` | `ticker`, `tipo`, `data_com` | todas | Valor já ajustado por desdobramento, bonificação e grupamento. Units já somadas pela composição |
@@ -124,16 +124,17 @@ Ticker sem `.SA`; datas `AAAA-MM-DD`; ponto decimal; vazio = `NULL` (nunca 0); b
 | Lacuna | Comportamento do processamento |
 |---|---|
 | EBITDA e endividamento com insumo vazio (colunas preenchidas desde 22/10/2026, mas ~10% das linhas sem valor) | `status = indisponivel` no indicador que dependia do valor vazio |
-| Histórico curto (~1 ano hoje; meta de 5 anos) | Implementar tudo. **Não treinar o modelo "para valer"** até o histórico completo chegar; com 1 ano, só teste de funcionamento (sem conclusões) |
+| Histórico (24/10/2026): preços desde 30/12/2019; balanços e ações emitidas desde 2022; notícias desde 01/01/2024 (91% das de 2024 sem hora, marcadas "só data" pela coleta) | Implementar tudo. **Não treinar o modelo "para valer"** até o usuário declarar o histórico completo (`treino.modelo_oficial: true`, R7); até lá, só teste de funcionamento (sem conclusões) |
 | Composição histórica do Ibovespa | Ver 3.5 |
-| `data_mudanca` vazia | Unir históricos pela `v1-mudancas_ticker` assim mesmo; quando a data vier, usá-la |
+| Troca de ação por BDR (JBSS3 → JBSS32 em 09/06/2025) | Não une os históricos (seção 6): JBSS3 fica com as suas linhas (até 06/06/2025) e entra no universo histórico enquanto está na composição (classe ON pelo sufixo, empresa pela raiz); a BDR começa em 09/06/2025 |
 | Ações deslistadas sem preço nas fontes: CRFB3, SRNA3, STBP3 (decidido com a coleta em 22/10/2026) | Fora do universo **em todas as datas**. Lista em `processamento/config/exclusoes.yaml` (`tickers_excluidos`). Entra na limitação de **viés de sobrevivência** do TCC |
 | Classes extintas nos proventos (ex.: VALE5, AXIA6, CPLE5) | Classe que **não aparece** no `other_codes` da empresa em `v1-raw_b3_cadastro` é **extinta hoje**, mas existiu: seus proventos são reais e **contam normalmente** no histórico de proventos e no payout, ligados à empresa pela raiz (seção 6). **Units (final 11) continuam de fora** do payout (regra da unit). "Extinta" é só informação. Decidido em 22/10/2026 pelos números do diagnóstico: AXIA5, AXIA6 e CPLE5 pagaram dentro do período analisado |
 | Empresas sem balanço nas fontes: CNPJs 03847461000192 e 06057223000171 (decidido com a coleta em 22/10/2026) | A empresa continua no painel de preços e no modelo; P/L, P/VP, ROE, margens, EBITDA, endividamento e payout saem com `status = indisponivel`. Lista em `exclusoes.yaml` (`cnpjs_sem_balanco`) |
+| Empresa que parou de entregar balanço | Balanço de referência vencido em t (passou o fim do mês de `data_fim_periodo` + `fundamentos.balanco_idade_max_meses`, 15 meses; seção 6, "Balanço velho"): P/L, P/VP, ROE, margens, EBITDA, endividamento e payout 12m saem `indisponivel` |
 | Itens acima no diagnóstico (etapa 1) | Aparecem como **nota "excluídos por decisão"**, não como divergência |
 
 ### 3.5 Universo de ações por data
-- **Tabela da composição:** `` `v1-composicao_ibov` `` (criada pela coleta em 23/10/2026; **hoje vazia**). Colunas reais `ticker`, `vigencia_inicio`, `vigencia_fim`, `participacao`, `fonte`, mapeadas no `fontes.yaml` para `ticker`, `data_inicio`, `data_fim`, `participacao`, `fonte` (`participacao` e `fonte` só informativas por enquanto). `vigencia_fim` vazia = ainda vigente.
+- **Tabela da composição:** `` `v1-composicao_ibov` `` (criada pela coleta em 23/10/2026; preenchida em 24/10/2026: 137 linhas, 136 tickers, vigências de 01/01/2021 até hoje; fontes `paccafelipe_csv` (115 linhas, não oficial, seção 10) e `rebalanceamento` (22); 2020 não é coberto: nesses pregões vale a composição atual). Colunas reais `ticker`, `vigencia_inicio`, `vigencia_fim`, `participacao`, `fonte`, mapeadas no `fontes.yaml` para `ticker`, `data_inicio`, `data_fim`, `participacao`, `fonte` (`participacao` e `fonte` só informativas por enquanto). `vigencia_fim` vazia = ainda vigente.
 - **Cobertura por data (decidido em 23/10/2026):** uma data está coberta se alguma linha tem `data_inicio ≤ data` e (`data_fim` vazio ou `≥ data`). Data coberta: só entram as ações com vigência naquela data (`universo = 'composicao_historica'`; as outras ficam `fora_da_composicao`). Data não coberta (inclusive tabela inexistente ou vazia): todas as ações do `v1-cadastro` (`tipo_acao` ON, PN ou UNIT), `universo = 'composicao_atual'`; ticker que só está na composição fica `fora_da_composicao` nessa data.
 - **Aviso no `execucao`:** tabela vazia → "Composição do Ibovespa vazia: universo = composição atual (ações do cadastro)."; cobertura parcial → quantos pregões a composição cobre e o período coberto; cobertura total ou tabela inexistente → sem aviso (`universo.aviso_composicao`).
 - **Conversores aceitos:** intervalos (formato pedido); "fotos" das carteiras (`data_carteira`, `ticker` → a ação entra na primeira carteira em que aparece e sai na primeira em que some); colunas de entrada e saída no cadastro.
@@ -200,9 +201,11 @@ Fonte dos dados: tabelas da seção 3. `fech` = `fechamento`; `aj` = `fechamento
 | Trimestre isolado | ITR traz o trimestre e o acumulado; usar a linha cujo período tem ~3 meses. **4º trimestre = DFP (ano) − acumulado de 9 meses do 3º ITR.** Depreciação (quando vier) pode estar só acumulada: calcular pela diferença |
 | 12 meses | Soma dos 4 últimos trimestres isolados |
 | Point-in-time | Em cada data, usar só balanços com `data_entrega ≤ data` |
+| Balanço velho | Em t, o balanço de referência (D11) vale até o **fim do mês** de `data_fim_periodo` + `fundamentos.balanco_idade_max_meses` (15) meses de calendário (decidido em 24/10/2026: o limite é o fim do mês, não o dia exato; ex.: fim 31/12/2023 vale até 31/03/2025; fim 30/09/2024 vale até 31/12/2025; fim 29/02/2024 vale até 31/05/2025). Depois disso, P/L, P/VP, ROE, margens bruta e líquida, EBITDA (valor e margem), endividamento (DL, DL/PL, DL/EBITDA, caixa líquido) e payout 12m saem `indisponivel`, também nos pontos diários de P/L e P/VP do `series_diarias`; a empresa sai das medianas do setor desses indicadores. Não mudam: yield, `payout_por_ano`, `proventos_por_ano`, `fundamentos_trimestrais` e `balanco_referencia` (continua mostrando o balanço usado). Bancos e seguradoras seguem `nao_se_aplica` onde já eram (decidido em 24/10/2026) |
 | Bancos e seguradoras | Identificar pelo setor do cadastro |
 | Calendário | Pregões = datas com preço do `IBOV` em `v1-precos` |
-| Mudança de ticker | Unir os históricos pela `v1-mudancas_ticker` antes de qualquer cálculo |
+| Mudança de ticker | Unir os históricos pela `v1-mudancas_ticker` antes de qualquer cálculo. **Exceção (24/10/2026): troca de ação (classe 3, 4, 5, 6 ou 11) por BDR** (`tipo_acao` BDR no cadastro; fora dele, classe 32 a 35) não une: o código antigo fica com as suas linhas e a BDR começa na troca (ex.: JBSS3 → JBSS32 em 09/06/2025, que gerava um retorno suspeito). A empresa é a mesma (raiz/CNPJ): notícias e proventos do código antigo valem para ela |
+| Setor herdado (24/10/2026) | Ticker fora do `v1-cadastro` ligado a uma empresa do cadastro (mudança de ticker pela `v1-mudancas_ticker` ou raiz de 4 letras com um único CNPJ) herda o CNPJ e o setor dessa empresa **no dataset do experimento** (ex.: JBSS3 até 06/06/2025 → setor do JBSS32). Vale para `empresa`, `setor`, `ret_vs_setor` e `tom_setor`; os tickers que herdaram ficam em `setor_herdado` no JSON do dataset |
 | Empréstimos zerados | `emprestimos_curto_prazo = 0` **e** `emprestimos_longo_prazo = 0` na mesma linha = ausente (conta não achada pela coleta): dívida líquida, DL/PL, DL/EBITDA e `caixa_liquido` saem `indisponivel`. Só um dos dois = 0 continua valendo; `aplicacoes_financeiras = 0` continua valendo (decidido em 22/10/2026; pedido à coleta na seção 10) |
 | Quantidade de ações suspeita | Em cada data, se o P/VP calculado (valor de mercado ÷ patrimônio líquido > 0) for **< 0,05** (`fundamentos.pvp_minimo_plausivel`), a quantidade de `v1-acoes_emitidas` daquela empresa é suspeita (gravada em milhares em ~25 empresas): valor de mercado, P/L, P/VP e payout (inclusive `payout_por_ano` e `payout_12m`, pela situação em t) saem `indisponivel` e ficam fora das comparações com o setor. **Não multiplicar por 1000.** ROE, margens, EBITDA, endividamento e yield não mudam. O diagnóstico lista as empresas suspeitas (decidido em 23/10/2026; pedido à coleta na seção 10) |
 | Retorno diário suspeito | Retorno do dia do `fechamento_ajustado` (contra o último pregão com preço) **abaixo de −75% ou acima de +100%** (`fase1.retorno_suspeito_min`/`_max`; os limites exatos não contam) = erro da coleta (ex.: AZUL3 com 30.599.848 de 09/04 a 17/04/2026). **O preço não é corrigido:** o valor da própria ação (cotação, rentabilidade, série, P/L etc.) sai como veio. Só isola: (a) o retorno daquele dia não entra nas séries `SETOR_SEM:<ticker>` (nem, por isso, na `rentabilidade.setor`); (b) a empresa inteira fica fora das medianas de P/L, P/VP e yield do setor se alguma ação dela teve retorno suspeito nos últimos 21 pregões (`fase1.retorno_suspeito_pregoes_nivel`); (c) aviso no `execucao` com os suspeitos dos 253 pregões do pacote; (d) o diagnóstico lista todos (decidido em 24/10/2026; pedido à coleta na seção 10) |
@@ -422,6 +425,8 @@ Todas as 23 informações da planilha (`docs/planilha_final.xlsx`; cálculos na 
 
 Nomes dos arquivos: `execucao.json`, `acoes.json`, `series_diarias.json`, `mercado_dia.json`, `resumo_acao.json`, `fundamentos_trimestrais.json`, `proventos.json`, `noticias_dia.json`, `experimento_historico.json`, `experimento_top.json` (o `execucao.json` é regravado no fim da rodada). Cada pacote é validado antes de gravar; reprovado, não é gravado e a rodada fica `parcial`.
 
+**Top 5 provisório (24/10/2026):** enquanto `treino.modelo_oficial` e `saida.publicar_top_provisorio` forem `false`, o top 5 continua gerado e registrado em `registros/experimento/` (e os resultados continuam sendo fechados), mas `experimento_top` e `experimento_historico` **não são gravados** em `saida/<D>/` (passos 8 e 9 pulados; a ordem dos outros não muda), nem na carga completa (8.7). Eles são validados mesmo assim. `pacotes_enviados` lista os outros 7, a rodada não vira `parcial` por isso, e `avisos` traz: "Top 5 gerado e registrado só como teste de funcionamento (modelo não oficial): experimento_top e experimento_historico não enviados à interface (saida.publicar_top_provisorio = false)." Com `modelo_oficial: true` ou `publicar_top_provisorio: true`, vão os 10.
+
 ### 8.6 O que fica para a equipe da API e do banco decidir
 - Autenticação, endereço e se o envio é um pacote por chamada ou em lote.
 - Como o banco da interface guarda cada pacote (pode ser uma tabela por pacote, com a mesma chave).
@@ -432,7 +437,7 @@ Decidido em 24/10/2026.
 
 - **Por que existe:** o envio "quando muda" (8.1 e S4) marca o que já foi enviado em `saida/estado/`, mesmo sem API. Se a interface for ligada depois, ou se o banco dela for recriado, ela fica sem o histórico: séries, fundamentos e proventos só saem uma vez.
 - **Comando:** `python -m processamento.saida --data AAAA-MM-DD --completo`. Sem `--pasta`, a saída vai para `saida_completa/AAAA-MM-DD/`. Se `--pasta` for a pasta do envio diário, o comando recusa (código 2) e não grava nada.
-- **O que sai:** os 10 pacotes inteiros: todas as ações; séries de 253 pregões com `substituir_serie: true`; 8 trimestres de fundamentos; 5 anos de proventos; `removidos` vazio.
+- **O que sai:** os 10 pacotes inteiros (8 enquanto o top 5 não é publicado, 8.5): todas as ações; séries de 253 pregões com `substituir_serie: true`; 8 trimestres de fundamentos; 5 anos de proventos; `removidos` vazio.
 - **O que NÃO muda:** o estado do envio (`saida/estado/`), os registros do experimento (`registros/`), nenhum retreino e nenhum dia fechado (não grava `.resultado.json` nem `.descartado.json`). O top 5 de D: se `<D>.top.json` já existe, sai esse mesmo registro; se não existe, é gerado na hora, sem ser gravado.
 - **Carga inicial:** rodar com D = o dia da rotina diária mais recente; enviar os 10 arquivos pela ordem da 8.5. Daí em diante o envio diário segue de `saida/`.
 - **Recarga do zero:** apagar o banco da interface; rodar a carga completa com o D mais recente; enviar os 10 arquivos. Não precisa apagar `saida/estado/`: o upsert da API (8.6) torna o reenvio seguro.
@@ -500,7 +505,7 @@ Decidido em 24/10/2026.
 - **E16 Última linha:** fica no dataset sem alvo (é a linha da previsão ao vivo); o treino a descarta. As variáveis da noite dela exigem a data do próximo pregão (informada pela rotina); sem ela, ficam vazias.
 - **N1-A Meia-noite do Pacífico (23/10/2026):** notícias com 00:00:00 em Los Angeles (04:00/05:00 de SP; ~89% das notícias) viram "só data" na camada de leitura (`fontes.aplicar_regra_so_data`, coluna `precisao_hora`), em `v1-noticias` e `raw_articles`. `raw_articles.published_precision` não ajuda: marca `date` só nos documentos da CVM (as 131.616 de meia-noite vêm como `datetime`). Pedido de horário real à coleta na seção 10.
 - **N2-A Janela única (23/10/2026):** colunas `noticias_dia_*` na janela 08:00:01 de t → 08:00 do próximo pregão; `noticias_pregao_tom` e o modelo 2 saem; `experimento.inicio_janela` no `parametros.yaml`.
-- **Horários da B3 antes de 03/2024:** ainda não cadastrados; com o histórico de 5 anos o código para com aviso, e os horários de 2021–2024 serão cadastrados quando o histórico chegar.
+- **Horários da B3 desde 04/11/2019 (cadastrados em 24/10/2026):** períodos de 17h/18h e quartas de cinzas (abertura às 13h) de 2020 a 2024 no `parametros.yaml` (fontes: B3 OC 020/2022 e OC 125/2022; os demais por notícias da época; o início em 04/11/2019 a conferir). O calendário só exige o horário do pregão que cai na data de uma notícia (ou de uma entrega de balanço, E11) a classificar: pregão sem horário e sem notícia não gera erro.
 
 **Decisões da etapa 6 (23/10/2026; plano completo, com os casos de teste, em `docs/plano_etapa6.md`)**
 Com ~1 ano de histórico, a etapa 6 é **só teste de funcionamento** (3.4): o relatório gerado abre com o aviso "TESTE DE FUNCIONAMENTO, NÃO É RESULTADO", e nenhum número dele vale como conclusão.
@@ -575,6 +580,16 @@ Com ~1 ano de histórico, a etapa 6 é **só teste de funcionamento** (3.4): o r
 - **Setor sem a própria empresa:** série `SETOR_SEM:<ticker>` por ação (tipo `setor_sem_empresa`), e a `rentabilidade.setor` é a razão dela (gráfico e tabela batem). Motivo: a planilha e o TCC definem o setor sem a própria ação. A `SETOR:<nome>` saiu do pacote. A versão do contrato continua "1.0" (contrato ainda não está em uso).
 - **Experimento:** não muda nesta etapa (pendência na seção 10).
 
+**Acréscimo de 24/10/2026 (histórico novo; plano em `docs/plano_historico_novo.md`)**
+- **H1 Calendário:** horários desde 04/11/2019, quartas de cinzas 2020-2024 e 57 feriados (31/12/2019 a 30/05/2024) conferidos com a B3 e com os dias úteis sem IBOV; horário exigido só nos pregões com notícia a classificar.
+- **H2 Balanço velho:** `fundamentos.balanco_idade_max_meses: 15`, com o limite no fim do mês (seção 6).
+- **H3 Diagnóstico:** `data_mudanca` e texto vazio no título viram nota; hora das notícias em três grupos por ano (hora real, "só data" N1-A, sem hora); `noticia_sem_hora` só sem a marca "date" de `raw_articles.published_precision`; seção nova com a composição sem preço, o status do `corrigir_horas` e a cobertura do experimento por ano.
+- **H4 Troca de ação por BDR** não une os históricos (seção 6).
+- **H5 IDIV:** com o histórico novo, o m1 do IDIV em 21/10/2026 é `ok`.
+- **H6 Especificação** atualizada (3.1, 3.4, 3.5, 6, 8.5, 8.7, 10).
+- **H7 Top 5 provisório:** `saida.publicar_top_provisorio` (padrão `false`; seção 8.5).
+- **H8 Setor herdado:** ticker fora do `v1-cadastro` ligado a uma empresa do cadastro (mudança de ticker ou raiz de 4 letras com CNPJ único) herda o CNPJ e o setor dela no dataset do experimento (ex.: JBSS3 até 06/06/2025 → setor do JBSS32); os tickers que herdaram ficam em `setor_herdado` no JSON do dataset (seção 6).
+
 ---
 
 ## 10. Pendências externas (não bloqueiam a implementação)
@@ -582,11 +597,13 @@ Com ~1 ano de histórico, a etapa 6 é **só teste de funcionamento** (3.4): o r
 | Pendência | De quem |
 |---|---|
 | Zeros em `v1-balancos`: `emprestimos_curto_prazo` e `emprestimos_longo_prazo` = 0 **juntos** em 89 linhas de 12 empresas que não são banco (ex.: CSNA3, SBSP3, RDOR3, PCAR3, MGLU3, que têm dívida), e `aplicacoes_financeiras` = 0 em 134 linhas de 19 empresas. Provável conta não encontrada gravada como 0 (deveria ser `NULL`). Pedido à coleta: gravar `NULL` quando a conta não é achada. Enquanto isso, o processamento trata CP e LP = 0 juntos como ausente (seção 6, "Empréstimos zerados"); aplicações = 0 continuam valendo | Coleta |
-| Histórico de 5 anos (e testar a cobertura de notícias em 2021–2022) | Coleta |
-| Preencher a tabela `v1-composicao_ibov` (criada em 23/10/2026, ainda vazia; enquanto isso, universo = `composicao_atual`, seção 3.5) | Coleta |
-| Etapa manual `corrigir_horas` (execução `tipo = 'coletar'`, vista `pendente` em 23/10/2026): provavelmente a correção do horário das notícias pedida abaixo. **Quando concluir, reavaliar a regra N1-A** (seção 7.2) | Coleta |
+| Histórico de notícias antes de 2024 (hoje desde 01/01/2024) e horário real das de 2024 (91% sem hora, marcadas "só data") | Coleta |
+| Etapa manual `corrigir_horas`: a execução `2026-10-23-coletar-135621` (tipo `coletar`) está `agendada`, com a etapa `pendente`, desde 23/10/2026: não rodou. Provavelmente a correção do horário das notícias pedida abaixo. **Quando concluir, reavaliar a regra N1-A** (seção 7.2); o diagnóstico mostra o status | Coleta |
 | Histórico de IDIV, SMLL e IFIX (hoje só 20 e 21/10/2026) e de CDI/IPCA desde jul/2024 (hoje desde jan/2025): prometido para depois da manutenção do Railway | Coleta |
-| `data_mudanca` em `v1-mudancas_ticker` | Coleta |
+| Composição do Ibovespa de fonte não oficial: 115 das 137 linhas de `v1-composicao_ibov` vêm de `paccafelipe_csv` (as outras 22, de `rebalanceamento`). Conferir contra as carteiras oficiais da B3; 2020 não é coberto | Coleta |
+| 46 tickers da composição sem nenhum preço em `v1-precos` (ex.: ALPA4, BRML3, CIEL3, GOLL4, VIIA3; lista no diagnóstico): ficam fora do universo nas datas em que estavam no índice. O viés de sobrevivência continua (seção 3.4); limitação registrada no TCC | Coleta |
+| Histórico antigo faltando depois da troca de ticker: NTCO3, AZUL4 e PETZ3 não têm preço em `v1-precos`; NATU3, AZUL3 e AUAU3 só têm desde 26/06/2025, 13/01/2026 e 05/01/2026 | Coleta |
+| GMAT3, RAPT4 e SAUD3 estão no cadastro e nunca na composição: ficam fora do universo nas datas cobertas pela composição | Coleta (conferir) |
 | Autenticação, endereço e forma de envio da API | Equipe da API |
 | Manter o filtro da juíza desligado na coleta e informar quantas notícias do histórico ficaram sem julgamento | Coleta |
 | Validação do FinBERT: já feita pelo usuário; registrar os números (manchetes, % de acerto, por idioma) | Usuário |
@@ -610,6 +627,10 @@ Com ~1 ano de histórico, a etapa 6 é **só teste de funcionamento** (3.4): o r
 - Classes extintas nos proventos (VALE5, AXIA6, CPLE5 etc.) → identificadas pelo `other_codes`; seus proventos contam no histórico e no payout, ligados pela raiz; units ficam de fora (seções 3.4 e 6).
 - CNPJs 03847461000192 e 06057223000171 sem balanço → indicadores de balanço `indisponivel` (seção 3.4).
 - EBIT, depreciação, empréstimos, caixa e aplicações em `v1-balancos`: preenchidos pela coleta (~90%, como `lucro_bruto`). O diagnóstico passa a tratá-los como parciais; as etapas `cvm_itr_dfp` e `build_entrega` (execução manual `tipo = 'coletar'`) passam a ser conhecidas e só geram divergência se aparecerem num daily. Em 23/10/2026 entrou também `corrigir_horas` (mesma regra: nota).
+
+**Resolvidas em 24/10/2026:**
+- `data_mudanca` preenchida em todas as linhas de `v1-mudancas_ticker` (seção 3.1).
+- `v1-composicao_ibov` preenchida de 01/01/2021 até hoje (seção 3.5; a fonte não oficial e os tickers sem preço continuam pendentes acima).
 
 ---
 

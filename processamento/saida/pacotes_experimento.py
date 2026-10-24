@@ -19,6 +19,7 @@ import pandas as pd
 from processamento.experimento import avaliacao, modelos, preparacao, previsao, relatorio
 from processamento.experimento.alvo import alvos
 from processamento.experimento.parametros import ParametrosTreino
+from processamento import tickers
 from processamento.fatos import noticias as fatos_noticias
 from processamento.saida import contrato, textos
 from processamento.saida.parametros import ParametrosSaida
@@ -155,6 +156,7 @@ def gerar_top(
     dados_ate: str,
     nome_modelo: str,
     avisos_modelo: list[str],
+    mudancas: dict | None = None,
 ) -> tuple[dict, dict]:
     """(pacote, interno) do `experimento_top` de D, com base no pregão t (último antes de D).
 
@@ -177,6 +179,10 @@ def gerar_top(
     if n < k:
         avisos.append(AVISOS["poucas_acoes"].format(n=n, k=k))
 
+    def empresa_de(ticker: str) -> str:
+        """CNPJ da empresa (mudanças e raiz, como no dataset); sem empresa, o próprio ticker."""
+        return tickers.ligar_a_cnpj(ticker, cnpj_de, mudancas or {})[0] or ticker
+
     ranking = []
     for item in previsao.top_do_dia(preparado_dia, bruto_dia, modelo, meta, params_treino):
         ticker = item["ticker"]
@@ -198,7 +204,7 @@ def gerar_top(
             "ticker": ticker,
             "chance": _chance_saida(item["chance"]),
             "motivos": motivos,
-            "noticias_usadas": fatos_noticias.ids_da_empresa(janela, cnpj_de.get(ticker) or ticker),
+            "noticias_usadas": fatos_noticias.ids_da_empresa(janela, empresa_de(ticker)),
         })
 
     pacote = {

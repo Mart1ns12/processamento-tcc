@@ -131,3 +131,74 @@ def test_secao_colunas_chaves_detecta_coluna_extra():
     assert divergencia["tema"] == "coluna_extra"
     assert "atualizado_em" in divergencia["detalhe"]
     assert set(df_colunas["coluna"]) == set(COLUNAS_CADASTRO + ["atualizado_em"])
+
+
+# ---------------------------------------------------------------------------
+# Fase 3: texto vazio no título e data_mudanca só com nota (3H, 3J)
+# ---------------------------------------------------------------------------
+
+def test_montar_sql_ids_texto_vazio():
+    # 3H
+    assert c.montar_sql_ids_texto_vazio("v1-noticias", "id", "titulo") == (
+        "SELECT DISTINCT `id` AS id FROM `v1-noticias` WHERE `titulo` = '' ORDER BY id LIMIT 10"
+    )
+
+
+def _ler_vazios(nulos_data=0):
+    def ler(sql):
+        if "SELECT DISTINCT" in sql:
+            return pd.DataFrame({"id": ["n326413"]})
+        if "`v1-noticias`" in sql and "COUNT(*) AS total" in sql:
+            return pd.DataFrame([{
+                "total": 5, "nulos__id": 0, "vazios__id": 0, "nulos__titulo": 0,
+                "vazios__titulo": 1, "nulos__fonte": 0, "vazios__fonte": 2,
+            }])
+        if "`v1-mudancas_ticker`" in sql and "COUNT(*) AS total" in sql:
+            return pd.DataFrame([{
+                "total": 10, "nulos__ticker_antigo": 0, "vazios__ticker_antigo": 0,
+                "nulos__ticker_novo": 0, "vazios__ticker_novo": 0,
+                "nulos__data_mudanca": nulos_data,
+            }])
+        raise AssertionError(f"SQL inesperado: {sql}")
+    return ler
+
+
+def _df_colunas_vazios():
+    return pd.DataFrame({
+        "tabela": ["v1-noticias"] * 3 + ["v1-mudancas_ticker"] * 3,
+        "coluna": ["id", "titulo", "fonte", "ticker_antigo", "ticker_novo", "data_mudanca"],
+        "tipo": ["varchar", "varchar", "varchar", "varchar", "varchar", "date"],
+        "nulo": ["YES"] * 6,
+        "pos": [1, 2, 3, 1, 2, 3],
+    })
+
+
+def test_secao_vazios_ponta_a_ponta_com_notas():
+    secao = c.secao_vazios(
+        _ler_vazios(), MAPA, {"v1-noticias", "v1-mudancas_ticker"}, _df_colunas_vazios(),
+    )
+    assert len(secao["divergencias"]) == 1
+    divergencia = secao["divergencias"][0]
+    assert divergencia["tema"] == "coluna_vazia"
+    assert divergencia["tabela"] == "v1-noticias"
+    assert divergencia["detalhe"] == "`v1-noticias.fonte`: 2 textos vazios ('') em vez de NULL"
+    assert secao["notas"] == [
+        "`v1-noticias.titulo`: 1 textos vazios ('') (a leitura trata como vazio); "
+        "ids (até 10): n326413",
+        "`v1-mudancas_ticker.data_mudanca` preenchida em 10 de 10 linhas",
+        "demais colunas 100% preenchidas",
+    ]
+    assert secao["tabelas"][0]["linhas"] == [
+        ["v1-noticias", "titulo", 5, 0, 0.0, "cheia", 1, 0],
+        ["v1-noticias", "fonte", 5, 0, 0.0, "cheia", 2, 0],
+        ["v1-mudancas_ticker", "data_mudanca", 10, 0, 0.0, "cheia", 0, 0],
+    ]
+
+
+def test_secao_vazios_data_mudanca_toda_vazia_so_nota():
+    secao = c.secao_vazios(
+        _ler_vazios(nulos_data=10), MAPA, {"v1-noticias", "v1-mudancas_ticker"}, _df_colunas_vazios(),
+    )
+    assert all(d["tabela"] != "v1-mudancas_ticker" for d in secao["divergencias"])
+    assert "`v1-mudancas_ticker.data_mudanca` preenchida em 0 de 10 linhas (10 vazias)" in secao["notas"]
+

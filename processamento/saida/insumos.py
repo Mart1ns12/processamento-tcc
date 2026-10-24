@@ -52,7 +52,7 @@ def ler_insumos(d: date, ler: Callable[..., pd.DataFrame], existe_composicao: bo
     t = cal[-1]
     if t >= d:
         raise ErroSaida(f"o último pregão lido ({t}) não é anterior a {d}")
-    mudancas = fontes.mudancas_como_dict(fontes.ler_tabela("mudancas_ticker", ler=ler, unir_mudancas=False))
+    mudancas = fontes.ler_mudancas(ler)
     return Insumos(
         d=d,
         t=t,

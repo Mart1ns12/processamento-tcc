@@ -7,6 +7,7 @@ Não lê arquivo nem banco. Campo ausente ou None vira "n/d"; modelo ou dataset 
 from __future__ import annotations
 
 import math
+from datetime import date
 
 NAO_INFORMADO = "n/d"
 NAO_ENCONTRADO = "não encontrado"
@@ -108,6 +109,20 @@ def _tabela_de_dicts(lista) -> list[str]:
     return _tabela(colunas, [[_texto(item.get(c)) for c in colunas] for item in lista])
 
 
+def _linha_historico(periodo: dict) -> str:
+    """Linha do aviso com o período de desenvolvimento lido dos dados (em vez de um texto fixo)."""
+    inicio, fim = periodo.get("inicio"), periodo.get("fim")
+    if not inicio or not fim:
+        return "> Período de desenvolvimento não informado (ESPECIFICACAO 3.4)."
+    anos = (date.fromisoformat(str(fim)[:10]) - date.fromisoformat(str(inicio)[:10])).days / 365.25
+    anos_txt = f"{anos:.1f}".replace(".", ",")
+    return (
+        f"> Gerado com o período de desenvolvimento de {inicio} a {fim} (cerca de {anos_txt} anos, "
+        f"{_texto(periodo.get('n_pregoes'))} pregões); o modelo só vale como oficial com "
+        "`treino.modelo_oficial: true` (ESPECIFICACAO 3.4)."
+    )
+
+
 def _aviso(periodo: dict) -> list[str]:
     inicio = _texto(periodo.get("teste_final_inicio"))
     fim = periodo.get("teste_final_fim")
@@ -127,7 +142,7 @@ def _aviso(periodo: dict) -> list[str]:
         )
     return [
         "> **AVISO: TESTE DE FUNCIONAMENTO, NÃO É RESULTADO.**",
-        "> Gerado com cerca de 1 ano de histórico (o histórico completo ainda não chegou; ESPECIFICACAO 3.4).",
+        _linha_historico(periodo),
         "> Nenhum número abaixo vale como conclusão do TCC: serve só para conferir que o pipeline roda de ponta a ponta.",
         f"> Período de teste final (a partir de {inicio}): {situacao}",
         linha_fim,

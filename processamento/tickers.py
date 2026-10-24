@@ -60,6 +60,21 @@ def aplicar_mudancas(t: str, mudancas: dict[str, str]) -> str:
     return atual
 
 
+CLASSES_DE_ACAO = {3, 4, 5, 6, 11}
+
+
+def troca_acao_para_bdr(antigo: str, novo: str, tipo_de: dict[str, str]) -> bool:
+    """True se a mudança troca uma ação (classe 3, 4, 5, 6 ou 11) por uma BDR: os históricos não se unem.
+
+    BDR = `tipo_acao` "BDR" no cadastro (`tipo_de`); fora do cadastro, classe 32 a 35 (ex.: JBSS3 -> JBSS32).
+    """
+    if classe(antigo) not in CLASSES_DE_ACAO:
+        return False
+    if novo in tipo_de:
+        return tipo_de[novo] == "BDR"
+    return tipo_por_classe(classe(novo)) == "BDR"
+
+
 def parse_other_codes(v: object) -> list[str]:
     """Lê o campo `other_codes` (JSON) e devolve a lista de códigos, sem nulos nem vazios.
 
@@ -121,6 +136,33 @@ def ligar_a_cnpj(
     if not cnpjs:
         return None, "sem_empresa"
     return None, "ambiguo"
+
+
+def mapas_por_empresa(
+    tickers, setor_de: dict, cnpj_de: dict, mudancas: dict
+) -> tuple[dict, dict, dict[str, tuple[str, str | None]]]:
+    """Estende `setor_de`/`cnpj_de` (do cadastro) aos tickers fora do cadastro ligados a uma empresa dele.
+
+    Herda o CNPJ (ligar_a_cnpj) e o setor da empresa (setor único entre as ações do cadastro com esse CNPJ;
+    mais de um setor distinto = sem setor). Devolve (setor_de, cnpj_de, herdados), herdados = {ticker: (cnpj, setor)}.
+    Não altera os dicionários de entrada.
+    """
+    setor_de2 = dict(setor_de)
+    cnpj_de2 = dict(cnpj_de)
+    herdados: dict[str, tuple[str, str | None]] = {}
+    for t in tickers:
+        if t in cnpj_de:
+            continue
+        cnpj, _ = ligar_a_cnpj(t, cnpj_de, mudancas)
+        if not cnpj:
+            continue
+        setores = {setor_de[x] for x, c in cnpj_de.items() if c == cnpj and setor_de.get(x)}
+        setor = setores.pop() if len(setores) == 1 else None
+        cnpj_de2[t] = cnpj
+        if setor is not None:
+            setor_de2[t] = setor
+        herdados[t] = (cnpj, setor)
+    return setor_de2, cnpj_de2, herdados
 
 
 def classificar_classe(

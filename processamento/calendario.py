@@ -231,10 +231,10 @@ def fechamento(d: date) -> pd.Timestamp:
     return _instante(d, fe)
 
 
-def corte_manha(d: date) -> pd.Timestamp:
+def corte_manha(d: date, caminho: str | None = None) -> pd.Timestamp:
     """Fim da janela da noite que termina na manhã de d (corte_noite, fuso de São Paulo)."""
     d = _data(d)
-    corte = time.fromisoformat(carregar_parametros()["corte_noite"])
+    corte = time.fromisoformat(carregar_parametros(caminho)["corte_noite"])
     return _instante(d, corte)
 
 
@@ -274,48 +274,66 @@ def janela_pregao(t: date, cal: list[date]) -> tuple[pd.Timestamp, pd.Timestamp]
     return abertura(t), fechamento(t)
 
 
-def _classificar_instante(
-    ts: pd.Timestamp,
-    cal: list[date],
-    fechamentos: list[pd.Timestamp],
-    aberturas: list[pd.Timestamp],
-    cortes: list[pd.Timestamp],
-    corte_proximo: pd.Timestamp | None,
-) -> tuple[str, date | None]:
-    """Janela e pregão de referência de um instante (algoritmo da seção 7.2, com bisect)."""
+def _classificar_instante(ts, cal: list[date], horario, corte, corte_proximo) -> tuple[str, date | None]:
+    """Janela e pregão de referência de um instante (seção 7.2).
+
+    Só o pregão da própria data de `ts` (em São Paulo) precisa de horário: os pregões de datas anteriores
+    já fecharam antes de `ts`, e os de datas posteriores abrem depois do corte das 8h deles.
+    `horario(d)` -> (abertura, fechamento) e `corte(d)` -> instante do corte da manhã de d.
+    """
     if pd.isna(ts):
         return "sem_horario", None
-    k = bisect.bisect_left(fechamentos, ts)  # 1º pregão com fechamento >= ts
+    dia = ts.tz_convert(SP).date()
+    k = bisect.bisect_left(cal, dia)  # 1º pregão com data >= dia
+    if k < len(cal) and cal[k] == dia:
+        ab, fe = horario(dia)
+        if ts <= fe:
+            if ab <= ts:
+                return "pregao", dia
+            if ts <= corte(dia):
+                return ("fora_do_calendario", None) if k == 0 else ("noite", cal[k - 1])
+            return "pre_abertura", dia
+        k += 1  # depois do fechamento de `dia`: vale o próximo pregão
     if k == len(cal):
         if corte_proximo is not None and ts <= corte_proximo:
             return "noite", cal[-1]
         return "fora_do_calendario", None
-    if aberturas[k] <= ts <= fechamentos[k]:
-        return "pregao", cal[k]
-    if ts <= cortes[k]:
-        if k == 0:
-            return "fora_do_calendario", None
-        return "noite", cal[k - 1]
-    return "pre_abertura", cal[k]
+    # ts é de uma data anterior a cal[k], logo antes do corte das 8h de cal[k]
+    return ("fora_do_calendario", None) if k == 0 else ("noite", cal[k - 1])
 
 
 def classificar_noticias(
-    noticias: pd.DataFrame, cal: list[date], proximo_ao_vivo: date | None = None
+    noticias: pd.DataFrame, cal: list[date], proximo_ao_vivo: date | None = None, caminho: str | None = None
 ) -> pd.DataFrame:
     """Cópia de `noticias` com as colunas `janela` e `pregao_ref` (ver `_classificar_instante`).
 
-    `noticias` traz `data_hora_publicacao` tz-aware (fuso de São Paulo) ou NaT. `cal` é a lista
-    de pregões ordenada. `proximo_ao_vivo` é o próximo pregão ainda sem preço (só para a noite do
-    último pregão de `cal`).
+    `noticias` traz `data_hora_publicacao` tz-aware ou NaT. `cal` é a lista de pregões ordenada.
+    `proximo_ao_vivo` é o próximo pregão ainda sem preço (só para a noite do último pregão de `cal`).
+    Preguiçoso (24/10/2026): só pede o horário da B3 do pregão que cai na data (São Paulo) de alguma notícia.
+    Pregão sem horário cadastrado e sem notícia na sua data não gera erro; notícia na data de um pregão sem
+    horário levanta `ErroCalendario` (mensagem de `horario_b3`). Mesmo resultado do algoritmo antigo
+    (todos os horários antes) sempre que o antigo não levanta erro.
     """
-    fechamentos = [fechamento(p) for p in cal]
-    aberturas = [abertura(p) for p in cal]
-    cortes = [corte_manha(p) for p in cal]
-    corte_proximo = corte_manha(proximo_ao_vivo) if proximo_ao_vivo is not None and cal else None
+    cal = [_data(p) for p in cal]
+    horarios: dict[date, tuple[pd.Timestamp, pd.Timestamp]] = {}
+    cortes: dict[date, pd.Timestamp] = {}
+
+    def _horario(d: date) -> tuple[pd.Timestamp, pd.Timestamp]:
+        if d not in horarios:
+            ab, fe = horario_b3(d, caminho)
+            horarios[d] = (_instante(d, ab), _instante(d, fe))
+        return horarios[d]
+
+    def _corte(d: date) -> pd.Timestamp:
+        if d not in cortes:
+            cortes[d] = corte_manha(d, caminho)
+        return cortes[d]
+
+    corte_proximo = _corte(_data(proximo_ao_vivo)) if proximo_ao_vivo is not None and cal else None
     janelas = []
     refs = []
     for ts in noticias["data_hora_publicacao"]:
-        janela, ref = _classificar_instante(ts, cal, fechamentos, aberturas, cortes, corte_proximo)
+        janela, ref = _classificar_instante(ts, cal, _horario, _corte, corte_proximo)
         janelas.append(janela)
         refs.append(ref)
     saida = noticias.copy()

@@ -108,7 +108,7 @@ def _params_rotina(tmp: Path, prazo_tardio: time | None = time(12)) -> Parametro
 
 def _params_saida(tmp: Path):
     return dataclasses.replace(carregar_parametros_saida(), pasta=tmp / "saida", pasta_estado=tmp / "estado",
-                               pasta_registros=tmp / "registros")
+                               pasta_registros=tmp / "registros", publicar_top_provisorio=True)
 
 
 def _executar(tmp: Path, relogio, consultar, ler, *, d: date = D, sem_esperar: bool = False,

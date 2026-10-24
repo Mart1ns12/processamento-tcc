@@ -44,7 +44,6 @@ from processamento.diagnostico.regras import (
     inteiro,
     nova_secao,
     offset_iso,
-    pct_com_hora_por_ano,
     resumir_probabilidades,
     texto,
     tickers_fora_do_padrao,
@@ -172,6 +171,108 @@ def _resumo_horas(contagem: dict) -> str:
 # Notícias
 # ---------------------------------------------------------------------------
 
+def _pct(parte: int, total: int):
+    """Percentual com 1 casa (None se total 0)."""
+    return None if not total else round(parte / total * 100, 1)
+
+
+def meia_noite_por_ano_origem(candidatos: pd.DataFrame) -> dict:
+    """{(ano, origem): artigos} com instante = 00:00:00 em Los Angeles (regra N1-A, `fontes.meia_noite_pacifico`).
+
+    `candidatos`: ano, origem, instante (texto ISO com fuso), n (artigos distintos).
+    """
+    if candidatos.empty:
+        return {}
+    instantes = fontes.para_sao_paulo_iso(candidatos["instante"].map(texto), "v1-noticias.data_hora_publicacao")
+    meia = fontes.meia_noite_pacifico(instantes)
+    saida: dict = {}
+    for (a, o, n), e_meia in zip(_registros(candidatos, ("ano", "origem", "n")), meia):
+        if e_meia:
+            chave = (_ano(a), texto(o))
+            saida[chave] = saida.get(chave, 0) + inteiro(n)
+    return saida
+
+
+def linhas_horas(totais: pd.DataFrame, meia: dict) -> list[list]:
+    """[ano, origem, total, hora_real, %, so_data_n1a, %, sem_hora, %] por (ano, origem), na ordem dos totais."""
+    linhas = []
+    for a, o, t, s in _registros(totais, ("ano", "origem", "total", "sem_hora")):
+        ano_v, origem_v, total, sem = _ano(a), texto(o), inteiro(t), inteiro(s)
+        n1a = meia.get((ano_v, origem_v), 0)
+        real = total - sem - n1a
+        linhas.append([ano_v, origem_v, total, real, _pct(real, total), n1a, _pct(n1a, total), sem, _pct(sem, total)])
+    return linhas
+
+
+def somar_horas_por_ano(linhas_ao: list[list]) -> list[list]:
+    """Soma as linhas de `linhas_horas` por ano: [ano, total, hora_real, %, so_data_n1a, %, sem_hora, %]."""
+    soma: dict = {}
+    for ano_v, _o, total, real, _p1, n1a, _p2, sem, _p3 in linhas_ao:
+        t0, r0, n0, s0 = soma.get(ano_v, (0, 0, 0, 0))
+        soma[ano_v] = (t0 + total, r0 + real, n0 + n1a, s0 + sem)
+    return [[a, t, r, _pct(r, t), n, _pct(n, t), s, _pct(s, t)] for a, (t, r, n, s) in sorted(soma.items())]
+
+
+_COLS_HORAS = ["total", "hora_real", "pct_hora_real", "so_data_n1a", "pct_so_data_n1a", "sem_hora", "pct_sem_hora"]
+
+
+def _horas_por_ano(ler, mapa: dict, existentes: set, secao: dict) -> pd.DataFrame:
+    """Hora da publicação por ano (artigos distintos): hora real, "só data" N1-A e sem hora.
+
+    Divergência `noticia_sem_hora` só para Google News sem hora e sem a marca 'date' em raw_articles;
+    os marcados viram nota. Devolve o DataFrame dos totais (ano, origem, total, sem_hora).
+    """
+    nome = _nome(mapa, "noticias")
+    T = _tab(mapa, "noticias")
+    c = lambda x: _col(mapa, "noticias", x)
+    dhp, dp, org, idc = c("data_hora_publicacao"), c("data_publicacao"), c("origem"), c("id")
+    df_tot = ler(
+        f"SELECT YEAR({dp}) AS ano, {org} AS origem, COUNT(DISTINCT {idc}) AS total, "
+        f"COUNT(DISTINCT CASE WHEN {dhp} IS NULL OR {dhp} = '' THEN {idc} END) AS sem_hora "
+        f"FROM {T} GROUP BY ano, origem ORDER BY ano, origem"
+    )
+    df_cand = ler(
+        f"SELECT YEAR({dp}) AS ano, {org} AS origem, {dhp} AS instante, COUNT(DISTINCT {idc}) AS n "
+        f"FROM {T} WHERE SUBSTRING({dhp}, 15, 5) = '00:00' GROUP BY ano, origem, instante"
+    )
+    linhas_ao = linhas_horas(df_tot, meia_noite_por_ano_origem(df_cand))
+    adicionar_tabela(secao, "Hora da publicação, por ano (artigos distintos)", ["ano", *_COLS_HORAS],
+                     somar_horas_por_ano(linhas_ao))
+    adicionar_tabela(secao, "Hora da publicação, por ano e origem (artigos distintos)",
+                     ["ano", "origem", *_COLS_HORAS], linhas_ao)
+
+    google = {linha[0]: (linha[2], linha[7]) for linha in linhas_ao if linha[1] == "google_news" and linha[7] > 0}
+    if not google:
+        return df_tot
+    so_data: dict = {}
+    sem_marca: dict = {}
+    if _existe(mapa, existentes, "raw_articles"):
+        RAW = _tab(mapa, "raw_articles")
+        rr = lambda x: _col(mapa, "raw_articles", x)
+        df_p = ler(
+            f"SELECT YEAR(n.{dp}) AS ano, r.{rr('published_precision')} AS precisao, COUNT(DISTINCT n.{idc}) AS n "
+            f"FROM {T} n LEFT JOIN {RAW} r ON r.{rr('id')} = CAST(SUBSTRING(n.{idc}, 2) AS UNSIGNED) "
+            f"WHERE n.{org} = 'google_news' AND (n.{dhp} IS NULL OR n.{dhp} = '') GROUP BY ano, precisao"
+        )
+        for a, p, n in _registros(df_p, ("ano", "precisao", "n")):
+            alvo = so_data if texto(p) == "date" else sem_marca
+            alvo[_ano(a)] = alvo.get(_ano(a), 0) + inteiro(n)
+    else:
+        secao["notas"].append(f"Marca 'só data' (raw_articles): {_pulada(mapa, 'raw_articles')}")
+        sem_marca = {a: sem for a, (_t, sem) in google.items()}
+    if so_data:
+        partes = ", ".join(f"{a}: {n}" for a, n in sorted(so_data.items()))
+        secao["notas"].append(
+            f"{sum(so_data.values())} notícias do Google News sem hora, marcadas 'só data' pela coleta "
+            f"(raw_articles.published_precision = 'date'): {partes}")
+    for a in sorted(sem_marca):
+        if sem_marca[a] > 0:
+            total = google.get(a, (0, 0))[0]
+            secao["divergencias"].append(div(
+                "noticia_sem_hora", nome, f"{a}: {sem_marca[a]} de {total} sem hora e sem a marca 'só data' em raw_articles"))
+    return df_tot
+
+
 def secao_noticias(ler, mapa: dict, existentes: set) -> dict:
     """Seção de notícias: probabilidades, hora, formato ISO, fuso, idioma, FinBERT e id."""
     secao = nova_secao("Notícias (v1-noticias)")
@@ -202,26 +303,8 @@ def secao_noticias(ler, mapa: dict, existentes: set) -> dict:
         adicionar_tabela(secao, f"Faixa de prob_{rotulo}", ["minimo", "maximo"],
                          _registros(df_faixa, ("minimo", "maximo")))
 
-    # b) percentual com hora, por ano e por origem
-    df_ano = ler(
-        f"SELECT YEAR({c('data_publicacao')}) AS ano, {c('origem')} AS origem, "
-        f"COUNT(*) AS total, SUM({c('data_hora_publicacao')} IS NOT NULL "
-        f"AND {c('data_hora_publicacao')} <> '') AS com_hora "
-        f"FROM {T} GROUP BY ano, origem ORDER BY ano, origem"
-    )
-    pct = pct_com_hora_por_ano(df_ano)
-    adicionar_tabela(secao, "Percentual com hora, por ano", ["ano", "pct_com_hora"],
-                     [[a, p] for a, p in pct.items()])
-    linhas_ao = [
-        [_ano(a), texto(o), inteiro(t), inteiro(ch)]
-        for a, o, t, ch in _registros(df_ano, ("ano", "origem", "total", "com_hora"))
-    ]
-    adicionar_tabela(secao, "Percentual com hora, por ano e origem",
-                     ["ano", "origem", "total", "com_hora"], linhas_ao)
-    for ano_v, origem_v, total, com_hora in linhas_ao:
-        if origem_v == "google_news" and com_hora < total:
-            secao["divergencias"].append(
-                div("noticia_sem_hora", nome, f"{ano_v}: {total - com_hora} de {total} sem hora"))
+    # b) hora da publicação por ano e por origem (hora real, só data N1-A, sem hora)
+    df_ano = _horas_por_ano(ler, mapa, existentes, secao)
 
     # c) formatos ISO de data_hora_publicacao e data_hora_coleta
     linhas_iso = []

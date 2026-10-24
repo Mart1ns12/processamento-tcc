@@ -10,6 +10,17 @@ fuso: "America/Sao_Paulo"
 corte_noite: "08:00"            # fim da janela da noite (seção 7.2 da especificação)
 horarios_b3_valido_ate: "2027-12-31"   # depois disso: erro, atualizar o arquivo
 horarios_b3:
+  # 2019-11-04 a 2024-03-10 (histórico novo, 24/10/2026): B3 OC 020/2022 (14/03/2022) e OC 125/2022 (07/11/2022);
+  # os demais por notícias da época; o início em 2019-11-04 ainda a conferir.
+  - {a_partir_de: "2019-11-04", abertura: "10:00", fechamento: "18:00"}
+  - {a_partir_de: "2020-03-09", abertura: "10:00", fechamento: "17:00"}
+  - {a_partir_de: "2020-11-03", abertura: "10:00", fechamento: "18:00"}
+  - {a_partir_de: "2021-03-15", abertura: "10:00", fechamento: "17:00"}
+  - {a_partir_de: "2021-11-08", abertura: "10:00", fechamento: "18:00"}
+  - {a_partir_de: "2022-03-14", abertura: "10:00", fechamento: "17:00"}
+  - {a_partir_de: "2022-11-07", abertura: "10:00", fechamento: "18:00"}
+  - {a_partir_de: "2023-03-13", abertura: "10:00", fechamento: "17:00"}
+  - {a_partir_de: "2023-11-06", abertura: "10:00", fechamento: "18:00"}
   - {a_partir_de: "2024-03-11", abertura: "10:00", fechamento: "17:00"}
   - {a_partir_de: "2024-11-04", abertura: "10:00", fechamento: "18:00"}
   - {a_partir_de: "2025-03-10", abertura: "10:00", fechamento: "17:00"}
@@ -23,11 +34,73 @@ horarios_b3:
 # Ex.: quarta-feira de cinzas. Copa de 2026: a B3 manteve o horário normal nos jogos do Brasil
 # (ex.: 29/06/2026; conferido pelo usuário), por isso nenhum dia da Copa entra aqui.
 dias_especiais:
+  "2020-02-26": {abertura: "13:00", motivo: "quarta-feira de cinzas"}
+  "2021-02-17": {abertura: "13:00", motivo: "quarta-feira de cinzas"}
+  "2022-03-02": {abertura: "13:00", motivo: "quarta-feira de cinzas"}
+  "2023-02-22": {abertura: "13:00", motivo: "quarta-feira de cinzas"}
+  "2024-02-14": {abertura: "13:00", motivo: "quarta-feira de cinzas"}
   "2025-03-05": {abertura: "13:00", motivo: "quarta-feira de cinzas"}
   "2026-02-18": {abertura: "13:00", motivo: "quarta-feira de cinzas"}
   "2027-02-10": {abertura: "13:00", motivo: "quarta-feira de cinzas"}
-# Feriados da B3: dias úteis sem pregão. 2024 a 2026-10-12 conferidos com os dias úteis sem IBOV do banco (docs/diagnostico_banco.md). O resto: conferir no calendário oficial da B3. DATAS ENTRE ASPAS. 09/07 tem pregão; 25/01 tem pregão desde 2022 (conferir).
+# Feriados da B3: dias úteis sem pregão. 2019-12-31 a 2026-10-12 conferidos com os dias úteis sem IBOV do banco e com a B3 (24/10/2026). O resto: conferir no calendário oficial da B3. DATAS ENTRE ASPAS. 09/07 e 25/01 só fecharam em 2021 (pregão nos outros anos).
 feriados_b3:
+  "2019-12-31": "último dia útil do ano (sem pregão)"
+  "2020-01-01": "Confraternização Universal"
+  "2020-02-24": "Carnaval"
+  "2020-02-25": "Carnaval"
+  "2020-04-10": "Sexta-feira Santa"
+  "2020-04-21": "Tiradentes"
+  "2020-05-01": "Dia do Trabalho"
+  "2020-06-11": "Corpus Christi"
+  "2020-09-07": "Independência"
+  "2020-10-12": "Nossa Senhora Aparecida"
+  "2020-11-02": "Finados"
+  "2020-11-20": "Consciência Negra"
+  "2020-12-24": "véspera de Natal (sem pregão)"
+  "2020-12-25": "Natal"
+  "2020-12-31": "último dia útil do ano (sem pregão)"
+  "2021-01-01": "Confraternização Universal"
+  "2021-01-25": "Aniversário de São Paulo"
+  "2021-02-15": "Carnaval"
+  "2021-02-16": "Carnaval"
+  "2021-04-02": "Sexta-feira Santa"
+  "2021-04-21": "Tiradentes"
+  "2021-06-03": "Corpus Christi"
+  "2021-07-09": "Revolução Constitucionalista"
+  "2021-09-07": "Independência"
+  "2021-10-12": "Nossa Senhora Aparecida"
+  "2021-11-02": "Finados"
+  "2021-11-15": "Proclamação da República"
+  "2021-12-24": "véspera de Natal (sem pregão)"
+  "2021-12-31": "último dia útil do ano (sem pregão)"
+  "2022-02-28": "Carnaval"
+  "2022-03-01": "Carnaval"
+  "2022-04-15": "Sexta-feira Santa"
+  "2022-04-21": "Tiradentes"
+  "2022-06-16": "Corpus Christi"
+  "2022-09-07": "Independência"
+  "2022-10-12": "Nossa Senhora Aparecida"
+  "2022-11-02": "Finados"
+  "2022-11-15": "Proclamação da República"
+  "2022-12-30": "último dia útil do ano (sem pregão)"
+  "2023-02-20": "Carnaval"
+  "2023-02-21": "Carnaval"
+  "2023-04-07": "Sexta-feira Santa"
+  "2023-04-21": "Tiradentes"
+  "2023-05-01": "Dia do Trabalho"
+  "2023-06-08": "Corpus Christi"
+  "2023-09-07": "Independência"
+  "2023-10-12": "Nossa Senhora Aparecida"
+  "2023-11-02": "Finados"
+  "2023-11-15": "Proclamação da República"
+  "2023-12-25": "Natal"
+  "2023-12-29": "último dia útil do ano (sem pregão)"
+  "2024-01-01": "Confraternização Universal"
+  "2024-02-12": "Carnaval"
+  "2024-02-13": "Carnaval"
+  "2024-03-29": "Sexta-feira Santa"
+  "2024-05-01": "Dia do Trabalho"
+  "2024-05-30": "Corpus Christi"
   "2024-11-15": "Proclamação da República"
   "2024-11-20": "Consciência Negra"
   "2024-12-24": "véspera de Natal (sem pregão)"
@@ -90,6 +163,7 @@ fundamentos:
   anos_payout: 5                # payout_por_ano: últimos N exercícios (DFP) entregues até t
   anos_historico_proventos: 5   # soma por ano: ano de t e os N − 1 anteriores
   pvp_minimo_plausivel: 0.05    # P/VP calculado abaixo disto = quantidade de ações suspeita (v1-acoes_emitidas em milhares em ~25 empresas; seção 10)
+  balanco_idade_max_meses: 15   # balanço de referência com data_fim_periodo + N meses antes de t = velho: P/L, P/VP, ROE, margens, EBITDA, endividamento e payout 12m indisponíveis (seção 6)
 # Fase 2: dataset do experimento (seção 7.3; plano da etapa 5). Volatilidade, volume, beta e
 # setor_excluir vêm do bloco fase1 (mesma conta do painel).
 experimento:
@@ -137,6 +211,7 @@ saida:
   pasta_estado: "saida/estado"              # último envio dos pacotes "quando muda"
   pasta_registros: "registros/experimento"  # top 5 do dia e resultado (uso único; S11)
   tom_neutro: 0.05                          # |tom| até isto = "tom neutro" nos textos
+  publicar_top_provisorio: false            # true = grava experimento_top e experimento_historico mesmo com treino.modelo_oficial false (seção 8.5)
 # Rotina diária (seção 4 da especificação; plano da etapa 8). HORAS E CAMINHOS ENTRE ASPAS.
 rotina:
   inicio_consulta: "08:00"        # 1ª consulta ao painel da coleta (São Paulo)

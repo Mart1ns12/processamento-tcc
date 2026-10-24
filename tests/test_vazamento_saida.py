@@ -8,6 +8,7 @@ Sem rede e sem banco real: `banco_teste` (SQLite de tests/dados) e modelos peque
 
 from __future__ import annotations
 
+import dataclasses
 import json
 from datetime import date
 from pathlib import Path
@@ -21,6 +22,7 @@ from processamento import fontes
 from processamento.experimento import modelos, preparacao
 from processamento.experimento.modelos import CHAVES_METADADOS
 from processamento.saida.gerar import gerar
+from processamento.saida.parametros import carregar_parametros_saida
 
 D = date(2025, 10, 22)
 PARAMS = params_teste()
@@ -108,11 +110,15 @@ def _envenenado(banco_teste, extra_noticias=None):
     return banco_teste(alterar=alterar)
 
 
+# Publica o top provisório para o veneno cobrir também experimento_top e experimento_historico (9 arquivos).
+SAIDA_PUBLICA = dataclasses.replace(carregar_parametros_saida(), publicar_top_provisorio=True)
+
+
 def _gerar(raiz: Path, ler, modelos_pasta: Path, usar_estado: bool = False) -> Path:
     return gerar(
         D, ler=ler, pasta_saida=raiz / "saida" / D.isoformat(), pasta_modelos=modelos_pasta,
         pasta_registros=raiz / "registros", pasta_estado=raiz / "estado", usar_estado=usar_estado,
-        agora=AGORA, existe_composicao=False, params_treino=PARAMS,
+        agora=AGORA, existe_composicao=False, params_treino=PARAMS, params_saida=SAIDA_PUBLICA,
     )
 
 

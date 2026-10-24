@@ -322,6 +322,45 @@ def test_divergencias_coluna(args, esperado):
     assert r.divergencias_coluna(*args) == esperado
 
 
+@pytest.mark.parametrize("args, kwargs, esperado", [
+    # 3A-3B: coluna só com nota de preenchimento não gera divergência
+    (("v1-mudancas_ticker", "data_mudanca", "cheia", 0, 0, False, False),
+     {"so_nota_preenchimento": True}, []),
+    (("v1-mudancas_ticker", "data_mudanca", "vazia", 0, 0, False, False),
+     {"so_nota_preenchimento": True}, []),
+    (("v1-mudancas_ticker", "data_mudanca", "parcial", 0, 0, False, False),
+     {"so_nota_preenchimento": True}, []),
+    # 3C: texto vazio só informativo (título) não gera divergência
+    (("v1-noticias", "titulo", "cheia", 1, 0, False, False),
+     {"so_nota_texto_vazio": True}, []),
+    # 3D: texto vazio em coluna comum continua divergência
+    (("v1-noticias", "fonte", "cheia", 2, 0, False, False), {},
+     ["`v1-noticias.fonte`: 2 textos vazios ('') em vez de NULL"]),
+])
+def test_divergencias_coluna_so_nota(args, kwargs, esperado):
+    assert r.divergencias_coluna(*args, **kwargs) == esperado
+
+
+@pytest.mark.parametrize("args, esperado", [
+    # 3E: todas preenchidas
+    (("v1-mudancas_ticker", "data_mudanca", 10, 0),
+     "`v1-mudancas_ticker.data_mudanca` preenchida em 10 de 10 linhas"),
+    # 3F: com vazias
+    (("v1-mudancas_ticker", "data_mudanca", 10, 3),
+     "`v1-mudancas_ticker.data_mudanca` preenchida em 7 de 10 linhas (3 vazias)"),
+])
+def test_nota_preenchimento(args, esperado):
+    assert r.nota_preenchimento(*args) == esperado
+
+
+def test_nota_texto_vazio():
+    # 3G
+    assert r.nota_texto_vazio("v1-noticias", "titulo", 1, ["n326413"]) == (
+        "`v1-noticias.titulo`: 1 textos vazios ('') (a leitura trata como vazio); "
+        "ids (até 10): n326413"
+    )
+
+
 # ---------------------------------------------------------------------------
 # 20. classificar_id_noticia
 # ---------------------------------------------------------------------------

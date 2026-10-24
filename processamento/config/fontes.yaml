@@ -8,6 +8,7 @@ tabelas:
     chave: [id, ticker]
     colunas: {id: id, ticker: ticker, data_hora_publicacao: data_hora_publicacao, data_hora_coleta: data_hora_coleta, titulo: titulo, fonte: fonte, link: link, prob_positivo: prob_positivo, prob_neutro: prob_neutro, prob_negativo: prob_negativo, origem: origem, papel: papel, tipo_conteudo: tipo_conteudo, evento: evento, qualidade: qualidade, data_publicacao: data_publicacao}
     colunas_ignoradas: [momento_pregao]   # existe no banco; NÃO usar (seção 3.1)
+    textos_vazios_nota: [titulo]   # texto vazio no título vira nota com até 10 ids (a leitura já trata como vazio); nas outras colunas é divergência
     coluna_data: data_publicacao
     coluna_entidade: ticker
     valores_permitidos:
@@ -36,7 +37,7 @@ tabelas:
     colunas: {ticker_antigo: ticker_antigo, ticker_novo: ticker_novo, data_mudanca: data_mudanca}
     coluna_data: data_mudanca
     coluna_entidade: ticker_antigo
-    colunas_vazias_conhecidas: [data_mudanca]
+    colunas_nota_preenchimento: [data_mudanca]   # preenchida desde 24/10/2026: só nota com a contagem (seção 3.1)
   balancos:
     nome_real: v1-balancos
     chave: [cnpj, tipo_documento, data_inicio_periodo, data_fim_periodo]

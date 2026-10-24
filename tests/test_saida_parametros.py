@@ -82,3 +82,28 @@ def test_calendario_aceita_bloco_saida(tmp_path):
     dados = calendario.carregar_parametros(caminho)
     assert "saida" in dados
     assert dados["saida"]["tom_neutro"] == 0.05
+
+
+def test_yaml_real_nao_publica_o_top_provisorio():
+    assert carregar_parametros_saida().publicar_top_provisorio is False
+
+
+def test_publicar_top_ausente_e_false(tmp_path):
+    assert carregar_parametros_saida(_escrever(tmp_path, _BLOCO_VALIDO)).publicar_top_provisorio is False
+
+
+def test_publicar_top_true_e_lido(tmp_path):
+    bloco = _BLOCO_VALIDO + "  publicar_top_provisorio: true\n"
+    assert carregar_parametros_saida(_escrever(tmp_path, bloco)).publicar_top_provisorio is True
+
+
+def test_publicar_top_texto_erra(tmp_path):
+    bloco = _BLOCO_VALIDO + '  publicar_top_provisorio: "sim"\n'
+    with pytest.raises(ErroParametrosSaida, match="saida.publicar_top_provisorio"):
+        carregar_parametros_saida(_escrever(tmp_path, bloco))
+
+
+def test_chave_a_mais_continua_erro_com_publicar_presente(tmp_path):
+    bloco = _BLOCO_VALIDO + "  publicar_top_provisorio: true\n  extra: 1\n"
+    with pytest.raises(ErroParametrosSaida, match="chave desconhecida"):
+        carregar_parametros_saida(_escrever(tmp_path, bloco))

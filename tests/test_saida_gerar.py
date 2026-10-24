@@ -7,6 +7,7 @@ Cenário: D = 2025-10-22, t = 2025-10-21 (banco de teste).
 
 from __future__ import annotations
 
+import dataclasses
 import json
 from datetime import date
 from pathlib import Path
@@ -21,7 +22,8 @@ from processamento.experimento import modelos, preparacao
 from processamento.experimento import dataset as exp_dataset
 from processamento.experimento.modelos import CHAVES_METADADOS
 from processamento.saida import contrato, pacotes_experimento
-from processamento.saida.gerar import gerar, main
+from processamento.saida.gerar import NOTA_TOP_NAO_PUBLICADO, gerar, main
+from processamento.saida.parametros import carregar_parametros_saida
 
 D = date(2025, 10, 22)
 ORDEM_PACOTES = ["acoes", "series_diarias", "mercado_dia", "resumo_acao", "fundamentos_trimestrais", "proventos",
@@ -29,6 +31,9 @@ ORDEM_PACOTES = ["acoes", "series_diarias", "mercado_dia", "resumo_acao", "funda
 ARQUIVOS = [*ORDEM_PACOTES, "execucao"]
 COLETA_NAO_CONSULTADA = {"consultado": False, "nota": "gatilho da coleta não consultado (etapa 8)"}
 PARAMS = params_teste()  # teste final trancado (fim None)
+SAIDA_NAO = dataclasses.replace(carregar_parametros_saida(), publicar_top_provisorio=False)
+SAIDA_SIM = dataclasses.replace(carregar_parametros_saida(), publicar_top_provisorio=True)
+SETE = ORDEM_PACOTES[:-2]  # sem os dois pacotes do experimento (top não publicado)
 
 
 class _BancoRealProibido(BaseException):
@@ -76,6 +81,7 @@ def modelos_invertidos_dir(tmp_path_factory):
 
 def _gerar(tmp: Path, ler, *, modelos: Path, d: date = D, usar_estado: bool = False, params=None, **kw) -> Path:
     """Chama `gerar` com todas as pastas em `tmp` (saída, registros e estado)."""
+    kw.setdefault("params_saida", SAIDA_SIM)  # o yaml real traz publicar_top_provisorio: false; estes testes esperam os 10
     return gerar(
         d, ler=ler, pasta_saida=tmp / "saida" / d.isoformat(), pasta_modelos=modelos,
         pasta_registros=tmp / "registros", pasta_estado=tmp / "estado", usar_estado=usar_estado,
@@ -256,9 +262,39 @@ def test_caso_7_teste_final_trancado_nao_fecha_nem_mostra_dia(banco_teste, tmp_p
     assert _registros(pasta_2, "experimento_historico")[0]["resumo"]["n_dias"] == 0
 
 
+# ---------------------------------------------------------------- Fase 7: publicação do top (seção 8.5)
+
+def test_caso_7a_top_nao_publicado_manda_os_sete_e_avisa(banco_teste, tmp_path, modelos_dir):
+    pasta = _gerar(tmp_path, banco_teste(), modelos=modelos_dir, usar_estado=True, params_saida=SAIDA_NAO)
+
+    assert {p.name for p in pasta.iterdir()} == {f"{nome}.json" for nome in [*SETE, "execucao"]}
+    ex = _execucao(pasta)
+    assert ex["status"] == "ok"
+    assert [p["pacote"] for p in ex["pacotes_enviados"]] == SETE
+    assert ex["avisos"].count(NOTA_TOP_NAO_PUBLICADO) == 1
+    assert (tmp_path / "registros" / "2025-10-22.top.json").is_file()
+    assert not [p for p in (tmp_path / "estado").glob("*") if "experimento" in p.name]
+
+
+@pytest.mark.parametrize("oficial, publicar", [(False, True), (True, False), (True, True)])
+def test_caso_7bcd_top_publicado_manda_os_dez(banco_teste, tmp_path, modelos_dir, oficial, publicar):
+    params = dataclasses.replace(PARAMS, modelo_oficial=oficial)
+    pasta = _gerar(tmp_path, banco_teste(), modelos=modelos_dir, params=params,
+                   params_saida=SAIDA_SIM if publicar else SAIDA_NAO)
+
+    assert {p.name for p in pasta.iterdir()} == {f"{nome}.json" for nome in ARQUIVOS}
+    ex = _execucao(pasta)
+    assert ex["status"] == "ok"
+    assert [p["pacote"] for p in ex["pacotes_enviados"]] == ORDEM_PACOTES
+    assert NOTA_TOP_NAO_PUBLICADO not in ex["avisos"]
+    assert (tmp_path / "registros" / "2025-10-22.top.json").is_file()
+
+
 # ---------------------------------------------------------------- caso 8: CLI
 
-def test_caso_8_cli_codigos_de_saida(banco_teste, tmp_path, modelos_dir):
+def test_caso_8_cli_codigos_de_saida(banco_teste, tmp_path, modelos_dir, monkeypatch):
+    # o CLI lê o yaml real (top não publicado); este teste confere a gravação do top, então liga a publicação
+    monkeypatch.setattr("processamento.saida.gerar.carregar_parametros_saida", lambda *a, **k: SAIDA_SIM)
     raiz = tmp_path / "saida"
     argv = ["--data", "2025-10-22", "--pasta", str(raiz), "--pasta-modelos", str(modelos_dir),
             "--pasta-registros", str(tmp_path / "registros"), "--sem-estado"]

@@ -13,6 +13,7 @@ from pathlib import Path
 from processamento import calendario, fontes
 
 _CHAVES = {"limite_valido_historico", "pasta", "pasta_estado", "pasta_registros", "tom_neutro"}
+_OPCIONAIS = {"publicar_top_provisorio"}  # ausente = false (yamls de teste montados à mão)
 _RE_HORA = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 
 
@@ -29,6 +30,7 @@ class ParametrosSaida:
     pasta_estado: Path
     pasta_registros: Path
     tom_neutro: float
+    publicar_top_provisorio: bool = False
 
 
 def _texto(valor: object, onde: str) -> str:
@@ -66,7 +68,7 @@ def carregar_parametros_saida(caminho: str | None = None) -> ParametrosSaida:
     if not isinstance(bloco, dict):
         raise ErroParametrosSaida("saida deve ser um mapeamento")
     presentes = {str(c) for c in bloco}
-    desconhecidas = presentes - _CHAVES
+    desconhecidas = presentes - _CHAVES - _OPCIONAIS
     if desconhecidas:
         nomes = ", ".join(f"saida.{c}" for c in sorted(desconhecidas))
         raise ErroParametrosSaida(f"chave desconhecida no bloco saida: {nomes}")
@@ -75,10 +77,15 @@ def carregar_parametros_saida(caminho: str | None = None) -> ParametrosSaida:
         nomes = ", ".join(f"saida.{c}" for c in sorted(faltantes))
         raise ErroParametrosSaida(f"faltam chaves no bloco saida: {nomes}")
 
+    publicar = bloco.get("publicar_top_provisorio", False)
+    if not isinstance(publicar, bool):
+        raise ErroParametrosSaida(f"saida.publicar_top_provisorio deve ser true ou false (recebeu {publicar!r})")
+
     return ParametrosSaida(
         limite_valido_historico=_hora(bloco["limite_valido_historico"], "saida.limite_valido_historico"),
         pasta=fontes.RAIZ / _texto(bloco["pasta"], "saida.pasta"),
         pasta_estado=fontes.RAIZ / _texto(bloco["pasta_estado"], "saida.pasta_estado"),
         pasta_registros=fontes.RAIZ / _texto(bloco["pasta_registros"], "saida.pasta_registros"),
         tom_neutro=_tom_neutro(bloco["tom_neutro"], "saida.tom_neutro"),
+        publicar_top_provisorio=publicar,
     )

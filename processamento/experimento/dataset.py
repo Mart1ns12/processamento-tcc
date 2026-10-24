@@ -33,7 +33,7 @@ from processamento.experimento.resultados import dias_de_resultado
 from processamento.experimento.tom import COLUNAS_NOTICIAS, variaveis_de_noticias
 from processamento.experimento.variaveis import variaveis_de_preco
 from processamento.fatos.precos import ParametrosPrecos, carregar_parametros_precos, indice_pregoes, mapas_cadastro
-from processamento.tickers import ligar_a_cnpj
+from processamento.tickers import ligar_a_cnpj, mapas_por_empresa
 from processamento.universo import montar_universo
 
 COLUNAS_DATASET = IDENTIFICACAO + COLUNAS_NOTICIAS + COLUNAS_RANK + COLUNAS_ALVO
@@ -91,7 +91,8 @@ def montar_dataset(
     de setor e de mercado usa só essas linhas. `cobertura_inicio` é a menor `data_publicacao` das
     notícias lidas, antes do filtro de versão. Sem `proximo_ao_vivo`, a noite do último pregão de
     `cal` ainda está aberta. `info`: contagens das notícias e dos dias de resultado, mais linhas,
-    pregões, versão e cobertura ("AAAA-MM-DD" ou None).
+    pregões, versão, cobertura ("AAAA-MM-DD" ou None) e `setor_herdado` (ticker fora do cadastro
+    que ganhou o setor da empresa dele, `tickers.mapas_por_empresa`).
     """
     params = carregar_parametros_experimento() if params is None else params
     params_precos = carregar_parametros_precos() if params_precos is None else params_precos
@@ -100,6 +101,8 @@ def montar_dataset(
 
     modelo = dados.universo.loc[dados.universo["no_universo"], ["data", "ticker", "universo"]].reset_index(drop=True)
     tickers = sorted(modelo["ticker"].unique())
+    # Ticker fora do cadastro ligado a uma empresa dele (ex.: JBSS3 antigo) herda CNPJ e setor (plano Fase 6b)
+    setor_de, cnpj_de, herdados = mapas_por_empresa(tickers, setor_de, cnpj_de, dados.mudancas)
     empresa_de = {t: ligar_a_cnpj(t, cnpj_de, dados.mudancas)[0] or t for t in tickers}
     modelo["empresa"] = modelo["ticker"].map(empresa_de)
     modelo["setor"] = modelo["ticker"].map(setor_de)
@@ -134,6 +137,7 @@ def montar_dataset(
         "versao_noticias": versao_noticias,
         "inicio_janela_efetivo": "fechamento" if versao_noticias == "hora_real_noite" else params.inicio_janela,
         "cobertura_inicio": None if cobertura is None else cobertura.date().isoformat(),
+        "setor_herdado": {t: herdados[t][1] for t in sorted(herdados) if herdados[t][1] is not None},
     }
     return df, info
 
@@ -231,9 +235,7 @@ def executar(
         ),
         balancos=fontes.ler_tabela("balancos", ate=ate, ler=ler),
         universo=montar_universo(cal, cadastro, precos, carregar_exclusoes(), composicao),
-        mudancas=fontes.mudancas_como_dict(
-            fontes.ler_tabela("mudancas_ticker", ler=ler, unir_mudancas=False)
-        ),
+        mudancas=fontes.ler_mudancas(ler),
     )
     df, info = montar_dataset(
         dados,

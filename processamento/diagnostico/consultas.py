@@ -83,6 +83,12 @@ def montar_sql_vazios(tabela: str, colunas: list[tuple[str, str]]) -> str:
     return f"SELECT {', '.join(partes)} FROM {fontes.citar(tabela)}"
 
 
+def montar_sql_ids_texto_vazio(tabela: str, coluna_id: str, coluna: str) -> str:
+    """Até 10 ids (distintos, em ordem) das linhas com texto vazio na coluna (nomes reais)."""
+    return (f"SELECT DISTINCT {fontes.citar(coluna_id)} AS id FROM {fontes.citar(tabela)} "
+            f"WHERE {fontes.citar(coluna)} = '' ORDER BY id LIMIT 10")
+
+
 def montar_sql_distintos(tabela: str, coluna: str) -> str:
     """Valores distintos de uma coluna, com contagem, comparados em binário (case e acento)."""
     col = fontes.citar(coluna)
@@ -378,6 +384,8 @@ def secao_vazios(ler, mapa, existentes, df_colunas):
         total = r.inteiro(row["total"])
         nome_contrato_de = {real: contrato_col for contrato_col, real in cfg["colunas"].items()}
         conhecidas = set(cfg.get("colunas_vazias_conhecidas", []))
+        so_nota_preench = set(cfg.get("colunas_nota_preenchimento", []))
+        so_nota_texto = set(cfg.get("textos_vazios_nota", []))
         proibidas_zero = set(cfg.get("zero_proibido", []))
 
         for coluna, _tipo, _nulo in reais:
@@ -390,10 +398,20 @@ def secao_vazios(ler, mapa, existentes, df_colunas):
             for detalhe in r.divergencias_coluna(
                 nome, coluna, resumo["situacao"], textos_vazios, zeros,
                 contrato_col in conhecidas, contrato_col in proibidas_zero,
+                so_nota_preenchimento=contrato_col in so_nota_preench,
+                so_nota_texto_vazio=contrato_col in so_nota_texto,
             ):
                 secao["divergencias"].append(r.div("coluna_vazia", nome, detalhe))
 
-            if nulos or textos_vazios or zeros or contrato_col in conhecidas:
+            if contrato_col in so_nota_preench and resumo["situacao"] != "tabela_vazia":
+                secao["notas"].append(r.nota_preenchimento(nome, coluna, total, nulos))
+            if contrato_col in so_nota_texto and textos_vazios > 0:
+                coluna_id = cfg["colunas"][cfg["chave"][0]]
+                df_ids = ler(montar_sql_ids_texto_vazio(nome, coluna_id, coluna))
+                ids = [r.texto(v) for v in df_ids["id"]]
+                secao["notas"].append(r.nota_texto_vazio(nome, coluna, textos_vazios, ids))
+
+            if nulos or textos_vazios or zeros or contrato_col in conhecidas or contrato_col in so_nota_preench:
                 linhas.append([
                     nome, coluna, total, nulos, resumo["pct_nulo"], resumo["situacao"],
                     textos_vazios, zeros,
