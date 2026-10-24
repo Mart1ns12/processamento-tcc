@@ -354,6 +354,24 @@ _DIA_HISTORICO = {
     "taxa_acumulada": "folha",
 }
 
+# Motivos da decisão do gatilho da coleta (seção 8 do plano da etapa 8). Fica aqui para o contrato não importar `rotina`.
+MOTIVOS_COLETA = ("entrega_concluida", "entrega_pendente", "entrega_falhou", "sem_daily", "daily_agendado",
+                  "dados_atrasados", "falha_consulta", "sem_esperar")
+_ETAPAS_COLETA = ("precos", "macro", "noticias", "ipe", "enriquecimento", "juiza", "cadastro", "entrega", "analise")
+# `consultado` e `nota` são o formato antigo (sem coleta consultada); o resto é opcional e vem do painel e do laço.
+_COLETA_STATUS = {
+    "consultado": "bool", "nota": "texto",
+    "motivo": ("opcional", ("enum", MOTIVOS_COLETA)),
+    "execucao_id": ("opcional", "texto?"), "origem": ("opcional", "texto?"), "status_execucao": ("opcional", "texto?"),
+    "iniciada_em": ("opcional", "data_hora?"), "finalizada_em": ("opcional", "data_hora?"),
+    "entrega_concluida_em": ("opcional", "data_hora?"),
+    "etapas": ("opcional", {e: ("opcional", "texto?") for e in _ETAPAS_COLETA}),
+    "consultas": ("opcional", "inteiro"), "espera_segundos": ("opcional", "inteiro"),
+    "primeira_consulta_em": ("opcional", "data_hora?"), "ultima_consulta_em": ("opcional", "data_hora?"),
+    "prazo": ("opcional", "data_hora?"),
+    "t_esperado": ("opcional", "data?"), "ultimo_pregao_lido": ("opcional", "data?"),
+}
+
 # Um esquema por pacote, exatamente os campos da seção 4 do plano (`series_diarias` fica de fora: validar_serie).
 ESQUEMAS: dict[str, dict] = {
     "acoes": {
@@ -432,7 +450,7 @@ ESQUEMAS: dict[str, dict] = {
         **{c: "versao" if c == "versao_contrato" else "data_hora" for c in _META_CAMPOS},
         "data_referencia": "data", "rodada": "inteiro", "inicio": "data_hora", "fim": ("ou_nulo", "data_hora"),
         "status": ("enum", ("em_andamento", "ok", "parcial", "falhou")),
-        "coleta_status": {"consultado": "bool", "nota": "texto"},
+        "coleta_status": _COLETA_STATUS,
         "pacotes_enviados": ("lista", {"pacote": ("enum", PACOTES), "arquivo": "texto",
                                         "registros": "inteiro", "removidos": "inteiro"}),
         "avisos": ("lista", "texto"),

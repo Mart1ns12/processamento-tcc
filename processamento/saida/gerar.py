@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import functools
 import json
+from collections.abc import Callable
 from datetime import date, datetime
 from pathlib import Path
 
@@ -23,7 +24,9 @@ from processamento.experimento.dataset import DadosExperimento, montar_dataset
 from processamento.experimento.parametros import carregar_parametros_experimento, carregar_parametros_treino
 from processamento.fatos.fundamentos import carregar_parametros_fundamentos
 from processamento.fatos.multiplos import multiplos_diarios
-from processamento.fatos.precos import carregar_parametros_precos, mapas_cadastro
+from processamento.fatos.precos import carregar_parametros_precos, mapas_cadastro, pares_do_painel
+from processamento.rotina import checagem as checagem_diaria
+from processamento.rotina.parametros import ParametrosChecagem
 from processamento.saida import contrato, pacote_noticias, pacote_series, pacotes_experimento, pacotes_fatos
 from processamento.saida.insumos import ErroSaida, ler_insumos
 from processamento.saida.parametros import carregar_parametros_saida
@@ -34,7 +37,8 @@ ORDEM = ("acoes", "series_diarias", "mercado_dia", "resumo_acao", "fundamentos_t
 COMPACTOS = ("series_diarias", "proventos")                              # seção 2.3 (S20)
 COLETA_NAO_CONSULTADA = {"consultado": False, "nota": "gatilho da coleta não consultado (etapa 8)"}
 AVISO_SEM_MODELO = "sem arquivo de modelo em {pasta}: experimento_top não gerado"
-AVISO_NAO_HOUVE = "pregão previsto {dia} não houve; dia descartado"
+AVISO_RETREINO = "Retreino de {mes} falhou ({tipo}): usando o modelo anterior."
+AVISO_CHECAGEM = "falha na checagem diária ({tipo}): avisos de checagem não gerados."
 
 
 def _data_argumento(texto: str) -> date:
@@ -71,12 +75,18 @@ def _gravar_execucao(pasta: Path, registro: dict) -> None:
 def gerar(d: date, *, ler=None, pasta_saida: Path | None = None, pasta_modelos: Path | None = None,
           pasta_registros: Path | None = None, pasta_estado: Path | None = None, usar_estado: bool = False,
           agora: datetime | None = None, coleta_status: dict | None = None, avisos_coleta: list[str] = (),
-          existe_composicao: bool | None = None, params_treino=None, params_saida=None) -> Path:
+          existe_composicao: bool | None = None, params_treino=None, params_saida=None,
+          retreinar: Callable[[pd.DataFrame, dict, list[date], date], list[str]] | None = None,
+          checagem: ParametrosChecagem | None = None) -> Path:
     """Gera os pacotes da saída de D e devolve a pasta (`pasta_saida`, que é a pasta de D).
 
     `ler`: leitor injetado (testes e etapa 8); sem ele usa a conexão somente leitura da coleta.
     `usar_estado`: lê e grava o estado do "quando muda" (sem ele, manda tudo). Ponto de vista: t vem de `ler_insumos`.
+    `retreinar`: gancho do retreino mensal (seção 7 do plano da etapa 8); chamado no top 5, antes de escolher o
+    modelo, com (df do dataset, info, calendário, D). Exceção vira aviso e a rodada segue.
+    `checagem`: limites da checagem diária (seção 9 do plano da etapa 8); sem ele, nenhum aviso de checagem.
     Levanta `ErroSaida` (depois de gravar `execucao.json` com status `falhou`) se não há pregão antes de D.
+    `fontes.ErroSomenteLeitura` sobe sem ser convertido (o chamador devolve código 3).
     """
     params_saida = carregar_parametros_saida() if params_saida is None else params_saida
     params_treino = carregar_parametros_treino() if params_treino is None else params_treino
@@ -107,7 +117,7 @@ def gerar(d: date, *, ler=None, pasta_saida: Path | None = None, pasta_modelos: 
         motivo = str(erro) if isinstance(erro, ErroSaida) else f"falha ao ler a coleta ({type(erro).__name__})"
         _gravar_execucao(pasta, _execucao(d, rodada, gerado_em, contrato.data_hora_txt(datetime.now(contrato.SP)),
                                           "falhou", gerado_em, dados_ate, coleta, [], [motivo]))
-        if isinstance(erro, ErroSaida):
+        if isinstance(erro, ErroSaida | fontes.ErroSomenteLeitura):
             raise
         raise ErroSaida(motivo) from erro
 
@@ -143,9 +153,8 @@ def gerar(d: date, *, ler=None, pasta_saida: Path | None = None, pasta_modelos: 
             precos=ins.precos, cadastro=ins.cadastro, noticias=ins.noticias, balancos=ins.balancos,
             universo=universo(), mudancas=ins.mudancas,
         )
-        df, _info = montar_dataset(dados, ins.cal, versao_noticias="todas", proximo_ao_vivo=d,
-                                   params=params_exp, params_precos=params_precos)
-        return df
+        return montar_dataset(dados, ins.cal, versao_noticias="todas", proximo_ao_vivo=d,
+                              params=params_exp, params_precos=params_precos)
 
     def estado_de(nome: str):
         return contrato.ler_estado(estado_dir, nome)
@@ -181,14 +190,7 @@ def gerar(d: date, *, ler=None, pasta_saida: Path | None = None, pasta_modelos: 
 
     def historico():
         fim = params_treino.teste_final_fim
-        if fim is not None:
-            registro_t = pacotes_experimento.ler_registro_top(pasta_registros, ins.t)
-            if pacotes_experimento.pode_fechar(registro_t, fim):
-                resultado = pacotes_experimento.fechar_dia(registro_t, ins.precos, ins.cal, agora)
-                if resultado is None:
-                    avisos.append(AVISO_NAO_HOUVE.format(dia=ins.t.isoformat()))
-                else:
-                    pacotes_experimento.gravar_resultado(pasta_registros, resultado)
+        avisos.extend(pacotes_experimento.fechar_pendentes(pasta_registros, ins.precos, ins.cal, ins.t, fim, agora))
         resultados = pacotes_experimento.ler_resultados(pasta_registros)
         u = universo()
         universo_t = str(u.loc[pd.to_datetime(u["data"]).dt.date == ins.t, "universo"].iloc[0])
@@ -203,6 +205,12 @@ def gerar(d: date, *, ler=None, pasta_saida: Path | None = None, pasta_modelos: 
         if existente is not None:
             avisos.extend(existente["avisos"])
             return [existente], [], None
+        if retreinar is not None:
+            df_treino, info_treino = dataset()
+            try:
+                avisos.extend(retreinar(df_treino, info_treino, ins.cal, d))
+            except Exception as erro:
+                avisos.append(AVISO_RETREINO.format(mes=f"{d.year:04d}-{d.month:02d}", tipo=type(erro).__name__))
         caminho, caminho_m1, avisos_modelo = pacotes_experimento.escolher_modelo(pasta_modelos, d)
         if caminho is None:
             avisos.append(AVISO_SEM_MODELO.format(pasta=pasta_modelos))
@@ -211,7 +219,7 @@ def gerar(d: date, *, ler=None, pasta_saida: Path | None = None, pasta_modelos: 
         modelo_m1, meta_m1 = modelos.carregar_modelo(caminho_m1) if caminho_m1 is not None else (None, None)
         cnpj_de = mapas_cadastro(ins.cadastro)[1]
         pacote, interno = pacotes_experimento.gerar_top(
-            dataset(), ins.t, d, modelo, meta, modelo_m1, meta_m1, janela(), cnpj_de, params_treino, params_saida,
+            dataset()[0], ins.t, d, modelo, meta, modelo_m1, meta_m1, janela(), cnpj_de, params_treino, params_saida,
             agora, dados_ate, caminho.stem, avisos_modelo,
         )
         pacote, _gravou = pacotes_experimento.gravar_registro_top(pasta_registros, pacote, interno, fim)
@@ -227,6 +235,7 @@ def gerar(d: date, *, ler=None, pasta_saida: Path | None = None, pasta_modelos: 
     # 4) cada pacote: montar -> validar e gravar -> estado. Erro num pacote vira aviso e a rodada segue.
     enviados: list[dict] = []
     incompleta = False
+    produzidos: dict[str, list[dict]] = {}   # registros completos de cada pacote gravado (para a checagem)
     for nome in ORDEM:
         try:
             produzido = produtores[nome]()
@@ -239,11 +248,23 @@ def gerar(d: date, *, ler=None, pasta_saida: Path | None = None, pasta_modelos: 
             )
             if novo_estado is not None:
                 contrato.gravar_estado(estado_dir, nome, novo_estado)
+            produzidos[nome] = registros
             enviados.append({"pacote": nome, "arquivo": arquivo.name,
                              "registros": len(registros), "removidos": len(removidos)})
         except Exception as erro:
             avisos.append(f"falha ao gerar {nome}: {type(erro).__name__}: {erro}")
             incompleta = True
+
+    # 4b) checagem diária (seção 9 do plano da etapa 8): só avisos, nunca bloqueia nada
+    if checagem is not None:
+        try:
+            avisos.extend(checagem_diaria.avisos_do_dia(
+                ins.precos, ins.cal, ins.t, pares_do_painel(ins.cadastro, ins.exclusoes), checagem))
+            mercado_t = (produzidos.get("mercado_dia") or [None])[0]
+            avisos.extend(checagem_diaria.avisos_indicadores(
+                mercado_t, produzidos.get("resumo_acao"), ins.t, checagem))
+        except Exception as erro:
+            avisos.append(AVISO_CHECAGEM.format(tipo=type(erro).__name__))
 
     # 5) execução final: ok = os 9 pacotes; parcial = algum falhou ou foi pulado; falhou = nenhum gravado
     if not enviados:
@@ -255,6 +276,21 @@ def gerar(d: date, *, ler=None, pasta_saida: Path | None = None, pasta_modelos: 
     fim = contrato.data_hora_txt(datetime.now(contrato.SP))
     _gravar_execucao(pasta, _execucao(d, rodada, gerado_em, fim, status, gerado_em, dados_ate, coleta,
                                       enviados, avisos + list(avisos_coleta)))
+    return pasta
+
+
+def registrar_execucao(d: date, status: str, *, coleta_status: dict, avisos: list[str], agora: datetime,
+                       pasta_saida: Path | None = None, params_saida=None) -> Path:
+    """Grava só o `execucao.json` de D, sem pacotes (rotina diária: coleta não pronta até o prazo; seção 5 do
+    plano da etapa 8). Mesma pasta e mesma numeração de rodada de `gerar`; `inicio` e `fim` são `agora`.
+    """
+    params_saida = carregar_parametros_saida() if params_saida is None else params_saida
+    pasta = Path(pasta_saida) if pasta_saida is not None else params_saida.pasta / d.isoformat()
+    gerado_em = contrato.data_hora_txt(agora)
+    dados_ate = contrato.data_hora_txt(calendario.corte_manha(d))
+    rodada = _rodada_anterior(pasta) + 1
+    _gravar_execucao(pasta, _execucao(d, rodada, gerado_em, gerado_em, status, gerado_em, dados_ate,
+                                      coleta_status, [], list(avisos)))
     return pasta
 
 
@@ -302,6 +338,9 @@ def main(argv=None, ler=None, existe_composicao: bool | None = None) -> int:
     except ErroSaida as e:
         print(f"Saída não gerada: {e}")
         return 4
+    except fontes.ErroSomenteLeitura as e:
+        print(f"{e}. A coleta não foi alterada.")
+        return 3
 
     execucao = json.loads((pasta / "execucao.json").read_text(encoding="utf-8"))["registros"][0]
     print(f"Saída de {d.isoformat()} em {pasta}: status {execucao['status']}")

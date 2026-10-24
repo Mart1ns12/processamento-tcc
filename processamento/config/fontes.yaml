@@ -78,10 +78,10 @@ auxiliares:
     colunas: {article_id: article_id, model: model, text_source: text_source}
   painel_execucoes:
     nome_real: v1-painel_execucoes
-    colunas: {id: id, tipo: tipo, status: status, iniciada_em: iniciada_em, finalizada_em: finalizada_em, origem: origem}
+    colunas: {id: id, tipo: tipo, status: status, aguardando: aguardando, iniciada_em: iniciada_em, finalizada_em: finalizada_em, origem: origem}
   painel_etapas:
     nome_real: v1-painel_etapas
-    colunas: {execucao_id: execucao_id, etapa_id: etapa_id, ordem: ordem, status: status}
+    colunas: {execucao_id: execucao_id, etapa_id: etapa_id, ordem: ordem, status: status, iniciada_em: iniciada_em, finalizada_em: finalizada_em}
   composicao_ibov:            # criada pela coleta em 23/10/2026 (seção 3.5); vigencia_fim vazia = ainda vigente
     nome_real: v1-composicao_ibov
     opcional: true

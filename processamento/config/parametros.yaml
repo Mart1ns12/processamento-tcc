@@ -8,7 +8,7 @@
 # HORAS E DATAS ENTRE ASPAS.
 fuso: "America/Sao_Paulo"
 corte_noite: "08:00"            # fim da janela da noite (seção 7.2 da especificação)
-horarios_b3_valido_ate: "2027-03-12"   # depois disso: erro, atualizar o arquivo
+horarios_b3_valido_ate: "2027-12-31"   # depois disso: erro, atualizar o arquivo
 horarios_b3:
   - {a_partir_de: "2024-03-11", abertura: "10:00", fechamento: "17:00"}
   - {a_partir_de: "2024-11-04", abertura: "10:00", fechamento: "18:00"}
@@ -16,12 +16,61 @@ horarios_b3:
   - {a_partir_de: "2025-11-03", abertura: "10:00", fechamento: "18:00"}
   - {a_partir_de: "2026-03-09", abertura: "10:00", fechamento: "17:00"}
   - {a_partir_de: "2026-11-03", abertura: "10:00", fechamento: "18:00"}
+  # 2027: conferir no site da B3
+  - {a_partir_de: "2027-03-15", abertura: "10:00", fechamento: "17:00"}
+  - {a_partir_de: "2027-11-08", abertura: "10:00", fechamento: "18:00"}
 # Dias especiais: pregões com horário diferente do período (só o que muda: abertura e/ou fechamento).
 # Ex.: quarta-feira de cinzas. Copa de 2026: a B3 manteve o horário normal nos jogos do Brasil
 # (ex.: 29/06/2026; conferido pelo usuário), por isso nenhum dia da Copa entra aqui.
 dias_especiais:
   "2025-03-05": {abertura: "13:00", motivo: "quarta-feira de cinzas"}
   "2026-02-18": {abertura: "13:00", motivo: "quarta-feira de cinzas"}
+  "2027-02-10": {abertura: "13:00", motivo: "quarta-feira de cinzas"}
+# Feriados da B3: dias úteis sem pregão. 2024 a 2026-10-12 conferidos com os dias úteis sem IBOV do banco (docs/diagnostico_banco.md). O resto: conferir no calendário oficial da B3. DATAS ENTRE ASPAS. 09/07 tem pregão; 25/01 tem pregão desde 2022 (conferir).
+feriados_b3:
+  "2024-11-15": "Proclamação da República"
+  "2024-11-20": "Consciência Negra"
+  "2024-12-24": "véspera de Natal (sem pregão)"
+  "2024-12-25": "Natal"
+  "2024-12-31": "último dia do ano (sem pregão)"
+  "2025-01-01": "Confraternização Universal"
+  "2025-03-03": "Carnaval"
+  "2025-03-04": "Carnaval"
+  "2025-04-18": "Sexta-feira Santa"
+  "2025-04-21": "Tiradentes"
+  "2025-05-01": "Dia do Trabalho"
+  "2025-06-19": "Corpus Christi"
+  "2025-11-20": "Consciência Negra"
+  "2025-12-24": "véspera de Natal (sem pregão)"
+  "2025-12-25": "Natal"
+  "2025-12-31": "último dia do ano (sem pregão)"
+  "2026-01-01": "Confraternização Universal"
+  "2026-02-16": "Carnaval"
+  "2026-02-17": "Carnaval"
+  "2026-04-03": "Sexta-feira Santa"
+  "2026-04-21": "Tiradentes"
+  "2026-05-01": "Dia do Trabalho"
+  "2026-06-04": "Corpus Christi"
+  "2026-09-07": "Independência"
+  "2026-10-12": "Nossa Senhora Aparecida"
+  "2026-11-02": "Finados (a conferir)"
+  "2026-11-20": "Consciência Negra (a conferir)"
+  "2026-12-24": "véspera de Natal (sem pregão; a conferir)"
+  "2026-12-25": "Natal (a conferir)"
+  "2026-12-31": "último dia do ano (sem pregão; a conferir)"
+  "2027-01-01": "Confraternização Universal (a conferir)"
+  "2027-02-08": "Carnaval (a conferir)"
+  "2027-02-09": "Carnaval (a conferir)"
+  "2027-03-26": "Sexta-feira Santa (a conferir)"
+  "2027-04-21": "Tiradentes (a conferir)"
+  "2027-05-27": "Corpus Christi (a conferir)"
+  "2027-09-07": "Independência (a conferir)"
+  "2027-10-12": "Nossa Senhora Aparecida (a conferir)"
+  "2027-11-02": "Finados (a conferir)"
+  "2027-11-15": "Proclamação da República (a conferir)"
+  "2027-12-24": "véspera de Natal (sem pregão; a conferir)"
+  "2027-12-31": "último dia do ano (sem pregão; a conferir)"
+feriados_b3_valido_ate: "2027-12-31"
 # Fase 1 (seção 5 da especificação). Janelas contadas em PREGÕES do calendário (datas com IBOV).
 fase1:
   janelas: {d1: 1, m1: 21, m6: 126, a1: 252}
@@ -66,6 +115,7 @@ treino:
     inicio: "2026-06-23"            # 1º dia do teste final (o período reservado na v1 e nunca usado)
     fim: null                       # véspera da entrada em produção (etapa 8), "AAAA-MM-DD"; vazio = trava ativa. Depois: teste ao vivo
     liberado: false                 # true SÓ por decisão do usuário; mesmo assim exige --teste-final; uso único
+  modelo_oficial: false            # true SÓ quando o histórico completo chegar e o desenvolvimento for refeito com ele (pegadinha 13)
   topk: [5, 3]                      # o primeiro é o corte principal
   xgboost: {n_estimators: 300, max_depth: 3, learning_rate: 0.03, subsample: 0.8, colsample_bytree: 0.8, min_child_weight: 50, reg_lambda: 5}
   grade: {max_depth: [2, 3], min_child_weight: [50, 200]}   # escolhida só nas dobras de desenvolvimento
@@ -84,3 +134,19 @@ saida:
   pasta_estado: "saida/estado"              # último envio dos pacotes "quando muda"
   pasta_registros: "registros/experimento"  # top 5 do dia e resultado (uso único; S11)
   tom_neutro: 0.05                          # |tom| até isto = "tom neutro" nos textos
+# Rotina diária (seção 4 da especificação; plano da etapa 8). HORAS E CAMINHOS ENTRE ASPAS.
+rotina:
+  inicio_consulta: "08:00"        # 1ª consulta ao painel da coleta (São Paulo)
+  intervalo_minutos: 5            # entre consultas
+  prazo: "09:45"                  # sem entrega até aqui: execucao "falhou", sem pacotes
+  prazo_tardio: "12:00"           # continua consultando até aqui (rodada tardia); null = desliga
+  etapas_conferidas: ["precos", "noticias", "enriquecimento"]   # não concluídas: aviso
+  pasta_logs: "logs"
+  trava: "saida/estado/rotina.trava"
+  trava_validade_horas: 6
+  aviso_calendario_dias: 30
+  checagem:
+    acoes_minimo_fracao: 0.9
+    retorno_maximo_abs: 0.30
+    preco_parado_pregoes: 5
+    max_tickers_por_aviso: 10

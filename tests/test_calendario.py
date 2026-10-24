@@ -122,7 +122,7 @@ def test_horario_b3_antes_do_primeiro_periodo_erro():
 
 def test_horario_b3_depois_do_valido_ate_erro():
     with pytest.raises(ErroCalendario):
-        horario_b3(date(2027, 3, 15))
+        horario_b3(date(2028, 1, 3))
 
 
 def test_horario_sem_aspas_erro_com_mensagem_de_aspas(tmp_path):

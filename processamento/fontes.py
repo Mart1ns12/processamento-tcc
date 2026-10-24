@@ -11,7 +11,7 @@ import functools
 import os
 import re
 from collections.abc import Callable, Mapping
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -719,3 +719,96 @@ def ler_composicao(
             intervalos[c] = pd.to_datetime(intervalos[c]).dt.normalize()
         intervalos["participacao"] = pd.to_numeric(intervalos["participacao"]).astype(float)
     return intervalos.sort_values(["ticker", "data_inicio"]).reset_index(drop=True)
+
+
+# ---------------------------------------------------------------------------
+# Painel de execuções da rotina (etapa 8, fase 2): só leitura. `iniciada_em` e `finalizada_em`
+# do painel são UTC sem fuso; aqui viram São Paulo. Ausência = None/NaT, nunca 0.
+# ---------------------------------------------------------------------------
+
+_TICKER_IBOV = "IBOV"
+
+
+def _desde_utc_texto(desde_utc: datetime) -> str:
+    """Instante em UTC sem fuso como texto 'AAAA-MM-DD HH:MM:SS'. Sem fuso, já é UTC."""
+    if desde_utc.tzinfo is not None:
+        desde_utc = desde_utc.astimezone(timezone.utc).replace(tzinfo=None)
+    return desde_utc.strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _de_utc_com_erro(serie: pd.Series, rotulo: str) -> pd.Series:
+    """`para_sao_paulo_de_utc` com erro legível (ErroLeitura)."""
+    try:
+        return para_sao_paulo_de_utc(serie)
+    except (ValueError, TypeError) as erro:
+        raise ErroLeitura(f"{rotulo}: {erro}") from erro
+
+
+def ler_painel_execucoes(desde_utc: datetime, ler: Callable[..., pd.DataFrame] | None = None) -> pd.DataFrame:
+    """Execuções da rotina com `iniciada_em >= desde_utc`, da mais antiga para a mais nova.
+
+    Colunas: id, tipo, origem, status, aguardando, iniciada_em, finalizada_em (as duas datas
+    tz-aware em São Paulo; `finalizada_em` vazia = NaT).
+    """
+    if ler is None:
+        ler = _ler_padrao
+    _conferir_tabela("painel_execucoes", ler)
+    condicao = f"{coluna_sql('painel_execucoes', 'iniciada_em')} >= :desde"
+    df = _selecionar(
+        "painel_execucoes",
+        ["id", "tipo", "origem", "status", "aguardando", "iniciada_em", "finalizada_em"],
+        [condicao],
+        {"desde": _desde_utc_texto(desde_utc)},
+        ler,
+    )
+    for c in ("id", "tipo", "origem", "status", "aguardando"):
+        df[c] = _vazio_como_nulo(df[c])
+    df["iniciada_em"] = _de_utc_com_erro(df["iniciada_em"], "painel_execucoes.iniciada_em")
+    df["finalizada_em"] = _de_utc_com_erro(df["finalizada_em"], "painel_execucoes.finalizada_em")
+    return df.sort_values("iniciada_em", kind="stable").reset_index(drop=True)
+
+
+def ler_painel_etapas(execucao_id: str, ler: Callable[..., pd.DataFrame] | None = None) -> pd.DataFrame:
+    """Etapas de uma execução do painel, na ordem de `ordem`.
+
+    Colunas: execucao_id, etapa_id, ordem (inteiro), status, iniciada_em, finalizada_em
+    (tz-aware em São Paulo; vazia = NaT).
+    """
+    if ler is None:
+        ler = _ler_padrao
+    _conferir_tabela("painel_etapas", ler)
+    condicao = f"{coluna_sql('painel_etapas', 'execucao_id')} = :id"
+    df = _selecionar(
+        "painel_etapas",
+        ["execucao_id", "etapa_id", "ordem", "status", "iniciada_em", "finalizada_em"],
+        [condicao],
+        {"id": execucao_id},
+        ler,
+    )
+    for c in ("etapa_id", "status"):
+        df[c] = _vazio_como_nulo(df[c])
+    ordens = pd.to_numeric(df["ordem"], errors="coerce")
+    if ordens.isna().any():
+        raise ErroLeitura(f"painel_etapas.ordem: {int(ordens.isna().sum())} valores nulos ou não numéricos")
+    df["ordem"] = ordens.astype("int64")
+    df["iniciada_em"] = _de_utc_com_erro(df["iniciada_em"], "painel_etapas.iniciada_em")
+    df["finalizada_em"] = _de_utc_com_erro(df["finalizada_em"], "painel_etapas.finalizada_em")
+    return df.sort_values("ordem", kind="stable").reset_index(drop=True)
+
+
+def ultimo_pregao_ibov(ate: date, ler: Callable[..., pd.DataFrame] | None = None) -> date | None:
+    """Último pregão com fechamento do IBOV em `v1-precos` até `ate` (inclusive); None se não há."""
+    if ler is None:
+        ler = _ler_padrao
+    _conferir_tabela("precos", ler)
+    sql = (
+        f"SELECT MAX({coluna_sql('precos', 'data')}) AS {citar('ultima')} "
+        f"FROM {tabela_sql('precos')} "
+        f"WHERE {coluna_sql('precos', 'ticker')} = :ticker "
+        f"AND {coluna_sql('precos', 'fechamento')} IS NOT NULL "
+        f"AND {coluna_sql('precos', 'data')} <= :ate"
+    )
+    df = ler(sql, {"ticker": _TICKER_IBOV, "ate": _data_texto(ate)})
+    if df.empty or pd.isna(df["ultima"].iloc[0]):
+        return None
+    return pd.Timestamp(df["ultima"].iloc[0]).date()

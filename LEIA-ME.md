@@ -16,3 +16,69 @@
 1. A pasta da extração (`extracao-dados-tcc-main/`) dentro desta pasta (ou ajuste o caminho no `REGRAS_AGENTE.md`).
 2. O arquivo `.env` com o acesso ao banco (de preferência um usuário só de leitura).
 3. `git init` (os commits você faz).
+
+## Rotina diária no Agendador de Tarefas (Windows)
+
+A rotina roda de segunda a sexta. A tarefa abre às 07:55; a rotina espera a coleta (que começa às 08:00) e termina quando a entrega do dia fica pronta, ou às 12:00. Em dia sem pregão, sai sem gravar nada.
+
+- Script: `scripts/rotina_diaria.ps1` (não precisa editar).
+- Log: `logs/rotina-AAAA-MM-DD.log`.
+- Resultado do dia: `saida/AAAA-MM-DD/execucao.json`.
+- Antes: `.env` preenchido e `.venv` criado (`pip install -r requirements.txt`).
+- Este passo a passo é para o PC (testes de funcionamento). Onde a rotina vai rodar na produção ainda não foi decidido.
+
+### Criar a tarefa pela interface
+
+1. Abra o **Agendador de Tarefas** (Menu Iniciar, digite "Agendador de Tarefas").
+2. No painel da direita, clique em **Criar Tarefa...** (não em "Criar Tarefa Básica": ela não mostra todas as abas abaixo).
+3. Aba **Geral**:
+   - Nome: `TCC rotina diaria`.
+   - Marque **Executar estando o usuário conectado ou não** (o Windows pede a senha da conta).
+4. Aba **Disparadores** > **Novo**:
+   - Iniciar a tarefa: **Em uma programação**; configurações: **Semanalmente**, a cada 1 semana.
+   - Marque **Segunda, Terça, Quarta, Quinta e Sexta**.
+   - Hora: **07:55:00**. Clique em OK.
+5. Aba **Ações** > **Novo**:
+   - Ação: **Iniciar um programa**.
+   - Programa/script: `powershell`
+   - Adicionar argumentos: `-NoProfile -ExecutionPolicy Bypass -File "C:\Users\danie\Desktop\TCC\Arquivos\processamento-tcc\scripts\rotina_diaria.ps1"`
+   - Deixe "Iniciar em" vazio (o script já vai para a pasta do projeto).
+6. Aba **Condições**:
+   - Marque **Acordar o computador para executar esta tarefa**.
+   - Desmarque **Iniciar a tarefa somente se o computador estiver ligado à rede elétrica CA** (só importa em notebook).
+7. Aba **Configurações**:
+   - Marque **Executar a tarefa o mais cedo possível após uma inicialização agendada ter sido perdida**.
+   - Marque **Parar a tarefa se ela for executada por mais de**, com **5 horas**.
+   - Em **Se a tarefa já estiver em execução, aplicar a seguinte regra**: **Não iniciar uma nova instância**.
+8. Clique em OK e informe a senha do Windows.
+
+**Plano de energia** (Painel de Controle > Opções de Energia > plano em uso > Alterar configurações do plano): em "Suspender o computador", quando estiver na tomada, escolha **Nunca**. A rotina também pede ao Windows para não suspender enquanto espera.
+
+### Linha de comando equivalente
+
+```
+schtasks /Create /TN "TCC rotina diaria" /SC WEEKLY /D MON,TUE,WED,THU,FRI /ST 07:55 /TR "powershell -NoProfile -ExecutionPolicy Bypass -File C:\Users\danie\Desktop\TCC\Arquivos\processamento-tcc\scripts\rotina_diaria.ps1"
+```
+
+O `schtasks` cria só o disparo e a ação. Depois, abra as propriedades da tarefa e faça os passos 3, 6 e 7 (conta, condições e configurações), que a linha de comando não cobre.
+
+### Como testar
+
+1. No Agendador, clique com o botão direito em **TCC rotina diaria** > **Executar**.
+2. Espere terminar. Teste em dia de pregão, de preferência depois das 08:00 (a rotina espera a coleta).
+3. Confira:
+   - `logs/rotina-AAAA-MM-DD.log`: uma linha por consulta e o resultado;
+   - `saida/AAAA-MM-DD/execucao.json`: `status` (`ok`, `parcial` ou `falhou`) e `coleta_status`.
+4. Na coluna **Resultado da última execução** do Agendador aparece o código de saída em hexadecimal (`0x0` = 0, `0x4` = 4).
+
+Em sábado, domingo ou feriado, a rotina sai com código 0 e não grava nada. Isso é o esperado.
+
+### Códigos de saída
+
+| Código | Quando |
+|---|---|
+| 0 | `ok`, `parcial` ou dia sem pregão (nada gravado) |
+| 2 | Configuração: banco, parâmetros ou calendário vencido |
+| 3 | Conexão com o banco, ou sessão que não é só leitura |
+| 4 | `falhou`: a coleta não ficou pronta até 09:45 (ou o `gerar` não gerou nenhum pacote) |
+| 5 | Outra rotina em andamento (trava). A trava vence sozinha depois de 6 horas |

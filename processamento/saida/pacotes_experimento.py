@@ -45,6 +45,13 @@ NOTA_SEM_DIAS = (
     "Antes disso, os top 5 são testes de funcionamento e não entram aqui."
 )
 _RE_MODELO_ARQUIVO = re.compile(r"^xgb-(\d{4}-\d{2})\.json$")
+_RE_TOP_ARQUIVO = re.compile(r"^(\d{4}-\d{2}-\d{2})\.top\.json$")
+AVISO_NAO_HOUVE = "pregão previsto {dia} não houve; dia descartado"  # usado por fechar_pendentes
+AVISO_BASE_DIFERENTE = (
+    "top 5 de {dia} foi gerado com pregão base {base}, mas o pregão anterior a {dia} foi {real}; dia descartado"
+)
+MOTIVO_NAO_HOUVE = "nao_houve_pregao"
+MOTIVO_BASE_DIFERENTE = "pregao_base_diferente"
 
 
 def _texto_json(objeto: dict) -> str:
@@ -362,6 +369,91 @@ def ler_resultados(pasta: Path) -> list[dict]:
     if not pasta.is_dir():
         return []
     return [json.loads(c.read_text(encoding="utf-8")) for c in sorted(pasta.glob("*.resultado.json"))]
+
+
+# ---------------------------------------------------------------- pendentes (plano da etapa 8, seção 6)
+
+def listar_registros_top(pasta: Path) -> list[date]:
+    """Dias D dos `AAAA-MM-DD.top.json` da pasta (só a pasta de cima), em ordem. Vazio se a pasta não existe."""
+    pasta = Path(pasta)
+    if not pasta.is_dir():
+        return []
+    datas = []
+    for arquivo in pasta.glob("*.top.json"):
+        casamento = _RE_TOP_ARQUIVO.match(arquivo.name)
+        if casamento is None:
+            continue
+        try:
+            datas.append(date.fromisoformat(casamento.group(1)))
+        except ValueError:
+            continue
+    return sorted(datas)
+
+
+def gravar_descartado(pasta: Path, dia: date, motivo: str, agora: datetime) -> bool:
+    """Grava `<D>.descartado.json` de uso único (nunca sobrescreve). True se gravou."""
+    caminho = Path(pasta) / f"{dia.isoformat()}.descartado.json"
+    caminho.parent.mkdir(parents=True, exist_ok=True)
+    texto = _texto_json({
+        "data_referencia": dia.isoformat(),
+        "motivo": motivo,
+        "descartado_em": contrato.data_hora_txt(agora),
+    })
+    try:
+        with caminho.open("x", encoding="utf-8", newline="\n") as arquivo:
+            arquivo.write(texto)
+    except FileExistsError:
+        return False
+    return True
+
+
+def fechar_pendentes(
+    pasta: Path, precos: pd.DataFrame, cal: list[date], t: date, fim: date | None, agora: datetime
+) -> list[str]:
+    """Fecha os tops pendentes de D' <= t (plano da etapa 8, seção 6). Devolve os avisos gerados.
+
+    Sem `fim` nada fecha. Só mexe em tops sem `.resultado.json` nem `.descartado.json`. Se o pregão
+    anterior a D' no calendário é o pregão base do registro, fecha; se é outro, descarta com
+    `pregao_base_diferente`; se D' não está no calendário mas há pregão depois dele, descarta com
+    `nao_houve_pregao`; senão espera.
+    """
+    if fim is None:
+        return []
+    pasta = Path(pasta)
+    cal = sorted(cal)
+    avisos: list[str] = []
+    for dia in listar_registros_top(pasta):
+        if dia > t:
+            continue
+        if (pasta / f"{dia.isoformat()}.resultado.json").exists():
+            continue
+        if (pasta / f"{dia.isoformat()}.descartado.json").exists():
+            continue
+        registro = ler_registro_top(pasta, dia)
+        if not pode_fechar(registro, fim):
+            continue
+        base = date.fromisoformat(registro["pacote"]["pregao_base"])
+        if dia in cal:
+            pos = cal.index(dia)
+            if pos == 0:
+                # sem pregão anterior no calendário não há como comparar com o pregão base: fica pendente
+                continue
+            real = cal[pos - 1]
+            if real == base:
+                resultado = fechar_dia(registro, precos, cal, agora)
+                if resultado is not None:
+                    gravar_resultado(pasta, resultado)
+                continue
+            motivo = MOTIVO_BASE_DIFERENTE
+            aviso = AVISO_BASE_DIFERENTE.format(dia=dia.isoformat(), base=base.isoformat(), real=real.isoformat())
+        elif any(c > dia for c in cal):
+            motivo = MOTIVO_NAO_HOUVE
+            aviso = AVISO_NAO_HOUVE.format(dia=dia.isoformat())
+        else:
+            continue
+        if gravar_descartado(pasta, dia, motivo, agora):
+            avisos.append(aviso)
+    return avisos
 
 
 # ---------------------------------------------------------------- histórico (4.9)

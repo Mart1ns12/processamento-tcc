@@ -204,6 +204,7 @@ class ParametrosTreino:
     calibracao_ece_maximo: float
     calibracao_linhas_minimas: int
     liberar_chance: bool
+    modelo_oficial: bool = False
 
 
 def _inteiro_nao_negativo(valor: object, onde: str) -> int:
@@ -322,7 +323,9 @@ def carregar_parametros_treino(caminho: str | None = None) -> ParametrosTreino:
     bloco = calendario.carregar_parametros(caminho).get("treino")
     if bloco is None:
         raise ErroParametrosExperimento("falta o bloco treino no arquivo de parâmetros")
-    _chaves_exatas(bloco, _CHAVES_TREINO, "treino")
+    # `modelo_oficial` é opcional (ausente = false), para não quebrar yamls de teste montados à mão.
+    opcionais = {"modelo_oficial"} if isinstance(bloco, dict) and "modelo_oficial" in bloco else set()
+    _chaves_exatas(bloco, _CHAVES_TREINO | opcionais, "treino")
     inicio, fim, liberado = _teste_final(bloco["teste_final"])
     calibracao = bloco["calibracao"]
     _chaves_exatas(calibracao, _CHAVES_CALIBRACAO, "treino.calibracao")
@@ -350,4 +353,5 @@ def carregar_parametros_treino(caminho: str | None = None) -> ParametrosTreino:
         calibracao_ece_maximo=_real(calibracao["ece_maximo"], "treino.calibracao.ece_maximo", positivo=False),
         calibracao_linhas_minimas=_inteiro_positivo(calibracao["linhas_minimas"], "treino.calibracao.linhas_minimas"),
         liberar_chance=_booleano(calibracao["liberar_chance"], "treino.calibracao.liberar_chance"),
+        modelo_oficial=_booleano(bloco.get("modelo_oficial", False), "treino.modelo_oficial"),
     )
