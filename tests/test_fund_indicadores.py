@@ -21,7 +21,12 @@ from fabrica_fundamentos import (
     balanco_de,
     mundo,
 )
-from processamento.fatos.fundamentos import LUCRO_NEGATIVO, indicadores_empresa, valor_de_mercado
+from processamento.fatos.fundamentos import (
+    LUCRO_NEGATIVO,
+    indicadores_empresa,
+    quantidade_suspeita,
+    valor_de_mercado,
+)
 from processamento.fatos.precos import HIST, INDISPONIVEL, NAO_SE_APLICA, OK
 from processamento.fatos.trimestres import ESTOQUE, FLUXO, FotoBalanco, foto_balanco
 
@@ -319,3 +324,65 @@ def test_indicadores_ebitda_negativo_dl_ebitda_nao_se_aplica():
     r = indicadores_empresa(foto, (1000.0, OK), (0.0, OK), False)
     _par(r["ebitda.valor_12m"], -20.0, OK)
     _par(r["endividamento.dl_ebitda"], None, NAO_SE_APLICA)
+
+
+# ---------------------------------------------------------------------------
+# quantidade_suspeita e pvp_minimo (seção 10: v1-acoes_emitidas em milhares)
+# ---------------------------------------------------------------------------
+
+def _foto_com_pl(pl, pl_status=OK):
+    return _foto_a_mao(estoque={"patrimonio_liquido": (pl, pl_status)})
+
+
+def test_quantidade_nao_suspeita_com_pvp_igual_ao_limite():
+    # P/VP = 5 ÷ 100 = 0,05 exato: limite estrito, não é suspeito
+    assert quantidade_suspeita((5.0, OK), _foto_com_pl(100.0), 0.05) is False
+
+
+def test_quantidade_suspeita_com_pvp_abaixo_do_limite():
+    assert quantidade_suspeita((4.99, OK), _foto_com_pl(100.0), 0.05) is True
+
+
+def test_quantidade_nao_suspeita_com_pl_negativo():
+    assert quantidade_suspeita((5.0, OK), _foto_com_pl(-10.0), 0.05) is False
+
+
+def test_quantidade_nao_suspeita_com_pl_indisponivel():
+    assert quantidade_suspeita((5.0, OK), _foto_com_pl(NAN, INDISPONIVEL), 0.05) is False
+
+
+def test_quantidade_nao_suspeita_sem_valor_de_mercado():
+    assert quantidade_suspeita((NAN, INDISPONIVEL), _foto_com_pl(100.0), 0.05) is False
+
+
+def test_indicadores_com_quantidade_suspeita_tira_pl_pvp_e_payout():
+    foto = _foto_a_mao(
+        fluxo={"lucro_liquido": (160.0, OK), "receita_liquida": (1000.0, OK), "lucro_bruto": (400.0, OK)},
+        estoque={"patrimonio_liquido": (1300.0, OK)},
+    )
+    r = indicadores_empresa(foto, (0.92, OK), (50.0, OK), False, pvp_minimo=0.05)
+    _par(r["pl.valor"], None, INDISPONIVEL)
+    _par(r["pvp.valor"], None, INDISPONIVEL)
+    _par(r["payout.valor"], None, INDISPONIVEL)
+    _par(r["roe.valor"], 160.0 / 1300.0, OK)
+    _par(r["margem_bruta.valor"], 0.4, OK)
+
+
+def test_indicadores_sem_quantidade_suspeita_com_pvp_minimo_nao_mudam():
+    foto = _foto_a_mao(
+        fluxo={"lucro_liquido": (160.0, OK)},
+        estoque={"patrimonio_liquido": (1300.0, OK)},
+    )
+    r = indicadores_empresa(foto, (920.0, OK), (50.0, OK), False, pvp_minimo=0.05)
+    _par(r["pl.valor"], 920.0 / 160.0, OK)
+    _par(r["pvp.valor"], 920.0 / 1300.0, OK)
+    _par(r["payout.valor"], 50.0 / 160.0, OK)
+
+
+def test_indicadores_sem_pvp_minimo_nao_aplicam_a_regra():
+    foto = _foto_a_mao(
+        fluxo={"lucro_liquido": (160.0, OK)},
+        estoque={"patrimonio_liquido": (1300.0, OK)},
+    )
+    r = indicadores_empresa(foto, (0.92, OK), (50.0, OK), False)
+    _par(r["pvp.valor"], 0.92 / 1300.0, OK)

@@ -37,6 +37,7 @@ fundamentos:
   meses_janela: 12              # yield e payout: data_com em (t − 12 meses, t]
   anos_payout: 5                # payout_por_ano: últimos N exercícios (DFP) entregues até t
   anos_historico_proventos: 5   # soma por ano: ano de t e os N − 1 anteriores
+  pvp_minimo_plausivel: 0.05    # P/VP calculado abaixo disto = quantidade de ações suspeita (v1-acoes_emitidas em milhares em ~25 empresas; seção 10)
 # Fase 2: dataset do experimento (seção 7.3; plano da etapa 5). Volatilidade, volume, beta e
 # setor_excluir vêm do bloco fase1 (mesma conta do painel).
 experimento:

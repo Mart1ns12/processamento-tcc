@@ -132,8 +132,9 @@ Ticker sem `.SA`; datas `AAAA-MM-DD`; ponto decimal; vazio = `NULL` (nunca 0); b
 | Itens acima no diagnóstico (etapa 1) | Aparecem como **nota "excluídos por decisão"**, não como divergência |
 
 ### 3.5 Universo de ações por data
-- Se existir a tabela da composição (pedida como `` `v1-composicao_ibov` ``: `ticker`, `data_inicio`, `data_fim`): em cada pregão, só entram ações com `data_inicio ≤ data` e (`data_fim` vazio ou `≥ data`).
-- Senão: todas as ações do `v1-cadastro` (`tipo_acao` ON, PN ou UNIT) e marcar `universo = 'composicao_atual'`.
+- **Tabela da composição:** `` `v1-composicao_ibov` `` (criada pela coleta em 23/10/2026; **hoje vazia**). Colunas reais `ticker`, `vigencia_inicio`, `vigencia_fim`, `participacao`, `fonte`, mapeadas no `fontes.yaml` para `ticker`, `data_inicio`, `data_fim`, `participacao`, `fonte` (`participacao` e `fonte` só informativas por enquanto). `vigencia_fim` vazia = ainda vigente.
+- **Cobertura por data (decidido em 23/10/2026):** uma data está coberta se alguma linha tem `data_inicio ≤ data` e (`data_fim` vazio ou `≥ data`). Data coberta: só entram as ações com vigência naquela data (`universo = 'composicao_historica'`; as outras ficam `fora_da_composicao`). Data não coberta (inclusive tabela inexistente ou vazia): todas as ações do `v1-cadastro` (`tipo_acao` ON, PN ou UNIT), `universo = 'composicao_atual'`; ticker que só está na composição fica `fora_da_composicao` nessa data.
+- **Aviso no `execucao`:** tabela vazia → "Composição do Ibovespa vazia: universo = composição atual (ações do cadastro)."; cobertura parcial → quantos pregões a composição cobre e o período coberto; cobertura total ou tabela inexistente → sem aviso (`universo.aviso_composicao`).
 - **Conversores aceitos:** intervalos (formato pedido); "fotos" das carteiras (`data_carteira`, `ticker` → a ação entra na primeira carteira em que aparece e sai na primeira em que some); colunas de entrada e saída no cadastro.
 - **Sempre (decidido em 22/10/2026):** ação **sem preço numa data** fica fora do universo **naquela data**; os `tickers_excluidos` de `exclusoes.yaml` ficam fora em **todas** as datas.
 - O filtro vale para o **modelo** e para o **histórico do experimento**. O painel de fatos usa as ações atuais.
@@ -144,7 +145,7 @@ Ticker sem `.SA`; datas `AAAA-MM-DD`; ponto decimal; vazio = `NULL` (nunca 0); b
 
 1. A coleta roda **uma vez por dia, às 8h** (Brasília).
 2. A partir das **8h**, a cada **~5 minutos**, o processamento consulta:
-   - em `v1-painel_execucoes`: o daily mais recente de hoje (`tipo = 'daily'`), com `iniciada_em` **no próprio dia e a partir das 08:00 de São Paulo**. **`iniciada_em` está em UTC**: converter para São Paulo antes de comparar data e hora. Vale **`origem` `cron` ou `manual`**; daily manual vira **nota** no pacote `execucao`. Execuções de outros tipos (ex.: `coletar`, com as etapas `cvm_itr_dfp` e `build_entrega`) não servem de gatilho. `origem = 'cron'` só é usada na conferência do horário no diagnóstico (decidido em 22/10/2026);
+   - em `v1-painel_execucoes`: o daily mais recente de hoje (`tipo = 'daily'`), com `iniciada_em` **no próprio dia e a partir das 08:00 de São Paulo**. **`iniciada_em` está em UTC**: converter para São Paulo antes de comparar data e hora. Vale **`origem` `cron` ou `manual`**; daily manual vira **nota** no pacote `execucao`. Execuções de outros tipos (ex.: `coletar`, com as etapas `cvm_itr_dfp`, `build_entrega` e `corrigir_horas`) não servem de gatilho. `origem = 'cron'` só é usada na conferência do horário no diagnóstico (decidido em 22/10/2026);
    - em `v1-painel_etapas` (por `execucao_id`): esperar **`etapa_id = 'entrega'` com `status = 'concluida'`**. **Não esperar o daily inteiro** (a etapa seguinte, `analise`, não interessa e, se falhar, deixa o daily `parcial`);
    - conferir se `precos`, `noticias` e `enriquecimento` também estão `concluida`. Se não: seguir, mas com aviso.
 3. Com a entrega pronta: calcular a Fase 1, fechar o resultado do top 5 do pregão anterior, gerar o top 5 de hoje e enviar os pacotes (ordem na seção 8.5).
@@ -157,7 +158,7 @@ Etapas da coleta, em ordem: `precos`, `macro`, `noticias`, `ipe`, `enriqueciment
 
 ## 5. Fase 1: indicadores do painel
 
-Fonte dos dados: tabelas da seção 3. `fech` = `fechamento`; `aj` = `fechamento_ajustado`. Comparações com o setor usam a **média das ações das outras empresas do mesmo setor** (sem a própria empresa: tiram-se todas as ações do mesmo CNPJ, ex.: PETR3 não entra no setor da PETR4); se o setor tem menos de 3 empresas (CNPJs distintos, contando a própria), `setor_comparacao_fraca = true`. Só ON, PN e UNIT entram nos pares (setor e `posicao_pct`); BDR aparece no painel, mas fica fora dos pares (`posicao_pct = nao_se_aplica`). Janelas "1 dia, 1 mês, 6 meses, 1 ano" = **1, 21, 126 e 252 pregões** (decisões de 22/10/2026; detalhes na seção 9, etapa 3).
+Fonte dos dados: tabelas da seção 3. `fech` = `fechamento`; `aj` = `fechamento_ajustado`. Comparações com o setor usam a **mediana por empresa das outras empresas do mesmo setor** (decidido em 23/10/2026: a média era distorcida por um valor extremo, ex.: P/L 180 da BRAV3 levava o P/L do setor de petróleo a 43, contra mediana 12; a variável `ret_vs_setor` do modelo continua com a média, seção 7.3) (sem a própria empresa: tiram-se todas as ações do mesmo CNPJ, ex.: PETR3 não entra no setor da PETR4); se o setor tem menos de 3 empresas (CNPJs distintos, contando a própria), `setor_comparacao_fraca = true`. Só ON, PN e UNIT entram nos pares (setor e `posicao_pct`); BDR aparece no painel, mas fica fora dos pares (`posicao_pct = nao_se_aplica`). Janelas "1 dia, 1 mês, 6 meses, 1 ano" = **1, 21, 126 e 252 pregões** (decisões de 22/10/2026; detalhes na seção 9, etapa 3).
 
 | Indicador | Cálculo | Observações / status |
 |---|---|---|
@@ -198,6 +199,7 @@ Fonte dos dados: tabelas da seção 3. `fech` = `fechamento`; `aj` = `fechamento
 | Calendário | Pregões = datas com preço do `IBOV` em `v1-precos` |
 | Mudança de ticker | Unir os históricos pela `v1-mudancas_ticker` antes de qualquer cálculo |
 | Empréstimos zerados | `emprestimos_curto_prazo = 0` **e** `emprestimos_longo_prazo = 0` na mesma linha = ausente (conta não achada pela coleta): dívida líquida, DL/PL, DL/EBITDA e `caixa_liquido` saem `indisponivel`. Só um dos dois = 0 continua valendo; `aplicacoes_financeiras = 0` continua valendo (decidido em 22/10/2026; pedido à coleta na seção 10) |
+| Quantidade de ações suspeita | Em cada data, se o P/VP calculado (valor de mercado ÷ patrimônio líquido > 0) for **< 0,05** (`fundamentos.pvp_minimo_plausivel`), a quantidade de `v1-acoes_emitidas` daquela empresa é suspeita (gravada em milhares em ~25 empresas): valor de mercado, P/L, P/VP e payout (inclusive `payout_por_ano` e `payout_12m`, pela situação em t) saem `indisponivel` e ficam fora das comparações com o setor. **Não multiplicar por 1000.** ROE, margens, EBITDA, endividamento e yield não mudam. O diagnóstico lista as empresas suspeitas (decidido em 23/10/2026; pedido à coleta na seção 10) |
 | Abertura ajustada | `abertura × aj / fech` do mesmo dia (para o salto da abertura não confundir dividendo com queda) |
 | Checagem diária | Avisar: poucas ações no dia, retorno acima de 30% em módulo, volume zero, preço parado, indicador vazio |
 
@@ -283,7 +285,7 @@ XGBoost, ponto de partida: `n_estimators=300, max_depth=3, learning_rate=0.03, s
 ### 7.6 Previsão diária (top 5)
 - Ordenar as ações do dia pela probabilidade do modelo e pegar as 5 primeiras. Na tela: **"5 ações com maior chance de superar o Ibovespa (experimento)"**.
 - **Motivos:** contribuições do XGBoost (`pred_contribs`), traduzidas em frases ("Notícias da noite com tom positivo (3 notícias)"), com efeito `ajudou`/`atrapalhou`/`neutro`.
-- **Chance:** calculada, mas `exibir = false` até a calibração ser conferida (se o modelo diz 60%, ~60% acontecem). Mostrar sempre ao lado da média de 50%.
+- **Chance:** calculada, mas `exibir = false` até a calibração ser conferida (se o modelo diz 60%, ~60% acontecem). Quando exibida, vem ao lado da referência do acaso, 50% (`chance.referencia_acaso`); com a chance escondida, a referência também vai `null`, para a interface não mostrar "50%" por engano.
 - Gravar o top 5 do dia no momento da geração (histórico nunca recalculado depois).
 - No dia seguinte, fechar o resultado: `superou` = retorno da ação > retorno do IBOV no pregão previsto.
 
@@ -351,7 +353,7 @@ Enquanto a API não existe, o processamento **gera os mesmos pacotes como arquiv
 - `volume`: `total`, `relativo` (÷ mediana de 20), `mediana_20` (para a linha de referência do gráfico de barras), `posicao_pct`
 - `volatilidade_20d`: `valor` (desvio diário), `posicao_pct` (fração de ações mais calmas)
 - `beta`: `valor`, `status`
-- `pl`, `pvp`, `roe`, `dividend_yield`, `payout`, `margem_bruta`, `margem_liquida`: `valor`, `setor` (média do setor sem a própria empresa), `status`
+- `pl`, `pvp`, `roe`, `dividend_yield`, `payout`, `margem_bruta`, `margem_liquida`: `valor`, `setor` (mediana por empresa do setor, sem a própria empresa), `status`
 - `payout_por_ano`: lista (`ano`, `valor`, `status`) dos últimos anos, para o gráfico de barras do payout
 - `ebitda`: `valor_12m`, `margem`, `setor_margem`, cada um com o seu `status`, e `rotulo` ("EBITDA (cálculo padrão CVM)")
 - `endividamento`: `divida_liquida`, `dl_pl`, `dl_ebitda`, `caixa_liquido` (bool), `setor_dl_pl`, `setor_dl_ebitda`, cada um com o seu `status`, e `aviso` ("Dívida líquida sem arrendamentos.")
@@ -390,7 +392,7 @@ Acréscimos: `proventos_por_ano` (soma por ano, 5 anos, com `ano`, `valor` e `st
     {
       "posicao": 1,
       "ticker": "CMIG4",
-      "chance": {"valor": null, "media": 0.5, "exibir": false, "status": "calibracao_nao_conferida"},
+      "chance": {"valor": null, "referencia_acaso": null, "exibir": false, "status": "calibracao_nao_conferida"},
       "motivos": [
         {"fator": "noticias_dia_tom", "valor": 0.42, "efeito": "ajudou", "texto": "Notícias do último pregão e da noite com tom positivo (3 notícias)"},
         {"fator": "ret_5d", "valor": -0.031, "efeito": "ajudou", "texto": "Caiu 3,1% nos últimos 5 pregões (abaixo da média das ações)"}
@@ -400,9 +402,9 @@ Acréscimos: `proventos_por_ano` (soma por ano, 5 anos, com `ano`, `valor` e `st
   ]
 }
 ```
-(valores ilustrativos; 02/11 é feriado, por isso o pregão base é 30/10.) `valido_para_historico = true` só com modelo não provisório, gerado até as 10h de D e D depois do fim do teste final (`treino.teste_final.fim`). `chance.valor` fica `null` (`calibracao_nao_conferida`) até a calibração ser aprovada **e** `liberar_chance: true` (F16); então vem o número, com `exibir: true` e `status: "ok"`. `modelo_versao` aponta para `modelos/xgb-AAAA-MM.json` (sem o dia). Os fatores dos motivos são os nomes das colunas do dataset (seção 7.3), com o valor bruto; os textos falam da janela única do modelo (08:00:01 de t até 08:00 de D: "último pregão e noite"). As sombras (modelo 1 e regra da volatilidade) e as probabilidades ficam só no registro interno (`registros/experimento/`), não no pacote.
+(valores ilustrativos; 02/11 é feriado, por isso o pregão base é 30/10.) `valido_para_historico = true` só com modelo não provisório, gerado até as 10h de D e D depois do fim do teste final (`treino.teste_final.fim`). `chance.valor` fica `null` (`calibracao_nao_conferida`) até a calibração ser aprovada **e** `liberar_chance: true` (F16); então vem o número, com `referencia_acaso: 0.5`, `exibir: true` e `status: "ok"`. Com `exibir: false`, `valor` e `referencia_acaso` são `null` (o validador exige; decidido em 23/10/2026, no lugar do antigo campo `media`, que a interface poderia mostrar como "50%"). A `versao_contrato` continua "1.0" (contrato ainda não está em uso). `modelo_versao` aponta para `modelos/xgb-AAAA-MM.json` (sem o dia). Os fatores dos motivos são os nomes das colunas do dataset (seção 7.3), com o valor bruto; os textos falam da janela única do modelo (08:00:01 de t até 08:00 de D: "último pregão e noite"). As sombras (modelo 1 e regra da volatilidade) e as probabilidades ficam só no registro interno (`registros/experimento/`), não no pacote.
 
-**9. `experimento_historico`:** `data_referencia` (dia fechado); `dia` (`ranking`, `resultado` com `retorno`, `retorno_ibov`, `superou` de cada ação, `acertos_dia`, `acertos_top3`, `resultado_incompleto`, `taxa_acumulada`) ou `null`; `resumo` (`periodo_inicio`, `periodo_fim`, `n_dias`, `taxa_acerto`, `acaso_media`, `acaso_faixa`, `universo`, `nota`). Só entram dias com `valido_para_historico = true` e pregão previsto depois de `treino.teste_final.fim`; até a produção, `n_dias = 0` e a nota explica. O resultado de cada dia é gravado uma vez (`registros/experimento/AAAA-MM-DD.resultado.json`) e nunca recalculado.
+**9. `experimento_historico`:** `data_referencia` (dia fechado); `dia` (`ranking`, `resultado` com `retorno`, `retorno_ibov`, `superou` de cada ação, `acertos_dia`, `acertos_top3`, `resultado_incompleto`, `taxa_acumulada`) ou `null`; `resumo` (`periodo_inicio`, `periodo_fim`, `n_dias`, `taxa_acerto`, `acaso_media`, `acaso_faixa`, `universo`, `nota`). Só entram dias com `valido_para_historico = true` e pregão previsto depois de `treino.teste_final.fim`; até a produção, `n_dias = 0` e a nota explica. A nota começa pelo universo: `composicao_atual` → "Histórico calculado com as ações que compõem o Ibovespa atualmente."; `composicao_historica` → "Histórico calculado com as ações que compunham o Ibovespa em cada data." O resultado de cada dia é gravado uma vez (`registros/experimento/AAAA-MM-DD.resultado.json`) e nunca recalculado.
 
 **10. `execucao`:** `data_referencia` (D), `rodada`, `inicio`, `fim`, `status` (`em_andamento`, `ok`, `parcial`, `falhou`), `coleta_status` (o que se leu do painel da coleta; vazio até a etapa 8), `pacotes_enviados` (`pacote`, `arquivo`, `registros`, `removidos`), `avisos`.
 
@@ -456,7 +458,7 @@ Nomes dos arquivos: `execucao.json`, `acoes.json`, `series_diarias.json`, `merca
 - **Lucro 12m = 0 e payout com prejuízo (D7):** P/L com lucro zero: sem valor, `lucro_negativo`. Payout com lucro ≤ 0: sem valor, `lucro_negativo`.
 - **Sem provento na janela (D8):** yield e payout = 0,0 com `ok` (não pagar é um fato, não ausência de dado).
 - **BDR (D9):** P/L, P/VP, yield e payout `indisponivel` (a coleta não traz proventos de BDR e a razão BDR/ação é desconhecida); ROE, margens, EBITDA e endividamento calculados se houver balanço.
-- **Média do setor por empresa (D10, vale para as etapas 3 e 4):** exclui todas as ações do mesmo CNPJ e conta cada CNPJ uma vez (primeiro a média das ações da empresa com valor, depois a média entre empresas). Ticker sem CNPJ conta como empresa própria. A média só usa valores com status `ok`: no P/L, empresa com `lucro_negativo` não entra.
+- **Média do setor por empresa (D10, vale para as etapas 3 e 4):** exclui todas as ações do mesmo CNPJ e conta cada CNPJ uma vez (primeiro a média das ações da empresa com valor, depois a média entre empresas). Ticker sem CNPJ conta como empresa própria. A média só usa valores com status `ok`: no P/L, empresa com `lucro_negativo` não entra. **Atualizado em 23/10/2026:** no painel, a agregação entre empresas passou a ser a **mediana** (`media_setor(..., agregacao="mediana")`); a `ret_vs_setor` do modelo segue com a média.
 - **Balanço de referência (D11):** o documento mais recente entregue até t. Os 12 meses exigem os 4 trimestres que terminam nele; senão `historico_insuficiente`.
 - **Valor de mercado (D12):** "só uma classe negociada" = só uma classe no cadastro. Classe do cadastro sem preço no dia: `indisponivel`.
 - **Proventos e mudança de ticker:** a `v1-mudancas_ticker` serve só para achar a empresa (CNPJ); a classe (ON/PN) sai do final do ticker **original** do provento. O yield (e a soma por ano e a lista do ticker) só usa proventos do ticker atual e de tickers antigos da **mesma classe** (ex.: ELET3 → AXIA3); em conversão de classe (ex.: CPLE6 PN → CPLE3 ON), o provento antigo fica fora do yield. O payout usa todas as classes ON e PN da empresa. Linha antiga da mesma classe que colide com uma do ticker atual (mesmo tipo e `data_com`) é descartada.
@@ -539,7 +541,8 @@ Com ~1 ano de histórico, a etapa 6 é **só teste de funcionamento** (3.4): o r
 |---|---|
 | Zeros em `v1-balancos`: `emprestimos_curto_prazo` e `emprestimos_longo_prazo` = 0 **juntos** em 89 linhas de 12 empresas que não são banco (ex.: CSNA3, SBSP3, RDOR3, PCAR3, MGLU3, que têm dívida), e `aplicacoes_financeiras` = 0 em 134 linhas de 19 empresas. Provável conta não encontrada gravada como 0 (deveria ser `NULL`). Pedido à coleta: gravar `NULL` quando a conta não é achada. Enquanto isso, o processamento trata CP e LP = 0 juntos como ausente (seção 6, "Empréstimos zerados"); aplicações = 0 continuam valendo | Coleta |
 | Histórico de 5 anos (e testar a cobertura de notícias em 2021–2022) | Coleta |
-| Tabela `v1-composicao_ibov` | Coleta |
+| Preencher a tabela `v1-composicao_ibov` (criada em 23/10/2026, ainda vazia; enquanto isso, universo = `composicao_atual`, seção 3.5) | Coleta |
+| Etapa manual `corrigir_horas` (execução `tipo = 'coletar'`, vista `pendente` em 23/10/2026): provavelmente a correção do horário das notícias pedida abaixo. **Quando concluir, reavaliar a regra N1-A** (seção 7.2) | Coleta |
 | Histórico de IDIV, SMLL e IFIX (hoje só 20 e 21/10/2026) e de CDI/IPCA desde jul/2024 (hoje desde jan/2025): prometido para depois da manutenção do Railway | Coleta |
 | `data_mudanca` em `v1-mudancas_ticker` | Coleta |
 | Autenticação, endereço e forma de envio da API | Equipe da API |
@@ -552,13 +555,14 @@ Com ~1 ano de histórico, a etapa 6 é **só teste de funcionamento** (3.4): o r
 | Abertura da ação = fechamento do pregão anterior em ~11% dos pares (ação, dia) (5.021 de 45.839, medido em 23/10/2026; maior em ações de preço baixo, ex.: RAIZ4 48%). Provável igualdade real (passo mínimo de R$ 0,01), **não confirmada**; afeta o `salto_abertura`. Limitação registrada no TCC | Coleta |
 | Abertura do IBOV em `v1-precos` (fonte Yahoo): em 32,5% dos pares de pregões consecutivos (557 pares medidos em 23/10/2026), a `abertura` do IBOV é igual ao `fechamento` do pregão anterior (abertura não informada pela fonte). Nesses dias o `alvo_abertura` vira "a ação abriu em alta?", e não "abriu melhor que o Ibovespa?". **Na etapa 6, o `alvo_abertura` é avaliado só nos dias em que a abertura do IBOV ≠ fechamento anterior.** Nenhuma variável do modelo usa a abertura do IBOV (só o `alvo_abertura`); o alvo principal usa o fechamento e não é afetado. Limitação registrada no TCC. Resolve-se com a abertura real do índice | Coleta |
 | **Notícias das versões "principais" e "hora real na noite" (medido em 23/10/2026, etapa 6):** antes de out/2026, só **3% a 15%** das linhas (ação, pregão) têm alguma notícia nessas versões (principais ~14–15%; hora real na noite ~3–5%), contra 71–89% na versão com todas as notícias; só em out/2026 sobem para ~60%. Motivos: 89% das notícias estão sem julgamento da juíza (`papel` vazio) e ~90% não têm hora real (N1-A). Consequência: os testes extras da 7.4/7.5 com essas versões **só terão sentido com o histórico novo ou no teste ao vivo**; no desenvolvimento atual, nas dobras de 2025, nenhuma árvore desses dois modelos usa as colunas de notícia, e as previsões das duas versões saíram idênticas entre si. Resolve-se com o julgamento da juíza no histórico e o horário real das notícias | Coleta |
+| **Quantidade de ações em escala errada em `v1-acoes_emitidas`** (medido em 23/10/2026): ~25 empresas com a quantidade em **milhares** (ex.: Vibra 1.198.563 em vez de ~1,1 bilhão; VALE ~4,5 milhões; ITUB ~10,8 milhões), provavelmente porque a CVM informa a escala do formulário e ela não foi aplicada. Pedido à coleta: gravar sempre em **unidades**, aplicando a escala da CVM. Enquanto isso, o processamento marca a quantidade como suspeita quando o P/VP < 0,05 e deixa valor de mercado, P/L, P/VP e payout `indisponivel` (seção 6); o diagnóstico lista as empresas | Coleta |
 | Desdobramento ou bonificação entre o último balanço e t: o valor de mercado usa o preço já ajustado × a quantidade antiga de `v1-acoes_emitidas` e fica errado pelo fator. Limitação registrada no TCC. Pode ser conferido no futuro com `v1-raw_b3_suplemento` | Coleta |
 
 **Resolvidas em 22/10/2026** (as fontes não tinham os dados; não foi erro da coleta):
 - CRFB3, SRNA3 e STBP3 sem preço → removidas da análise (seção 3.4). Registrar no TCC como **viés de sobrevivência**.
 - Classes extintas nos proventos (VALE5, AXIA6, CPLE5 etc.) → identificadas pelo `other_codes`; seus proventos contam no histórico e no payout, ligados pela raiz; units ficam de fora (seções 3.4 e 6).
 - CNPJs 03847461000192 e 06057223000171 sem balanço → indicadores de balanço `indisponivel` (seção 3.4).
-- EBIT, depreciação, empréstimos, caixa e aplicações em `v1-balancos`: preenchidos pela coleta (~90%, como `lucro_bruto`). O diagnóstico passa a tratá-los como parciais; as etapas `cvm_itr_dfp` e `build_entrega` (execução manual `tipo = 'coletar'`) passam a ser conhecidas e só geram divergência se aparecerem num daily.
+- EBIT, depreciação, empréstimos, caixa e aplicações em `v1-balancos`: preenchidos pela coleta (~90%, como `lucro_bruto`). O diagnóstico passa a tratá-los como parciais; as etapas `cvm_itr_dfp` e `build_entrega` (execução manual `tipo = 'coletar'`) passam a ser conhecidas e só geram divergência se aparecerem num daily. Em 23/10/2026 entrou também `corrigir_horas` (mesma regra: nota).
 
 ---
 

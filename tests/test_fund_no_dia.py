@@ -5,13 +5,14 @@ seção F3b do plano da etapa 4, com os ajustes A1 a A3 (média do setor por emp
 sem lucro negativo e classe do provento pelo ticker original) e a empresa K. Sem banco e sem rede.
 """
 
+import dataclasses
 import math
 from datetime import date
 
 import pandas as pd
 import pytest
 
-from fabrica_fundamentos import EXCL, T, mundo
+from fabrica_fundamentos import CNPJ, EXCL, T, mundo
 from processamento.fatos.fundamentos import (
     INDICADORES,
     LUCRO_NEGATIVO,
@@ -20,6 +21,7 @@ from processamento.fatos.fundamentos import (
     calcular_fundamentos_no_dia,
     carregar_parametros_fundamentos,
     payout_por_ano,
+    tabela_trimestral,
 )
 from processamento.fatos.precos import HIST, INDISPONIVEL, NAO_SE_APLICA, OK, resumo_precos_no_dia
 
@@ -135,6 +137,15 @@ def test_bdr_fica_sem_pl_pvp_yield_e_payout(resumo):
     _ok(resumo, "BDRX32", "margem_bruta.valor", 0.40476190476190477)
 
 
+@pytest.mark.parametrize("t", ["2025-01-02", "2025-03-31", "2025-05-12", "2026-03-13"])
+def test_bdr_indisponivel_antes_e_depois_do_primeiro_balanco(t):
+    # D9: sempre indisponível (antes do 1º balanço do BDR saía historico_insuficiente).
+    r = calcular_fundamentos_no_dia(t, CAL, DADOS, EXCL, PARAMS, "empresa")
+    for indicador in ("pl.valor", "pvp.valor", "payout.valor", "dividend_yield.valor"):
+        assert r[indicador].status.iloc[0]["BDRX32"] == INDISPONIVEL, (t, indicador)
+        assert math.isnan(r[indicador].valor.iloc[0]["BDRX32"]), (t, indicador)
+
+
 def test_setor_pl_media_por_empresa(resumo):
     _ok(resumo, "AAAA3", "pl.setor", 18.75)
     _ok(resumo, "AAAA4", "pl.setor", 18.75)
@@ -190,6 +201,76 @@ def test_payout_por_ano_prejuizo_e_sem_linhas_sem_empresa_ou_so_bdr():
         assert prej.loc[ano, "status"] == LUCRO_NEGATIVO
     assert "SEMB3" not in set(linhas["ticker"])
     assert "BDRX32" not in set(linhas["ticker"])
+
+
+# ---------------------------------------------------------------------------
+# Quantidade de ações em milhares (AAAA): regra do pvp_minimo_plausivel (seção 10)
+# ---------------------------------------------------------------------------
+
+# Cópia do mundo com as quantidades da empresa A divididas por 1000 (como a coleta traz em ~25 empresas).
+_ACOES_MIL = ACOES.copy()
+_mascara_a = _ACOES_MIL["cnpj"] == CNPJ["A"]
+_ACOES_MIL.loc[_mascara_a, ["qtd_on", "qtd_pn"]] = _ACOES_MIL.loc[_mascara_a, ["qtd_on", "qtd_pn"]] / 1000
+DADOS_MIL = dataclasses.replace(DADOS, acoes_emitidas=_ACOES_MIL)
+
+
+@pytest.fixture(scope="module")
+def resumo_mil():
+    grades_mil = calcular_fundamentos_no_dia(T, CAL, DADOS_MIL, EXCL, PARAMS, "empresa")
+    return resumo_precos_no_dia(grades_mil, T)
+
+
+@pytest.mark.parametrize("ticker", ["AAAA3", "AAAA4"])
+def test_quantidade_em_milhares_tira_pl_pvp_e_payout(resumo_mil, ticker):
+    _sem_valor(resumo_mil, ticker, "pl.valor", INDISPONIVEL)
+    _sem_valor(resumo_mil, ticker, "pvp.valor", INDISPONIVEL)
+    _sem_valor(resumo_mil, ticker, "payout.valor", INDISPONIVEL)
+
+
+def test_quantidade_em_milhares_nao_muda_roe_margem_e_yield(resumo_mil):
+    _ok(resumo_mil, "AAAA3", "roe.valor", 0.12307692307692308)
+    _ok(resumo_mil, "AAAA3", "margem_bruta.valor", 0.41333333333333333)
+    _ok(resumo_mil, "AAAA3", "dividend_yield.valor", 0.05)
+    _ok(resumo_mil, "AAAA4", "dividend_yield.valor", 0.06875)
+
+
+def test_quantidade_em_milhares_prejuizo_e_outras_empresas_iguais(resumo_mil):
+    valor, status = _celula(resumo_mil, "PREJ3", "pl.valor")
+    assert status == LUCRO_NEGATIVO
+    assert valor == pytest.approx(-5.0, rel=1e-9)
+    _ok(resumo_mil, "UUUU11", "pl.valor", 18.75)
+    _ok(resumo_mil, "UUUU11", "pvp.valor", 2.3076923076923075)
+    _ok(resumo_mil, "UUUU11", "payout.valor", 1.5)
+
+
+def test_setor_em_milhares_sem_a_empresa_a(resumo_mil):
+    # Sem AAAA, o setor S1 de UUUU11 não tem outra empresa com P/L ok (PREJ3 tem lucro negativo).
+    _sem_valor(resumo_mil, "UUUU11", "pl.setor", INDISPONIVEL)
+    _ok(resumo_mil, "PREJ3", "pl.setor", 18.75)  # com AAAA em milhares e sem a regra saía 9,377875
+    _ok(resumo_mil, "PREJ3", "pvp.setor", 2.3076923076923075)
+    _ok(resumo_mil, "UUUU11", "pvp.setor", 0.3076923076923077)
+
+
+def test_payout_por_ano_em_milhares_fica_indisponivel():
+    linhas = payout_por_ano(T, DADOS_MIL, EXCL, PARAMS)
+    aaaa3 = linhas[linhas["ticker"] == "AAAA3"]
+    assert list(aaaa3["ano"]) == [2024, 2025]
+    assert set(aaaa3["status"]) == {INDISPONIVEL}
+    assert aaaa3["valor"].isna().all()
+    uuuu = linhas[linhas["ticker"] == "UUUU11"].set_index("ano")
+    assert uuuu.loc[2025, "valor"] == pytest.approx(0.9375, rel=1e-9)
+    assert uuuu.loc[2025, "status"] == OK
+
+
+def test_tabela_trimestral_em_milhares_zera_payout_12m_da_empresa():
+    # Sem a regra o payout_12m da AAAA3 sai ok em algum trimestre; com a quantidade suspeita, nenhum sai ok.
+    normal = tabela_trimestral(T, DADOS, EXCL, PARAMS)
+    assert (normal[normal["ticker"] == "AAAA3"]["payout_12m_status"] == OK).any()
+    tab = tabela_trimestral(T, DADOS_MIL, EXCL, PARAMS)
+    aaaa3 = tab[tab["ticker"] == "AAAA3"]
+    assert len(aaaa3) > 0
+    assert (aaaa3["payout_12m_status"] != OK).all()
+    assert aaaa3["payout_12m"].isna().all()
 
 
 def test_balanco_referencia_no_dia():

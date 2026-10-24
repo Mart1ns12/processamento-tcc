@@ -61,8 +61,8 @@ def ret_vs_setor(ret: pd.DataFrame, mascara: pd.DataFrame, setor_de: dict, cnpj_
     r = ret.where(mascara)
     status = pd.DataFrame(fatos_precos.OK, index=r.index, columns=r.columns)
     media = fatos_precos.media_setor(
-        fatos_precos.montar_grade(r, status), list(r.columns), setor_de, cnpj_de, modo
-    )
+        fatos_precos.montar_grade(r, status), list(r.columns), setor_de, cnpj_de, modo, agregacao="media"
+    )  # o modelo continua com a média (seção 7.3); o painel usa a mediana
     return r - media.valor
 
 

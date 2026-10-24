@@ -82,11 +82,11 @@ auxiliares:
   painel_etapas:
     nome_real: v1-painel_etapas
     colunas: {execucao_id: execucao_id, etapa_id: etapa_id, ordem: ordem, status: status}
-  composicao_ibov:            # pedida à coleta; ainda NÃO existe (seção 3.5)
+  composicao_ibov:            # criada pela coleta em 23/10/2026 (seção 3.5); vigencia_fim vazia = ainda vigente
     nome_real: v1-composicao_ibov
     opcional: true
     formato: intervalos        # intervalos | fotos (colunas data_carteira, ticker) | cadastro
-    colunas: {ticker: ticker, data_inicio: data_inicio, data_fim: data_fim}
+    colunas: {ticker: ticker, data_inicio: vigencia_inicio, data_fim: vigencia_fim, participacao: participacao, fonte: fonte}
   raw_b3_cadastro:            # códigos de negociação atuais por empresa (other_codes = lista JSON de tickers)
     nome_real: v1-raw_b3_cadastro
     colunas: {cnpj: cnpj, issuing_company: issuing_company, other_codes: other_codes}

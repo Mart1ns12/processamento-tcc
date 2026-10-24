@@ -253,16 +253,39 @@ def _checar_folha(valor: object, caminho: str, tipo_valor: str = "numero", extra
         _checar(sub, valor[campo], f"{caminho}.{campo}")
 
 
+_CAMPOS_CHANCE = ("valor", "referencia_acaso", "exibir", "status")
+
+
 def _checar_chance(valor: object, caminho: str) -> None:
-    """Chance do experimento: sem valor enquanto a calibração não foi conferida."""
+    """Chance do experimento: escondida (exibir false, sem valor) ou liberada (exibir true, com valor e referência)."""
     if not isinstance(valor, dict):
         raise _erro(caminho, "deveria ser um objeto de chance")
-    _checar({"valor": "numero?", "media": "numero", "exibir": "bool", "status": ("enum", STATUS_CHANCE)},
-            valor, caminho)
-    if (valor["valor"] is None) != (valor["status"] != "ok"):
-        raise _erro(caminho, "valor e status não batem (valor null só com status calibracao_nao_conferida)")
-    if valor["exibir"] and valor["valor"] is None:
-        raise _erro(caminho, "exibir true exige valor")
+    for campo in valor:
+        if campo not in _CAMPOS_CHANCE:
+            raise _erro(f"{caminho}.{campo}", "campo desconhecido")
+    for campo in _CAMPOS_CHANCE:
+        if campo not in valor:
+            raise _erro(f"{caminho}.{campo}", "campo obrigatório ausente")
+    if not isinstance(valor["exibir"], bool):
+        raise _erro(f"{caminho}.exibir", "deveria ser true ou false")
+    if valor["status"] not in STATUS_CHANCE:
+        raise _erro(f"{caminho}.status", f"status desconhecido {valor['status']!r}")
+    if not valor["exibir"]:
+        if valor["valor"] is not None:
+            raise _erro(f"{caminho}.valor", "com exibir false o valor deveria ser null")
+        if valor["referencia_acaso"] is not None:
+            raise _erro(f"{caminho}.referencia_acaso", "com exibir false a referência deveria ser null")
+        if valor["status"] != "calibracao_nao_conferida":
+            raise _erro(f"{caminho}.status", "com exibir false o status deveria ser calibracao_nao_conferida")
+        return
+    if valor["status"] != "ok":
+        raise _erro(f"{caminho}.status", "com exibir true o status deveria ser ok")
+    _conferir_numero(valor["valor"], f"{caminho}.valor")
+    if not 0 <= valor["valor"] <= 1:
+        raise _erro(f"{caminho}.valor", f"probabilidade deveria estar em [0, 1] (recebeu {valor['valor']!r})")
+    _conferir_numero(valor["referencia_acaso"], f"{caminho}.referencia_acaso")
+    if not 0 < valor["referencia_acaso"] < 1:
+        raise _erro(f"{caminho}.referencia_acaso", f"referência deveria estar em (0, 1) (recebeu {valor['referencia_acaso']!r})")
 
 
 def _checar_objeto(spec: dict, valor: object, caminho: str) -> None:

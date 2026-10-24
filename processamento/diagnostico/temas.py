@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from processamento import fontes
+from processamento import calendario, fontes
 from processamento.diagnostico.esperado import (
     AMOSTRA_FUSO_POR_ANO,
     ETAPAS_COLETA,
@@ -52,6 +52,14 @@ from processamento.diagnostico.regras import (
     veredito_escala,
 )
 from processamento.exclusoes import Exclusoes, carregar_exclusoes
+from processamento.fatos.fundamentos import (
+    carregar_parametros_fundamentos,
+    quantidade_suspeita,
+    valor_de_mercado,
+)
+from processamento.fatos.precos import grade_de_precos, mapas_cadastro, tickers_do_painel
+from processamento.fatos.proventos import acoes_disponiveis, acoes_na_data
+from processamento.fatos.trimestres import foto_balanco
 from processamento.tickers import classificar_classe, codigos_por_cnpj, ligar_a_cnpj, parse_other_codes
 
 
@@ -917,4 +925,116 @@ def secao_painel(ler, mapa: dict, existentes: set) -> dict:
         if comp["faltando"]:
             secao["divergencias"].append(
                 div("coluna_faltando", cmp_nome, ", ".join(comp["faltando"])))
+        # Contagem e período só se as colunas de data existem (senão a consulta falharia)
+        cols_data = [_col_real(mapa, "composicao_ibov", "data_inicio"),
+                     _col_real(mapa, "composicao_ibov", "data_fim")]
+        if any(c in comp["faltando"] for c in cols_data):
+            secao["notas"].append(f"{cmp_nome}: contagem e período pulados (coluna de data ausente)")
+        else:
+            cc = lambda x: _col(mapa, "composicao_ibov", x)
+            df_cont = ler(
+                f"SELECT COUNT(*) AS n, MIN({cc('data_inicio')}) AS ini, "
+                f"MAX({cc('data_inicio')}) AS ini_max, "
+                f"SUM({cc('data_fim')} IS NULL) AS vigentes FROM {_tab(mapa, 'composicao_ibov')}"
+            )
+            linha = df_cont.iloc[0]
+            n = inteiro(linha["n"])
+            if n == 0:
+                secao["notas"].append(
+                    f"{cmp_nome} existe mas está vazia: universo = composicao_atual em todas as datas (seção 3.5)")
+            else:
+                secao["notas"].append(
+                    f"{cmp_nome}: {n} linhas, data_inicio de {_data(linha['ini'])} a "
+                    f"{_data(linha['ini_max'])}, {inteiro(linha['vigentes'])} vigentes (data_fim vazia); "
+                    "datas sem vigência usam composicao_atual (seção 3.5)")
+    return secao
+
+
+# ---------------------------------------------------------------------------
+# Quantidade de ações suspeita (pendência da seção 10 da especificação)
+# ---------------------------------------------------------------------------
+
+TABELAS_QUANTIDADE = ("precos", "mudancas_ticker", "cadastro", "balancos", "acoes_emitidas")
+
+
+def _data_referencia_usada(disponiveis: pd.DataFrame, cnpj: str, ts: pd.Timestamp):
+    """Data de referência da linha de ações que `acoes_na_data` escolhe (mesma regra dela)."""
+    linhas = disponiveis[disponiveis["cnpj"] == cnpj]
+    anteriores = linhas[linhas["data_referencia"] <= ts]
+    if anteriores.empty:
+        escolhida = linhas.sort_values("data_referencia").iloc[0]
+    else:
+        escolhida = anteriores.sort_values("data_referencia").iloc[-1]
+    return escolhida["data_referencia"].date()
+
+
+def _suspeitas_em(ts: pd.Timestamp, precos: pd.DataFrame, cadastro: pd.DataFrame, balancos: pd.DataFrame,
+                  acoes: pd.DataFrame, exclusoes: Exclusoes, limite: float) -> list[dict]:
+    """Empresas do painel com quantidade de ações suspeita em `ts` (mesma conta de `calcular_fundamentos_no_dia`)."""
+    tickers = tickers_do_painel(cadastro, exclusoes)
+    _, cnpj_de = mapas_cadastro(cadastro)
+    fech = grade_de_precos(precos, [ts], "fechamento", tickers).iloc[0].to_dict()
+    disp = acoes_disponiveis(acoes, balancos, ts)
+    achados = []
+    for cnpj in sorted({cnpj_de[k] for k in tickers if cnpj_de.get(k)}):
+        vm = valor_de_mercado(cnpj, fech, cadastro, tickers, acoes_na_data(disp, cnpj, ts))
+        foto = foto_balanco(balancos, cnpj, ts, exclusoes)
+        if not quantidade_suspeita(vm, foto, limite):
+            continue
+        qtd_on, qtd_pn, _ = acoes_na_data(disp, cnpj, ts)
+        total = qtd_on + qtd_pn
+        achados.append({
+            "tickers": [k for k in tickers if cnpj_de.get(k) == cnpj],
+            "cnpj": cnpj,
+            "data_referencia": _data_referencia_usada(disp, cnpj, ts),
+            "acoes": int(total) if float(total).is_integer() else total,
+            "pvp": vm[0] / foto.estoque["patrimonio_liquido"][0],
+        })
+    return achados
+
+
+def secao_quantidade_acoes(ler, mapa: dict, existentes: set, exclusoes: Exclusoes | None = None,
+                           t=None) -> dict:
+    """Empresas com quantidade de ações suspeita em t (P/VP < `fundamentos.pvp_minimo_plausivel`).
+
+    É nota, não divergência: a quantidade de `v1-acoes_emitidas` provavelmente está em milhares
+    (pendência da coleta, seção 10). `t` padrão é o último pregão com preço do IBOV. Lê só pela
+    camada de leitura (`fontes.ler_tabela`).
+    """
+    secao = nova_secao("Quantidade de ações suspeita")
+    faltam = [c for c in TABELAS_QUANTIDADE if not _existe(mapa, existentes, c)]
+    if faltam:
+        for c in faltam:
+            secao["notas"].append(_pulada(mapa, c))
+        return secao
+    if exclusoes is None:
+        exclusoes = carregar_exclusoes()
+    limite = carregar_parametros_fundamentos().pvp_minimo_plausivel
+
+    precos = fontes.ler_tabela("precos", ler=ler)
+    if t is None:
+        cal = calendario.pregoes(precos)
+        if not cal:
+            secao["notas"].append("sem pregão com preço do IBOV: checagem não feita")
+            return secao
+        t = cal[-1]
+    ts = pd.Timestamp(t).normalize()
+    cadastro = fontes.ler_tabela("cadastro", ler=ler)
+    balancos = fontes.ler_tabela("balancos", ate=ts.date(), ler=ler)
+    acoes = fontes.ler_tabela("acoes_emitidas", ler=ler)
+
+    achados = _suspeitas_em(ts, precos, cadastro, balancos, acoes, exclusoes, limite)
+    if not achados:
+        secao["notas"].append(f"nenhuma empresa com quantidade de ações suspeita em {ts.date().isoformat()}")
+        return secao
+    limite_txt = f"{limite:.2f}".replace(".", ",")
+    secao["notas"].append(
+        f"quantidade de ações suspeita (P/VP < {limite_txt}; v1-acoes_emitidas provavelmente em milhares) "
+        f"em {len(achados)} empresas em {ts.date().isoformat()}: valor de mercado, P/L, P/VP e payout "
+        "= indisponivel (seção 6)")
+    adicionar_tabela(
+        secao, "Empresas com quantidade de ações suspeita",
+        ["tickers", "cnpj", "data_referencia", "acoes", "pvp"],
+        [[", ".join(a["tickers"]), a["cnpj"], a["data_referencia"], a["acoes"], a["pvp"]] for a in achados],
+    )
     return secao

@@ -40,6 +40,20 @@ def _na_composicao(dia: date, intervalos: list[tuple[date | None, date | None]])
     )
 
 
+def _dia_coberto(dia: date, composicao: pd.DataFrame | None) -> bool:
+    """Diz se a composição cobre o dia: alguma vigência o contém (NaT = sem limite).
+
+    Composição None ou vazia não cobre nenhum dia.
+    """
+    if composicao is None or composicao.empty:
+        return False
+    intervalos = [
+        (_data_ou_none(ini), _data_ou_none(fim))
+        for ini, fim in zip(composicao["data_inicio"], composicao["data_fim"])
+    ]
+    return _na_composicao(dia, intervalos)
+
+
 def montar_universo(
     pregoes: list[date],
     cadastro: pd.DataFrame,
@@ -51,8 +65,10 @@ def montar_universo(
 
     `cadastro`: colunas ticker e tipo_acao. `precos`: colunas data, ticker e fechamento_ajustado
     (data como datetime ou texto; preço nulo conta como sem preço). `composicao`: colunas
-    ticker, data_inicio e data_fim (NaT = sem limite). Sem composição, o universo é
-    `composicao_atual`; com ela, `composicao_historica`.
+    ticker, data_inicio e data_fim (NaT = sem limite). A coluna `universo` vale por pregão:
+    `composicao_historica` onde a composição cobre o dia; senão, `composicao_atual` (ações do
+    cadastro, com as regras de sempre; ticker só da composição fica `fora_da_composicao`).
+    Sem composição (None ou vazia), todo o universo é `composicao_atual`.
     """
     tipos_cadastro = {
         t: _tipo_ou_none(tipo) for t, tipo in zip(cadastro["ticker"], cadastro["tipo_acao"])
@@ -65,25 +81,31 @@ def montar_universo(
             com_preco.add((dia, t))
 
     intervalos: dict[str, list[tuple[date | None, date | None]]] = defaultdict(list)
-    candidatos = set(cadastro["ticker"].dropna())
+    tickers_cadastro = set(cadastro["ticker"].dropna())
+    candidatos = set(tickers_cadastro)
     if composicao is not None:
         candidatos |= set(composicao["ticker"].dropna())
         for t, ini, fim in zip(composicao["ticker"], composicao["data_inicio"], composicao["data_fim"]):
             intervalos[t].append((_data_ou_none(ini), _data_ou_none(fim)))
-    universo = "composicao_atual" if composicao is None else "composicao_historica"
 
     tipo_de = {t: tipos_cadastro.get(t) or tipo_por_classe(classe(t)) for t in candidatos}
 
     linhas = []
     for pregao in pregoes:
         dia = _data_ou_none(pregao)
+        coberto = _dia_coberto(dia, composicao)
+        universo = "composicao_historica" if coberto else "composicao_atual"
         for t in sorted(candidatos):
             tipo = tipo_de[t]
+            if coberto:
+                fora = not _na_composicao(dia, intervalos.get(t, []))
+            else:
+                fora = t not in tickers_cadastro
             if t in exclusoes.tickers_excluidos:
                 motivo = "excluido_por_decisao"
             elif tipo not in TIPOS_ACEITOS:
                 motivo = "tipo_nao_aceito"
-            elif composicao is not None and not _na_composicao(dia, intervalos.get(t, [])):
+            elif fora:
                 motivo = "fora_da_composicao"
             elif (dia, t) not in com_preco:
                 motivo = "sem_preco"
@@ -104,6 +126,33 @@ def montar_universo(
     df["data"] = pd.to_datetime(df["data"])
     df["no_universo"] = df["no_universo"].astype(bool)
     return df.sort_values(["data", "ticker"]).reset_index(drop=True)
+
+
+def aviso_composicao(pregoes: list[date], composicao: pd.DataFrame | None) -> str | None:
+    """Aviso sobre a cobertura da composição nos pregões (None = nada a avisar).
+
+    Tabela inexistente (None) não gera aviso. Nos pregões não cobertos, o universo é a
+    composição atual (ações do cadastro).
+    """
+    if composicao is None:
+        return None
+    if composicao.empty:
+        return "Composição do Ibovespa vazia: universo = composição atual (ações do cadastro)."
+    dias = [_data_ou_none(p) for p in pregoes]
+    m = len(dias)
+    cobertos = sorted(d for d in dias if _dia_coberto(d, composicao))
+    if len(cobertos) == m:
+        return None
+    if not cobertos:
+        return (
+            f"Composição do Ibovespa não cobre nenhum dos {m} pregões: "
+            "universo = composição atual (ações do cadastro)."
+        )
+    return (
+        f"Composição do Ibovespa cobre {len(cobertos)} de {m} pregões "
+        f"(de {cobertos[0].isoformat()} a {cobertos[-1].isoformat()}); "
+        "nos outros, universo = composição atual (ações do cadastro)."
+    )
 
 
 def tickers_do_dia(universo: pd.DataFrame, d: date) -> list[str]:

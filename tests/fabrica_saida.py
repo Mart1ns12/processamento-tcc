@@ -106,7 +106,7 @@ def _experimento_top() -> dict:
         "avisos": ["Modelo provisório: treinado com cerca de 1 ano de dados, só para testar a rotina."],
         "ranking": [{
             "posicao": 1, "ticker": "PETR4",
-            "chance": {"valor": None, "media": 0.5, "exibir": False, "status": "calibracao_nao_conferida"},
+            "chance": {"valor": None, "referencia_acaso": None, "exibir": False, "status": "calibracao_nao_conferida"},
             "motivos": motivos, "noticias_usadas": ["n000008"],
         }],
     }

@@ -620,7 +620,8 @@ def unir_historicos(df: pd.DataFrame, mudancas: dict[str, str], chave: list[str]
     chaves = [tuple(linha) for linha in resultado[chave].itertuples(index=False, name=None)]
     fixas = {k for k, t in zip(chaves, trocada, strict=True) if not t}
     manter = [not (t and k in fixas) for k, t in zip(chaves, trocada, strict=True)]
-    return resultado[manter].sort_values(chave).reset_index(drop=True)
+    # .loc: com df vazio, resultado[[]] seleciona colunas (nenhuma) e perde a chave.
+    return resultado.loc[manter].sort_values(chave).reset_index(drop=True)
 
 
 def intervalos_de_fotos(fotos: pd.DataFrame) -> pd.DataFrame:
@@ -680,10 +681,12 @@ def _mudar_ticker(t, mudancas: dict[str, str]) -> str | None:
 def ler_composicao(
     ler: Callable[..., pd.DataFrame] | None = None, existe: bool | None = None
 ) -> pd.DataFrame | None:
-    """Intervalos de permanência no IBOV (ticker, data_inicio, data_fim) de `v1-composicao_ibov`.
+    """Intervalos de permanência no IBOV de `v1-composicao_ibov`.
 
-    Devolve None se a tabela ainda não existe na coleta. O formato (`intervalos`, `fotos`
-    ou `cadastro`) vem do `fontes.yaml`. Os tickers passam pelas mudanças de código.
+    Colunas: ticker, data_inicio, data_fim (NaT = ainda vigente), participacao (float) e fonte.
+    Devolve None só se a tabela não existe na coleta; tabela existente e vazia devolve um
+    DataFrame vazio com essas mesmas colunas. O formato (`intervalos`, `fotos` ou `cadastro`)
+    vem do `fontes.yaml`. Os tickers passam pelas mudanças de código.
     """
     if ler is None:
         ler = _ler_padrao
@@ -706,10 +709,13 @@ def ler_composicao(
         bruto["ticker"] = normalizar_ticker(bruto["ticker"]).map(lambda t: _mudar_ticker(t, mudancas))
         intervalos = intervalos_de_fotos(bruto)
     else:
-        intervalos = _selecionar("composicao_ibov", ["ticker", "data_inicio", "data_fim"], [], None, ler)
+        _conferir_tabela("composicao_ibov", ler)  # coluna faltando vira ErroLeitura legível
+        colunas = ["ticker", "data_inicio", "data_fim", "participacao", "fonte"]
+        intervalos = _selecionar("composicao_ibov", colunas, [], None, ler)
         intervalos["ticker"] = normalizar_ticker(intervalos["ticker"]).map(
             lambda t: _mudar_ticker(t, mudancas)
         )
         for c in ("data_inicio", "data_fim"):
             intervalos[c] = pd.to_datetime(intervalos[c]).dt.normalize()
+        intervalos["participacao"] = pd.to_numeric(intervalos["participacao"]).astype(float)
     return intervalos.sort_values(["ticker", "data_inicio"]).reset_index(drop=True)

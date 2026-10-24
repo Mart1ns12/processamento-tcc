@@ -37,6 +37,7 @@ def test_yaml_real_traz_o_bloco_fundamentos():
         meses_janela=12,
         anos_payout=5,
         anos_historico_proventos=5,
+        pvp_minimo_plausivel=0.05,
     )
 
 
@@ -64,6 +65,12 @@ def test_yaml_sem_bloco_fundamentos_levanta_erro(tmp_path):
         (lambda d: d["fundamentos"].__setitem__("anos_payout", True), "fundamentos.anos_payout"),
         (lambda d: d["fundamentos"].__setitem__("anos_historico_proventos", "5"),
          "fundamentos.anos_historico_proventos"),
+        (lambda d: d["fundamentos"].pop("pvp_minimo_plausivel"), "faltam chaves"),
+        (lambda d: d["fundamentos"].__setitem__("pvp_minimo_plausivel", 0), "fundamentos.pvp_minimo_plausivel"),
+        (lambda d: d["fundamentos"].__setitem__("pvp_minimo_plausivel", 1), "fundamentos.pvp_minimo_plausivel"),
+        (lambda d: d["fundamentos"].__setitem__("pvp_minimo_plausivel", -0.05), "fundamentos.pvp_minimo_plausivel"),
+        (lambda d: d["fundamentos"].__setitem__("pvp_minimo_plausivel", True), "fundamentos.pvp_minimo_plausivel"),
+        (lambda d: d["fundamentos"].__setitem__("pvp_minimo_plausivel", "0.05"), "fundamentos.pvp_minimo_plausivel"),
     ],
 )
 def test_parametros_fundamentos_invalidos_levantam_erro(tmp_path, mudar, trecho):

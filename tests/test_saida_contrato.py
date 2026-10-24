@@ -89,13 +89,56 @@ def test_validar_resumo_acao_nan_bool_e_caminho():
 def test_validar_experimento_top_chance_e_modelo():
     c.validar("experimento_top", exemplo("experimento_top"))
     r = exemplo("experimento_top")
-    r["ranking"][0]["chance"] = {"valor": None, "media": 0.5, "exibir": True, "status": "calibracao_nao_conferida"}
+    r["ranking"][0]["chance"] = {"valor": None, "referencia_acaso": None, "exibir": True, "status": "calibracao_nao_conferida"}
     with pytest.raises(ErroContrato):
         c.validar("experimento_top", r)
     r = exemplo("experimento_top")
     r["modelo_versao"] = "xgb-2026-11-01"
     with pytest.raises(ErroContrato, match="xgb-AAAA-MM"):
         c.validar("experimento_top", r)
+
+
+# ---------------------------------------------------------------- chance do experimento (contrato 1.0)
+
+CHANCE_ESCONDIDA = {"valor": None, "referencia_acaso": None, "exibir": False, "status": "calibracao_nao_conferida"}
+CHANCE_LIBERADA = {"valor": 0.58, "referencia_acaso": 0.5, "exibir": True, "status": "ok"}
+
+
+def _com_chance(chance: dict) -> dict:
+    r = exemplo("experimento_top")
+    r["ranking"][0]["chance"] = chance
+    return r
+
+
+def test_chance_escondida_e_liberada_passam():
+    c.validar("experimento_top", _com_chance(dict(CHANCE_ESCONDIDA)))
+    c.validar("experimento_top", _com_chance(dict(CHANCE_LIBERADA)))
+
+
+def test_chance_escondida_com_referencia_recusada():
+    with pytest.raises(ErroContrato):
+        c.validar("experimento_top", _com_chance({**CHANCE_ESCONDIDA, "referencia_acaso": 0.5}))
+
+
+def test_chance_liberada_sem_valor_recusada():
+    with pytest.raises(ErroContrato):
+        c.validar("experimento_top", _com_chance({**CHANCE_LIBERADA, "valor": None}))
+
+
+def test_chance_liberada_sem_referencia_recusada():
+    with pytest.raises(ErroContrato):
+        c.validar("experimento_top", _com_chance({**CHANCE_LIBERADA, "referencia_acaso": None}))
+
+
+def test_chance_com_media_recusada_com_nome_do_campo():
+    chance = {"valor": None, "media": 0.5, "exibir": False, "status": "calibracao_nao_conferida"}
+    with pytest.raises(ErroContrato, match="media"):
+        c.validar("experimento_top", _com_chance(chance))
+
+
+def test_chance_escondida_com_valor_recusada():
+    with pytest.raises(ErroContrato):
+        c.validar("experimento_top", _com_chance({**CHANCE_ESCONDIDA, "valor": 0.58}))
 
 
 # ---------------------------------------------------------------- 6 a 7: lote e gravação
@@ -177,14 +220,8 @@ def test_ler_insumos_cortes_do_banco_de_teste(banco_teste):
     assert instantes(ins, AGORA) == (GERADO, DADOS_ATE)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=KeyError,
-    reason="bug em fontes.unir_historicos: resultado[manter] com lista vazia de bools perde as colunas "
-           "quando o recorte de preços é vazio (KeyError 'data'); corrigir com .loc[manter] em fontes.py",
-)
 def test_ler_insumos_sem_pregao_antes_de_d(banco_teste):
-    with pytest.raises(ErroSaida):
+    with pytest.raises(ErroSaida, match="nenhum pregão com preço antes de 2025-10-16"):
         ler_insumos(date(2025, 10, 16), banco_teste(), existe_composicao=False)
 
 

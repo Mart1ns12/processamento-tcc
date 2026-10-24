@@ -47,7 +47,9 @@ from processamento.fatos.trimestres import (
 
 LUCRO_NEGATIVO = "lucro_negativo"
 
-_CHAVES_FUNDAMENTOS = {"subsetores_financeiros", "meses_janela", "anos_payout", "anos_historico_proventos"}
+_CHAVES_FUNDAMENTOS = {
+    "subsetores_financeiros", "meses_janela", "anos_payout", "anos_historico_proventos", "pvp_minimo_plausivel",
+}
 
 
 class ErroParametrosFundamentos(Exception):
@@ -62,6 +64,7 @@ class ParametrosFundamentos:
     meses_janela: int
     anos_payout: int
     anos_historico_proventos: int
+    pvp_minimo_plausivel: float
 
 
 def _inteiro_positivo(valor: object, onde: str) -> int:
@@ -69,6 +72,13 @@ def _inteiro_positivo(valor: object, onde: str) -> int:
     if isinstance(valor, bool) or not isinstance(valor, int) or valor <= 0:
         raise ErroParametrosFundamentos(f"{onde} deve ser um inteiro maior que zero (recebeu {valor!r})")
     return valor
+
+
+def _numero_entre_zero_e_um(valor: object, onde: str) -> float:
+    """Confere um número com 0 < valor < 1 (bool não conta; NaN é recusado); senão levanta o erro."""
+    if isinstance(valor, bool) or not isinstance(valor, (int, float)) or not 0 < valor < 1:
+        raise ErroParametrosFundamentos(f"{onde} deve ser um número maior que zero e menor que um (recebeu {valor!r})")
+    return float(valor)
 
 
 def carregar_parametros_fundamentos(caminho: str | None = None) -> ParametrosFundamentos:
@@ -99,6 +109,7 @@ def carregar_parametros_fundamentos(caminho: str | None = None) -> ParametrosFun
         anos_historico_proventos=_inteiro_positivo(
             bloco["anos_historico_proventos"], "fundamentos.anos_historico_proventos"
         ),
+        pvp_minimo_plausivel=_numero_entre_zero_e_um(bloco["pvp_minimo_plausivel"], "fundamentos.pvp_minimo_plausivel"),
     )
 
 
@@ -188,18 +199,37 @@ def valor_de_mercado(
     return _falha(INDISPONIVEL)
 
 
+def quantidade_suspeita(vm: tuple[float, str], foto: FotoBalanco, limite: float) -> bool:
+    """True se a quantidade de ações da empresa parece estar em milhares (seção 10).
+
+    Suspeita quando o valor de mercado e o patrimônio líquido têm status ok, o PL é > 0 e
+    valor de mercado ÷ PL é menor que `limite` (estrito: exatamente igual ao limite não é suspeito).
+    """
+    valor_mercado, vm_s = vm
+    pl, pl_s = foto.estoque["patrimonio_liquido"]
+    if vm_s != OK or pl_s != OK or not pl > 0:
+        return False
+    return valor_mercado / pl < limite
+
+
 def indicadores_empresa(
     foto: FotoBalanco,
     vm: tuple[float, str],
     pago: tuple[float, str],
     financeiro: bool,
+    pvp_minimo: float | None = None,
 ) -> dict[str, tuple[float, str]]:
     """Indicadores da empresa em t: P/L, P/VP, ROE, payout, margens, EBITDA e endividamento.
 
     Cada indicador devolve (valor, status). A primeira regra que se aplica vence (ordem da
     tabela da F3a do plano). P/L com lucro negativo mantém o valor (vm/L) e o status
     `lucro_negativo`; com lucro zero o valor é NaN.
+    Se `pvp_minimo` não for None e a quantidade de ações for suspeita (`quantidade_suspeita`),
+    valor de mercado e pago viram indisponíveis antes das contas: P/L, P/VP e payout saem indisponíveis.
     """
+    if pvp_minimo is not None and quantidade_suspeita(vm, foto, pvp_minimo):
+        vm = _falha(INDISPONIVEL)
+        pago = _falha(INDISPONIVEL)
     base = foto.status_base
     lucro, lucro_s = foto.fluxo_12m["lucro_liquido"]
     receita, receita_s = foto.fluxo_12m["receita_liquida"]
@@ -359,6 +389,9 @@ _CHAVES_EMPRESA = (
     "endividamento.dl_pl", "endividamento.dl_ebitda", "endividamento.caixa_liquido",
 )
 
+# D9: indicadores de BDR sempre indisponíveis (o yield já sai assim em `dividend_yield`).
+_BDR_INDISPONIVEL = ("pl.valor", "pvp.valor", "payout.valor")
+
 # Campo de setor -> indicador de empresa de onde ele sai (a média é feita sobre esse valor).
 _ORIGEM_SETOR = {
     "pl.setor": "pl.valor",
@@ -445,7 +478,8 @@ def calcular_fundamentos_no_dia(t, cal, dados: DadosFundamentos, exclusoes: Excl
         financeira_cnpj[cnpj] = any(
             eh_financeiro(subsetor_de.get(k), params) for k in tickers if cnpj_de.get(k) == cnpj
         )
-        por_empresa[cnpj] = indicadores_empresa(foto, vm, pago, financeira_cnpj[cnpj])
+        por_empresa[cnpj] = indicadores_empresa(foto, vm, pago, financeira_cnpj[cnpj],
+                                                pvp_minimo=params.pvp_minimo_plausivel)
 
     celulas: dict[str, dict[str, tuple[float, str]]] = {}
     financeira_de: dict[str, bool] = {}
@@ -457,13 +491,17 @@ def calcular_fundamentos_no_dia(t, cal, dados: DadosFundamentos, exclusoes: Excl
         else:
             celulas[k] = {c: _falha(INDISPONIVEL) for c in _CHAVES_EMPRESA}
             financeira_de[k] = eh_financeiro(subsetor_de.get(k), params)
+        if tipo_de.get(k) == "BDR":  # D9: razão BDR/ação desconhecida, sempre indisponível
+            for c in _BDR_INDISPONIVEL:
+                celulas[k][c] = _falha(INDISPONIVEL)
         celulas[k]["dividend_yield.valor"] = dividend_yield(
             ligados, k, tipo_de.get(k), fech.get(k), ts, params.meses_janela
         )
 
     for campo, origem in _ORIGEM_SETOR.items():
         bruta = _grade_do_dia(ts, tickers, {k: celulas[k][origem] for k in tickers})
-        media = media_setor(montar_grade(bruta.valor, bruta.status), pares, setor_de, cnpj_de, modo_setor)
+        media = media_setor(montar_grade(bruta.valor, bruta.status), pares, setor_de, cnpj_de, modo_setor,
+                            agregacao="mediana")
         for k in tickers:
             valor, status = media.valor.iloc[0][k], media.status.iloc[0][k]
             if status == HIST:
@@ -475,10 +513,29 @@ def calcular_fundamentos_no_dia(t, cal, dados: DadosFundamentos, exclusoes: Excl
     return {campo: _grade_do_dia(ts, tickers, {k: celulas[k][campo] for k in tickers}) for campo in INDICADORES}
 
 
+def _cnpjs_com_quantidade_suspeita(ts: pd.Timestamp, dados: DadosFundamentos, exclusoes: Exclusoes,
+                                   params: ParametrosFundamentos) -> set[str]:
+    """CNPJs do painel cuja quantidade de ações é suspeita em `ts` (mesma conta de `calcular_fundamentos_no_dia`)."""
+    tickers = tickers_do_painel(dados.cadastro, exclusoes)
+    _, cnpj_de = mapas_cadastro(dados.cadastro)
+    fech = grade_de_precos(dados.precos, [ts], "fechamento", tickers).iloc[0].to_dict()
+    disp = acoes_disponiveis(dados.acoes_emitidas, dados.balancos, ts)
+    suspeitas = set()
+    for cnpj in {cnpj_de[k] for k in tickers if cnpj_de.get(k)}:
+        vm = valor_de_mercado(cnpj, fech, dados.cadastro, tickers, acoes_na_data(disp, cnpj, ts))
+        foto = foto_balanco(dados.balancos, cnpj, ts, exclusoes)
+        if quantidade_suspeita(vm, foto, params.pvp_minimo_plausivel):
+            suspeitas.add(cnpj)
+    return suspeitas
+
+
 def _payout_das_dfps(ts: pd.Timestamp, cnpj: str, dados: DadosFundamentos, exclusoes: Exclusoes,
                      params: ParametrosFundamentos, ligados: pd.DataFrame,
-                     disp: pd.DataFrame) -> list[tuple[int, float, str]]:
-    """(ano, payout, status) das últimas `anos_payout` DFPs do CNPJ entregues até `ts`."""
+                     disp: pd.DataFrame, suspeita: bool = False) -> list[tuple[int, float, str]]:
+    """(ano, payout, status) das últimas `anos_payout` DFPs do CNPJ entregues até `ts`.
+
+    Com `suspeita` (quantidade de ações suspeita em `ts`) todas saem indisponíveis, como em `indicadores_empresa`.
+    """
     if foto_balanco(dados.balancos, cnpj, ts, exclusoes).status_base != OK:
         return []
     entregues = entregues_ate(dados.balancos, ts)
@@ -491,7 +548,7 @@ def _payout_das_dfps(ts: pd.Timestamp, cnpj: str, dados: DadosFundamentos, exclu
     for fim in sorted({pd.Timestamp(f) for f in anuais["data_fim_periodo"]})[-params.anos_payout:]:
         linha = anuais[anuais["data_fim_periodo"] == fim].sort_values("data_entrega").iloc[-1]
         lucro = linha["lucro_liquido"]
-        if pd.isna(lucro):
+        if suspeita or pd.isna(lucro):
             valor, status = math.nan, INDISPONIVEL
         elif lucro <= 0:
             valor, status = math.nan, LUCRO_NEGATIVO
@@ -516,6 +573,7 @@ def payout_por_ano(t, dados: DadosFundamentos, exclusoes: Exclusoes, params: Par
     ligados = ligar_proventos(dados.proventos, dados.cadastro, dados.mudancas)
     disp = acoes_disponiveis(dados.acoes_emitidas, dados.balancos, ts)
 
+    suspeitas = _cnpjs_com_quantidade_suspeita(ts, dados, exclusoes, params)
     por_cnpj: dict[str, list[tuple[int, float, str]]] = {}
     registros = []
     for ticker in pares:
@@ -523,7 +581,8 @@ def payout_por_ano(t, dados: DadosFundamentos, exclusoes: Exclusoes, params: Par
         if not cnpj:
             continue
         if cnpj not in por_cnpj:
-            por_cnpj[cnpj] = _payout_das_dfps(ts, cnpj, dados, exclusoes, params, ligados, disp)
+            por_cnpj[cnpj] = _payout_das_dfps(ts, cnpj, dados, exclusoes, params, ligados, disp,
+                                              suspeita=cnpj in suspeitas)
         for ano, valor, status in por_cnpj[cnpj]:
             registros.append({"ticker": ticker, "ano": ano, "valor": valor, "status": status})
     return (
@@ -581,11 +640,11 @@ def _ebitda_trimestre(foto: FotoBalanco, financeiro: bool) -> tuple[float, str]:
 
 def _linhas_da_empresa(ts: pd.Timestamp, cnpj: str, dados: DadosFundamentos, exclusoes: Exclusoes,
                        params: ParametrosFundamentos, ligados: pd.DataFrame, disp: pd.DataFrame,
-                       com_classe_paga: bool, financeiro: bool) -> list[dict]:
+                       com_classe_paga: bool, financeiro: bool, suspeita: bool = False) -> list[dict]:
     """Uma linha por trimestre entregue até `ts` da empresa (sem o ticker), com os pares (valor, status).
 
     Empresa sem base ok em `ts` não gera linha. O payout de 12 meses fica indisponível quando a
-    empresa só tem BDR no painel (`com_classe_paga` falso).
+    empresa só tem BDR no painel (`com_classe_paga` falso) ou quando a quantidade de ações é suspeita (`suspeita`).
     """
     if foto_balanco(dados.balancos, cnpj, ts, exclusoes).status_base != OK:
         return []
@@ -594,7 +653,7 @@ def _linhas_da_empresa(ts: pd.Timestamp, cnpj: str, dados: DadosFundamentos, exc
     for _, linha in trimestres.iterrows():
         fim = linha["data_fim_periodo"]
         foto = foto_balanco(dados.balancos, cnpj, ts, exclusoes, fim=fim)
-        if com_classe_paga:
+        if com_classe_paga and not suspeita:
             pago = total_pago(ligados, disp, cnpj, inicio_janela(fim, params.meses_janela), fim)
         else:
             pago = _falha(INDISPONIVEL)
@@ -638,6 +697,7 @@ def tabela_trimestral(t, dados: DadosFundamentos, exclusoes: Exclusoes,
     ligados = ligar_proventos(dados.proventos, dados.cadastro, dados.mudancas)
     disp = acoes_disponiveis(dados.acoes_emitidas, dados.balancos, ts)
 
+    suspeitas = _cnpjs_com_quantidade_suspeita(ts, dados, exclusoes, params)
     por_cnpj: dict[str, list[dict]] = {}
     registros = []
     for ticker in tickers:
@@ -650,7 +710,7 @@ def tabela_trimestral(t, dados: DadosFundamentos, exclusoes: Exclusoes,
             )
             por_cnpj[cnpj] = _linhas_da_empresa(
                 ts, cnpj, dados, exclusoes, params, ligados, disp,
-                cnpj in cnpjs_com_classe_paga, financeiro,
+                cnpj in cnpjs_com_classe_paga, financeiro, suspeita=cnpj in suspeitas,
             )
         for linha in por_cnpj[cnpj]:
             registro = {"ticker": ticker, "cnpj": cnpj, "data_fim_periodo": linha["data_fim_periodo"],

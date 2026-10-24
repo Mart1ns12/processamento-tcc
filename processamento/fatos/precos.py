@@ -241,14 +241,19 @@ def _outros_do_setor(t: str, pares: list[str], setor_de: dict, cnpj_de: dict, mo
     return outros
 
 
-def media_setor(gr: Grade, pares: list[str], setor_de: dict, cnpj_de: dict, modo: str) -> Grade:
-    """Média simples dos valores dos outros pares do setor de cada ticker.
+def media_setor(gr: Grade, pares: list[str], setor_de: dict, cnpj_de: dict, modo: str,
+                agregacao: str = "media") -> Grade:
+    """Média (ou mediana) dos valores dos outros pares do setor de cada ticker.
 
     No modo "empresa", cada CNPJ conta uma vez: primeiro a média das suas ações com valor,
-    depois a média entre empresas (ticker sem CNPJ conta como empresa à parte).
+    depois a média (ou mediana) entre empresas (ticker sem CNPJ conta como empresa à parte).
+    `agregacao`: "media" (variável `ret_vs_setor` do modelo) ou "mediana" (painel, decidido em
+    23/10/2026: um valor extremo não distorce a comparação).
     Sem setor ou sem outro par: indisponivel. Outros pares existem mas nenhum tem valor: HIST.
     """
     _conferir_modo(modo)
+    if agregacao not in ("media", "mediana"):
+        raise ValueError(f"agregacao do setor deve ser \"media\" ou \"mediana\" (recebeu {agregacao!r})")
     idx = gr.valor.index
     valor, status = {}, {}
     for t in gr.valor.columns:
@@ -258,7 +263,7 @@ def media_setor(gr: Grade, pares: list[str], setor_de: dict, cnpj_de: dict, modo
             if modo == "empresa":
                 bloco = bloco.T.groupby([cnpj_de.get(p) or p for p in outros], sort=False).mean().T
             cnt = bloco.notna().sum(axis=1).to_numpy()
-            valor[t] = bloco.mean(axis=1)
+            valor[t] = bloco.median(axis=1) if agregacao == "mediana" else bloco.mean(axis=1)
             status[t] = pd.Series(np.select([cnt == 0], [HIST], default=OK), index=idx, dtype=object)
         else:
             valor[t] = pd.Series(np.nan, index=idx)
@@ -339,7 +344,8 @@ def calcular_precos(
         res[f"variacao_preco.{nome}"] = variacao(g_fech, n)
         res[f"rentabilidade.{nome}"] = rent
         res[f"rentabilidade.ibov.{nome}"] = _repetir(variacao(ibov_aj, n), tickers)
-        res[f"rentabilidade.setor.{nome}"] = media_setor(rent, pares, setor_de, cnpj_de, params.setor_excluir)
+        res[f"rentabilidade.setor.{nome}"] = media_setor(rent, pares, setor_de, cnpj_de, params.setor_excluir,
+                                                          agregacao="mediana")
 
     total, relativo, mediana = volume_relativo(gv, params.volume_pregoes)
     res["volume.total"] = total

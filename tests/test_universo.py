@@ -11,7 +11,7 @@ import pytest
 from pandas.testing import assert_frame_equal
 
 from processamento.exclusoes import carregar_exclusoes
-from processamento.universo import montar_universo, tickers_do_dia
+from processamento.universo import aviso_composicao, montar_universo, tickers_do_dia
 
 D1 = date(2025, 10, 16)
 D2 = date(2025, 10, 17)
@@ -159,3 +159,100 @@ def test_tipo_sem_cadastro_vem_da_classe():
     assert _motivo(universo, D1, "ABCD4") == "ok"
     assert universo.loc[universo["ticker"] == "ABCD4", "tipo_acao"].iloc[0] == "PN"
     assert _motivo(universo, D1, "ABCD9") == "tipo_nao_aceito"
+
+
+# --- cobertura da composição por data (seção 3.5) -----------------------------------
+
+
+def _vazia() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "ticker": pd.Series([], dtype=object),
+            "data_inicio": pd.Series([], dtype="datetime64[ns]"),
+            "data_fim": pd.Series([], dtype="datetime64[ns]"),
+            "participacao": pd.Series([], dtype=float),
+            "fonte": pd.Series([], dtype=object),
+        }
+    )
+
+
+def _precos_com_zzzz3() -> pd.DataFrame:
+    precos = _precos()
+    extra = pd.DataFrame(_linhas_preco("ZZZZ3", PREGOES), columns=precos.columns)
+    return pd.concat([precos, extra], ignore_index=True)
+
+
+def _parcial() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "ticker": ["PETR3", "TAEE11", "NOVA3", "ZZZZ3"],
+            "data_inicio": [
+                pd.Timestamp("2025-10-20"),
+                pd.Timestamp("2025-10-20"),
+                pd.Timestamp("2025-10-21"),
+                pd.Timestamp("2025-10-20"),
+            ],
+            "data_fim": [pd.NaT, pd.NaT, pd.NaT, pd.NaT],
+        }
+    )
+
+
+def test_composicao_vazia_igual_a_sem_composicao():
+    sem = montar_universo(PREGOES, _cadastro(), _precos(), carregar_exclusoes())
+    com = montar_universo(PREGOES, _cadastro(), _precos(), carregar_exclusoes(), _vazia())
+    assert_frame_equal(com, sem)
+    assert set(com["universo"]) == {"composicao_atual"}
+    assert aviso_composicao(PREGOES, _vazia()) == (
+        "Composição do Ibovespa vazia: universo = composição atual (ações do cadastro)."
+    )
+    assert aviso_composicao(PREGOES, None) is None
+
+
+def test_composicao_total_sem_aviso():
+    assert aviso_composicao(PREGOES, _composicao()) is None
+
+
+def test_cobertura_parcial_por_data():
+    universo = montar_universo(PREGOES, _cadastro(), _precos_com_zzzz3(), carregar_exclusoes(), _parcial())
+    assert tickers_do_dia(universo, D1) == ["ABEV3", "PETR3", "PETR4", "TAEE11"]
+    assert tickers_do_dia(universo, D2) == ["ABEV3", "PETR3", "PETR4", "TAEE11"]
+    assert tickers_do_dia(universo, D3) == ["PETR3", "ZZZZ3"]
+    assert tickers_do_dia(universo, D4) == ["NOVA3", "PETR3", "TAEE11", "ZZZZ3"]
+    for d in (D1, D2):
+        assert set(universo.loc[universo["data"] == pd.Timestamp(d), "universo"]) == {"composicao_atual"}
+    for d in (D3, D4):
+        assert set(universo.loc[universo["data"] == pd.Timestamp(d), "universo"]) == {"composicao_historica"}
+
+
+def test_cobertura_parcial_motivos():
+    universo = montar_universo(PREGOES, _cadastro(), _precos_com_zzzz3(), carregar_exclusoes(), _parcial())
+    assert _motivo(universo, D1, "ZZZZ3") == "fora_da_composicao"
+    assert _motivo(universo, D1, "PETR4") == "ok"
+    assert _motivo(universo, D3, "PETR4") == "fora_da_composicao"
+    assert _motivo(universo, D3, "ABEV3") == "fora_da_composicao"
+    assert _motivo(universo, D3, "TAEE11") == "sem_preco"
+    assert _motivo(universo, D3, "NOVA3") == "fora_da_composicao"
+    assert _motivo(universo, D4, "ABEV3") == "fora_da_composicao"
+
+
+def test_aviso_cobertura_parcial():
+    assert aviso_composicao(PREGOES, _parcial()) == (
+        "Composição do Ibovespa cobre 2 de 4 pregões (de 2025-10-20 a 2025-10-21); "
+        "nos outros, universo = composição atual (ações do cadastro)."
+    )
+
+
+def test_sem_cobertura_nenhuma():
+    composicao = pd.DataFrame(
+        {
+            "ticker": ["ZZZZ3"],
+            "data_inicio": [pd.Timestamp("2025-11-01")],
+            "data_fim": [pd.NaT],
+        }
+    )
+    universo = montar_universo(PREGOES, _cadastro(), _precos_com_zzzz3(), carregar_exclusoes(), composicao)
+    assert set(universo["universo"]) == {"composicao_atual"}
+    assert aviso_composicao(PREGOES, composicao) == (
+        "Composição do Ibovespa não cobre nenhum dos 4 pregões: "
+        "universo = composição atual (ações do cadastro)."
+    )

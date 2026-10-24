@@ -1,18 +1,22 @@
 """Testes das seções por tema do diagnóstico (temas.py), com `ler` falso (sem banco)."""
 
+import copy
 import re
 from datetime import date, datetime
 
 import pandas as pd
 import pytest
 
+from fabrica_fundamentos import CNPJ, mundo
 from processamento import fontes
 from processamento.diagnostico.esperado import ETAPAS_COLETA, ETAPAS_EXECUCAO_MANUAL
 from processamento.diagnostico.temas import (
+    _data_referencia_usada,
     montar_sql_formato_iso,
     secao_noticias,
     secao_painel,
     secao_precos,
+    secao_quantidade_acoes,
     secao_tickers,
 )
 from processamento.exclusoes import Exclusoes
@@ -139,7 +143,7 @@ def test_secao_painel_etapas_manuais_fora_do_daily_viram_nota(mapa):
     secao = secao_painel(_ler_painel_com_manuais([]), mapa,
                          {"v1-painel_execucoes", "v1-painel_etapas"})
     assert secao["divergencias"] == []
-    assert any("build_entrega, cvm_itr_dfp" in n for n in secao["notas"])
+    assert any("build_entrega, corrigir_horas, cvm_itr_dfp" in n for n in secao["notas"])
 
 
 def test_secao_painel_etapa_manual_dentro_do_daily_e_divergencia(mapa):
@@ -148,6 +152,38 @@ def test_secao_painel_etapa_manual_dentro_do_daily_e_divergencia(mapa):
     temas = [d["tema"] for d in secao["divergencias"]]
     assert temas == ["etapa_manual_no_daily"]
     assert "cvm_itr_dfp" in secao["divergencias"][0]["detalhe"]
+
+
+def test_secao_painel_corrigir_horas_pendente_em_coletar_vira_nota(mapa):
+    # execução manual tipo 'coletar' (não é daily): só nota, sem etapa_desconhecida
+    base = _ler_painel_factory(pd.DataFrame({"origem": ["cron"], "hora": [11], "n": [30]}))
+    etapas = ETAPAS_COLETA + ETAPAS_EXECUCAO_MANUAL
+    status = ["pendente" if e == "corrigir_horas" else "concluida" for e in etapas]
+
+    def _ler(sql):
+        if " JOIN " in sql:
+            assert "'daily'" in sql
+            return pd.DataFrame({"etapa_id": [], "n": []})
+        if "etapa_id" in sql:
+            return pd.DataFrame({
+                "etapa_id": etapas,
+                "ordem": list(range(1, len(etapas) + 1)),
+                "status": status,
+                "n": [1] * len(etapas),
+            })
+        return base(sql)
+
+    secao = secao_painel(_ler, mapa, {"v1-painel_execucoes", "v1-painel_etapas"})
+    assert secao["divergencias"] == []
+    assert any("corrigir_horas" in n and "fora do daily" in n for n in secao["notas"])
+
+
+def test_secao_painel_corrigir_horas_dentro_do_daily_e_divergencia(mapa):
+    secao = secao_painel(_ler_painel_com_manuais(["corrigir_horas"]), mapa,
+                         {"v1-painel_execucoes", "v1-painel_etapas"})
+    temas = [d["tema"] for d in secao["divergencias"]]
+    assert temas == ["etapa_manual_no_daily"]
+    assert "corrigir_horas" in secao["divergencias"][0]["detalhe"]
 
 
 def test_secao_painel_cron_so_na_agenda_nao_gera_nota_fora_da_agenda(mapa):
@@ -281,3 +317,158 @@ def test_secao_tickers_tabela_de_proventos_das_classes_extintas(mapa):
     tabela = next(t for t in secao["tabelas"] if t["subtitulo"] == "Classes extintas: proventos")
     assert tabela["linhas"] == [["VALE5", 2, date(2016, 3, 1), date(2025, 6, 2), 1]]
     assert any("período analisado (pregões do IBOV): 2025-01-02 a 2026-10-21" in n for n in secao["notas"])
+
+
+# ---------------------------------------------------------------------------
+# composicao_ibov (dentro de secao_painel): colunas, contagem e período
+# ---------------------------------------------------------------------------
+
+COLUNAS_COMPOSICAO = ["ticker", "vigencia_inicio", "vigencia_fim", "participacao", "fonte"]
+
+
+def _mapa_composicao(mapa):
+    """Cópia do mapa com o contrato novo de composicao_ibov (nomes reais vigencia_*).
+
+    Não depende do fontes.yaml: o yaml real está sendo editado em paralelo.
+    """
+    m = copy.deepcopy(mapa)
+    m["auxiliares"]["composicao_ibov"]["colunas"] = {
+        "ticker": "ticker", "data_inicio": "vigencia_inicio", "data_fim": "vigencia_fim",
+        "participacao": "participacao", "fonte": "fonte",
+    }
+    return m
+
+
+def _ler_composicao(colunas_reais, contagem=None):
+    """Dublê de `ler` só para composicao_ibov; `contagem` é a resposta do SELECT de contagem.
+
+    `contagem=None` faz a consulta de contagem falhar (ela não pode rodar sem as colunas de data).
+    """
+    def _ler(sql):
+        if "information_schema.COLUMNS" in sql:
+            return pd.DataFrame({"coluna": colunas_reais})
+        if "COUNT(*) AS n" in sql:
+            if contagem is None:
+                raise AssertionError(f"não devia contar: {sql}")
+            assert "`v1-composicao_ibov`" in sql
+            return contagem
+        raise AssertionError(f"SQL inesperado: {sql}")
+    return _ler
+
+
+def _secao_composicao(ler, mapa):
+    """secao_painel só com composicao_ibov (painel_* ausentes: viram notas puladas)."""
+    return secao_painel(ler, mapa, {"v1-composicao_ibov"})
+
+
+def test_composicao_ibov_vazia_vira_nota_sem_divergencia(mapa):
+    m = _mapa_composicao(mapa)
+    contagem = pd.DataFrame({"n": [0], "ini": [None], "ini_max": [None], "vigentes": [None]})
+    secao = _secao_composicao(_ler_composicao(COLUNAS_COMPOSICAO, contagem), m)
+    assert secao["divergencias"] == []
+    assert "v1-composicao_ibov existe mas está vazia: universo = composicao_atual em todas as datas (seção 3.5)" in secao["notas"]
+
+
+def test_composicao_ibov_com_linhas_vira_nota_com_contagem_e_vigentes(mapa):
+    m = _mapa_composicao(mapa)
+    contagem = pd.DataFrame({
+        "n": [3], "ini": [date(2025, 1, 2)], "ini_max": [date(2026, 9, 1)], "vigentes": [2],
+    })
+    secao = _secao_composicao(_ler_composicao(COLUNAS_COMPOSICAO, contagem), m)
+    assert secao["divergencias"] == []
+    nota = next(n for n in secao["notas"] if n.startswith("v1-composicao_ibov: 3 linhas"))
+    assert "data_inicio de 2025-01-02 a 2026-09-01" in nota
+    assert "2 vigentes (data_fim vazia)" in nota
+    assert "datas sem vigência usam composicao_atual (seção 3.5)" in nota
+
+
+def test_composicao_ibov_sem_coluna_data_fim_diverge_e_nao_conta(mapa):
+    m = _mapa_composicao(mapa)
+    colunas = [c for c in COLUNAS_COMPOSICAO if c != "vigencia_fim"]
+    secao = _secao_composicao(_ler_composicao(colunas, contagem=None), m)
+    divs = [d for d in secao["divergencias"] if d["tema"] == "coluna_faltando"]
+    assert len(divs) == 1
+    assert divs[0]["tabela"] == "v1-composicao_ibov"
+    assert "vigencia_fim" in divs[0]["detalhe"]
+    assert len(secao["divergencias"]) == 1
+    assert any("contagem e período pulados" in n for n in secao["notas"])
+
+
+# ---------------------------------------------------------------------------
+# Quantidade de ações suspeita (mundo de fundamentos, sem banco)
+# ---------------------------------------------------------------------------
+
+T_QUANTIDADE = date(2026, 3, 16)
+
+
+@pytest.fixture
+def tabelas_quantidade(monkeypatch):
+    """Tabelas do mundo de fundamentos servidas por `fontes.ler_tabela` (sem banco)."""
+    cadastro, balancos, acoes, _, precos, _, _ = mundo()
+    dados = {"precos": precos, "cadastro": cadastro, "balancos": balancos, "acoes_emitidas": acoes}
+
+    def ler_tabela(tabela, **_kwargs):
+        return dados[tabela].copy()
+
+    monkeypatch.setattr(fontes, "ler_tabela", ler_tabela)
+    return dados
+
+
+def _existentes_quantidade():
+    return {fontes.nome_real(c) for c in ("precos", "mudancas_ticker", "cadastro", "balancos", "acoes_emitidas")}
+
+
+def test_quantidade_suspeita_sem_mudanca_nao_lista_empresas(mapa, tabelas_quantidade):
+    secao = secao_quantidade_acoes(_ler_sem_banco, mapa, _existentes_quantidade(), Exclusoes(), t=T_QUANTIDADE)
+    assert secao["notas"] == ["nenhuma empresa com quantidade de ações suspeita em 2026-03-16"]
+    assert secao["tabelas"] == []
+    assert secao["divergencias"] == []
+
+
+def test_quantidade_suspeita_com_quantidade_em_milhares_lista_a_empresa(mapa, tabelas_quantidade):
+    acoes = tabelas_quantidade["acoes_emitidas"]
+    mascara = acoes["cnpj"] == CNPJ["A"]
+    acoes.loc[mascara, ["qtd_on", "qtd_pn"]] = acoes.loc[mascara, ["qtd_on", "qtd_pn"]] / 1000
+
+    secao = secao_quantidade_acoes(_ler_sem_banco, mapa, _existentes_quantidade(), Exclusoes(), t=T_QUANTIDADE)
+
+    assert secao["notas"] == [
+        "quantidade de ações suspeita (P/VP < 0,05; v1-acoes_emitidas provavelmente em milhares) "
+        "em 1 empresas em 2026-03-16: valor de mercado, P/L, P/VP e payout = indisponivel (seção 6)"
+    ]
+    assert secao["divergencias"] == []
+    assert len(secao["tabelas"]) == 1
+    tabela = secao["tabelas"][0]
+    assert tabela["colunas"] == ["tickers", "cnpj", "data_referencia", "acoes", "pvp"]
+    assert len(tabela["linhas"]) == 1
+    tickers, cnpj, data_ref, acoes_emitidas, pvp = tabela["linhas"][0]
+    assert tickers == "AAAA3, AAAA4"
+    assert cnpj == CNPJ["A"]
+    assert data_ref == date(2025, 12, 31)
+    assert acoes_emitidas == pytest.approx(0.1, rel=1e-9)
+    assert pvp == pytest.approx(0.0007076923076923077, rel=1e-9)
+
+
+def test_quantidade_suspeita_sem_pregao_do_ibov_nao_faz_a_checagem(mapa, tabelas_quantidade):
+    secao = secao_quantidade_acoes(_ler_sem_banco, mapa, _existentes_quantidade(), Exclusoes())
+    assert secao["notas"] == ["sem pregão com preço do IBOV: checagem não feita"]
+    assert secao["divergencias"] == []
+
+
+def test_quantidade_suspeita_com_tabela_ausente_pula_a_checagem(mapa):
+    secao = secao_quantidade_acoes(_ler_sem_banco, mapa, set(), Exclusoes(), t=T_QUANTIDADE)
+    assert len(secao["notas"]) == 5
+    assert all(n.startswith("pulada: tabela ausente") for n in secao["notas"])
+
+
+def test_data_referencia_usada_segue_a_regra_de_acoes_na_data():
+    disponiveis = pd.DataFrame({
+        "cnpj": ["X", "X"],
+        "data_referencia": pd.to_datetime(["2025-03-31", "2025-12-31"]),
+        "qtd_on": [1.0, 2.0],
+        "qtd_pn": [1.0, 2.0],
+    })
+    assert _data_referencia_usada(disponiveis, "X", pd.Timestamp("2025-06-30")) == date(2025, 3, 31)
+    assert _data_referencia_usada(disponiveis, "X", pd.Timestamp("2026-03-16")) == date(2025, 12, 31)
+    # Sem linha anterior à data, vale a de menor data_referencia (fallback de acoes_na_data)
+    assert _data_referencia_usada(disponiveis, "X", pd.Timestamp("2025-01-01")) == date(2025, 3, 31)

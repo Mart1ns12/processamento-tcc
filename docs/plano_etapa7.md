@@ -1,6 +1,8 @@
 # PLANO: ETAPA 7, SAÍDA (os 10 pacotes JSON)
 
-> **ESTADO DA IMPLEMENTAÇÃO (23/10/2026, parada a pedido do usuário):**
+> **ESTADO DA IMPLEMENTAÇÃO (23/10/2026, 2ª sessão): fases 0 a 8 prontas.** `python -m processamento.saida` existe; falta só o usuário rodar contra o banco real (item (d) do "pronto quando"). Pendências resolvidas: (1) `fontes.unir_historicos` usa `.loc[manter]` (xfail retirado); (2) BDR com P/L, P/VP e payout sempre `indisponivel` (D9), também na etapa 4 (`calcular_fundamentos_no_dia`) e em `multiplos_diarios`; (3) `coleta_status` ampliado fica para a etapa 8. Desvios das fases 6a–8 registrados no relatório da sessão (ex.: estado das séries gravado como lista; `ler_registro_top`/`ler_resultados` novos; `main(..., existe_composicao)`).
+>
+> **Estado anterior (parada a pedido do usuário):**
 > - **Prontas:** Fase 0 (parâmetros), 1 (`fatos/series.py`), 2 (`fatos/multiplos.py`), 3 (`fatos/noticias.py`), 4 (`saida/contrato.py`, `saida/insumos.py`, `tests/fabrica_saida.py`), 5 (`saida/textos.py`). `ESPECIFICACAO.md` já atualizada (seção 13 deste plano, S1–S20, janela de 253).
 > - **Faltam:** 6a (`pacotes_fatos.py`), 6b (`pacote_series.py`), 6c (`pacote_noticias.py`), 7 (`pacotes_experimento.py`) — podem rodar em paralelo — e depois a 8 (`gerar.py`, `__main__.py`, teste ponta a ponta e de vazamento). O comando `python -m processamento.saida` ainda não existe.
 > - **Testes:** `pytest -q` = 1046 passaram, 22 pulados, 1 xfail; com `PROC_TESTES_COM_BANCO=1`: 1068 passaram, 1 xfail.
@@ -330,7 +332,7 @@ A contribuição numérica (log-odds), as sombras (modelo 1 e regra da volatilid
 | `resumo` | `{periodo_inicio: data ou null, periodo_fim: data ou null, n_dias: inteiro, taxa_acerto: F, acaso_media: F, acaso_faixa: [min, max] ou null, universo: texto, nota: texto}` |
 
 Regras (S12): só entram dias com `valido_para_historico = true` **e** pregão previsto > `treino.teste_final.fim` (com `fim` vazio, nenhum). `superou` = retorno da ação > retorno do IBOV (empate = false; sem preço = null, com `retorno {null, indisponivel}` e `resultado_incompleto: true`). `acertos_dia` conta só os `true`; a taxa do dia é `acertos_dia/5`; `taxa_acerto` = soma dos acertos ÷ (5 × n_dias). Faixa do acaso = `avaliacao.faixa_do_acaso` sobre as candidatas (com alvo) de todos os dias válidos, k = 5, `acaso_sorteios` e `semente` do bloco `treino`, `com_retorno=False`; `acaso_faixa = [p2_5, p97_5]`.
-`nota`: universo `composicao_atual` → "Histórico calculado com as ações que compõem o Ibovespa atualmente."; sem dias, acrescenta (separado por um espaço) "O histórico começa na entrada em produção (teste ao vivo). Antes disso, os top 5 são testes de funcionamento e não entram aqui."
+`nota`: universo `composicao_atual` → "Histórico calculado com as ações que compõem o Ibovespa atualmente."; `composicao_historica` → "Histórico calculado com as ações que compunham o Ibovespa em cada data." (decidido em 23/10/2026); sem dias, acrescenta (separado por um espaço) "O histórico começa na entrada em produção (teste ao vivo). Antes disso, os top 5 são testes de funcionamento e não entram aqui."
 
 **Antes da produção (hoje):** `data_referencia = D`, `dia = null`, `resumo = {periodo_inicio: null, periodo_fim: null, n_dias: 0, taxa_acerto: {null, indisponivel}, acaso_media: {null, indisponivel}, acaso_faixa: null, universo: "composicao_atual", nota: <as duas frases>}`.
 

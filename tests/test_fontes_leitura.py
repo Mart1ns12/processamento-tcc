@@ -173,6 +173,13 @@ def test_unir_historicos_fica_linha_com_ticker_novo():
     ]
 
 
+def test_unir_historicos_vazio_mantem_as_colunas():
+    df = pd.DataFrame({"data": pd.Series([], dtype="datetime64[ns]"), "ticker": pd.Series([], dtype=object),
+                       "fechamento": pd.Series([], dtype=float)})
+    out = fontes.unir_historicos(df, {"ELET3": "AXIA3"}, ["data", "ticker"])
+    assert list(out.columns) == ["data", "ticker", "fechamento"] and out.empty
+
+
 def test_ler_noticias_sem_momento_pregao_e_com_momento_ref(banco_teste):
     df = fontes.ler_noticias(ler=banco_teste())
     assert "momento_pregao" not in df.columns
@@ -232,3 +239,74 @@ def test_intervalos_de_cadastro_nat_sem_limite():
 
 def test_ler_composicao_sem_tabela_devolve_none(banco_teste):
     assert fontes.ler_composicao(ler=banco_teste(), existe=False) is None
+
+
+# --- v1-composicao_ibov (formato intervalos), com `ler` falso ----------------------
+
+COLUNAS_COMPOSICAO_REAIS = ["ticker", "vigencia_inicio", "vigencia_fim", "participacao", "fonte"]
+COLUNAS_COMPOSICAO_LOGICAS = ["ticker", "data_inicio", "data_fim", "participacao", "fonte"]
+
+
+def _ler_composicao_falso(colunas_reais: list[str], linhas: pd.DataFrame, sqls: list[str]):
+    """`ler` falso: `linhas` já vêm com os aliases lógicos; `LIMIT 0` devolve as colunas reais."""
+    mudancas = ["ticker_antigo", "ticker_novo", "data_mudanca"]
+
+    def ler(sql, params=None):
+        sqls.append(sql)
+        if "v1-mudancas_ticker" in sql:
+            return pd.DataFrame({c: pd.Series([], dtype=object) for c in mudancas})
+        if "LIMIT 0" in sql:
+            return pd.DataFrame({c: pd.Series([], dtype=object) for c in colunas_reais})
+        return linhas.copy()
+
+    return ler
+
+
+def test_ler_composicao_tabela_vazia_devolve_df_com_colunas():
+    vazias = pd.DataFrame({c: pd.Series([], dtype=object) for c in COLUNAS_COMPOSICAO_LOGICAS})
+    ler = _ler_composicao_falso(COLUNAS_COMPOSICAO_REAIS, vazias, [])
+    out = fontes.ler_composicao(ler=ler, existe=True)
+    assert out is not None
+    assert out.empty
+    assert list(out.columns) == COLUNAS_COMPOSICAO_LOGICAS
+
+
+def test_ler_composicao_data_fim_vazia_vira_nat_e_participacao_float():
+    linhas = pd.DataFrame(
+        {
+            "ticker": ["PETR4", "PETR3"],
+            "data_inicio": ["2025-01-01", "2025-10-20"],
+            "data_fim": ["2025-10-17", None],
+            "participacao": ["1.5", "2.25"],
+            "fonte": ["b3", "b3"],
+        }
+    )
+    ler = _ler_composicao_falso(COLUNAS_COMPOSICAO_REAIS, linhas, [])
+    out = fontes.ler_composicao(ler=ler, existe=True)
+    assert out["ticker"].tolist() == ["PETR3", "PETR4"]
+    assert out["data_inicio"].tolist() == [_ts("2025-10-20"), _ts("2025-01-01")]
+    assert pd.isna(out["data_fim"].iloc[0])
+    assert out["data_fim"].iloc[1] == _ts("2025-10-17")
+    assert out["participacao"].dtype == float
+    assert out["participacao"].tolist() == [2.25, 1.5]
+    assert out["fonte"].tolist() == ["b3", "b3"]
+
+
+def test_ler_composicao_sql_usa_colunas_reais_com_alias_logico():
+    sqls: list[str] = []
+    linhas = pd.DataFrame({c: pd.Series([], dtype=object) for c in COLUNAS_COMPOSICAO_LOGICAS})
+    fontes.ler_composicao(ler=_ler_composicao_falso(COLUNAS_COMPOSICAO_REAIS, linhas, sqls), existe=True)
+    sql_select = next(s for s in sqls if "LIMIT 0" not in s and "v1-composicao_ibov" in s)
+    assert "`vigencia_inicio` AS `data_inicio`" in sql_select
+    assert "`vigencia_fim` AS `data_fim`" in sql_select
+    assert "`participacao` AS `participacao`" in sql_select
+    assert "`fonte` AS `fonte`" in sql_select
+
+
+def test_ler_composicao_erro_coluna_ausente():
+    sem_participacao = ["ticker", "vigencia_inicio", "vigencia_fim", "fonte"]
+    linhas = pd.DataFrame({c: pd.Series([], dtype=object) for c in COLUNAS_COMPOSICAO_LOGICAS})
+    ler = _ler_composicao_falso(sem_participacao, linhas, [])
+    _afirmar_erro(
+        lambda: fontes.ler_composicao(ler=ler, existe=True), "v1-composicao_ibov", "participacao"
+    )

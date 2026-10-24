@@ -55,6 +55,44 @@ def test_empresa_com_uma_classe_sem_valor_usa_a_outra():
     _confere(res, "Y3", 20.0, OK)  # (X 10 + W 30) / 2
 
 
+# Mediana por empresa (painel, decidido em 23/10/2026): D3 e D4 são a mesma empresa (média 4.0).
+LINHAS_MEDIANA = [
+    ("A3", "1", "S", 1.0), ("B3", "2", "S", 2.0), ("C3", "3", "S", 10.0),
+    ("D3", "4", "S", 3.0), ("D4", "4", "S", 5.0), ("E3", "5", "S", 7.0),
+]
+
+
+def _mediana(trocar: dict | None = None, agregacao: str = "mediana"):
+    tickers = [t for t, *_ in LINHAS_MEDIANA]
+    idx = indice_pregoes(pregoes_uteis(1))
+    vals = [(trocar or {}).get(t, v) for t, _, _, v in LINHAS_MEDIANA]
+    valores = pd.DataFrame([vals], index=idx, columns=tickers, dtype=float)
+    status = pd.DataFrame([[OK if not np.isnan(v) else HIST for v in vals]], index=idx, columns=tickers, dtype=object)
+    setor_de, cnpj_de = mapas_cadastro(cadastro_de([(t, c, s, "ON") for t, c, s, _ in LINHAS_MEDIANA]))
+    return media_setor(montar_grade(valores, status), tickers, setor_de, cnpj_de, "empresa", agregacao=agregacao)
+
+
+def test_mediana_por_empresa():
+    res = _mediana()
+    _confere(res, "A3", 5.5, OK)  # outras empresas: 2, 10, 4, 7 -> (4 + 7) / 2; a média daria 5.75
+    _confere(res, "C3", 3.0, OK)  # 1, 2, 4, 7 -> (2 + 4) / 2; o extremo 10 não entra
+    _confere(res, "D3", 4.5, OK)  # 1, 2, 10, 7 -> (2 + 7) / 2
+    _confere(res, "D4", 4.5, OK)
+    _confere(res, "E3", 3.0, OK)  # 1, 2, 10, 4 -> (2 + 4) / 2
+
+
+def test_mediana_ignora_empresa_sem_valor_ok():
+    res = _mediana({"B3": float("nan")})
+    _confere(res, "A3", 7.0, OK)  # 10, 4, 7
+
+
+def test_mediana_com_media_por_padrao_e_agregacao_invalida():
+    _confere(_mediana(agregacao="media"), "A3", 5.75, OK)
+    _confere(_media(), "Z3", 28.333333333333332, OK)  # padrão continua média
+    with pytest.raises(ValueError, match="agregacao"):
+        _mediana(agregacao="moda")
+
+
 def test_unico_par_sem_valor_ok_fica_fora():
     res = _media()
     _confere(res, "Q3", None, HIST)  # R3 com lucro_negativo não entra

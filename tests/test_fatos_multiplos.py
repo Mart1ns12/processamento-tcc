@@ -82,6 +82,10 @@ VALORES_CONFERIDOS = [
     ("2026-04-15", "BDRX32", "dividend_yield", None, INDISPONIVEL),
     ("2026-04-15", "BDRX32", "pl", None, INDISPONIVEL),
     ("2026-04-15", "BDRX32", "pvp", None, INDISPONIVEL),
+    # D9: antes do 1º balanço do BDR também indisponível (antes saía historico_insuficiente).
+    ("2025-03-31", "BDRX32", "pl", None, INDISPONIVEL),
+    ("2025-03-31", "BDRX32", "pvp", None, INDISPONIVEL),
+    ("2025-08-11", "BDRX32", "pl", None, INDISPONIVEL),
     ("2026-04-15", "SEMB3", "pl", None, INDISPONIVEL),
     ("2026-04-15", "NOBA3", "pl", None, INDISPONIVEL),
 ]
@@ -161,3 +165,36 @@ def test_desde_so_calcula_os_pregoes_da_janela(grades):
     assert g["pl"].valor.loc[pd.Timestamp("2026-03-16"), "AAAA3"] == pytest.approx(5.75, rel=1e-9)
     # yield de 2026-03-13 depende de proventos anteriores ao `desde`: a janela usa o histórico todo
     assert g["dividend_yield"].valor.loc[pd.Timestamp("2026-03-13"), "AAAA3"] == pytest.approx(0.149, rel=1e-9)
+
+
+# Quantidade de ações da AAAA em milhares (seção 10): P/L e P/VP saem indisponíveis pela regra do
+# pvp_minimo_plausivel, e o oráculo continua igual ao cálculo do dia.
+_ACOES_MIL = ACOES.copy()
+_mascara_a = _ACOES_MIL["cnpj"] == CNPJ["A"]
+_ACOES_MIL.loc[_mascara_a, ["qtd_on", "qtd_pn"]] = _ACOES_MIL.loc[_mascara_a, ["qtd_on", "qtd_pn"]] / 1000
+DADOS_MIL = dataclasses.replace(DADOS, acoes_emitidas=_ACOES_MIL)
+
+
+@pytest.fixture(scope="module")
+def grades_mil():
+    return multiplos_diarios(DADOS_MIL, CAL, EXCL, PARAMS)
+
+
+def test_quantidade_em_milhares_tira_pl_e_pvp_da_empresa(grades_mil):
+    t = pd.Timestamp("2026-03-16")
+    for ticker in ("AAAA3", "AAAA4"):
+        for chave in ("pl", "pvp"):
+            assert grades_mil[chave].status.loc[t, ticker] == INDISPONIVEL, (chave, ticker)
+            assert pd.isna(grades_mil[chave].valor.loc[t, ticker]), (chave, ticker)
+
+
+@pytest.mark.parametrize("t", ORACULO_DATAS)
+def test_oraculo_igual_com_quantidade_em_milhares(grades_mil, t):
+    ref = calcular_fundamentos_no_dia(t, CAL, DADOS_MIL, EXCL, PARAMS, "empresa")
+    ts = pd.Timestamp(t)
+    mapa = {"pl": "pl.valor", "pvp": "pvp.valor", "dividend_yield": "dividend_yield.valor"}
+    for chave, indicador in mapa.items():
+        for ticker in TICKERS:
+            mio = (grades_mil[chave].valor.loc[ts, ticker], grades_mil[chave].status.loc[ts, ticker])
+            ref_valor = (ref[indicador].valor.loc[ts, ticker], ref[indicador].status.loc[ts, ticker])
+            _confere(mio, ref_valor, f"{t} {ticker} {chave}")

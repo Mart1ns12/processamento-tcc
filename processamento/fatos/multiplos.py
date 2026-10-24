@@ -76,10 +76,8 @@ def multiplos_diarios(dados: DadosFundamentos, cal: list, exclusoes: Exclusoes,
 
     Chaves "pl", "pvp" e "dividend_yield"; cada uma é uma `Grade` pregão × ticker (ordem de
     `tickers_do_painel`). `desde` (S19): só os pregões com data >= desde; as tabelas continuam
-    inteiras (foto do balanço e janela de 12 meses usam o histórico todo). BDR: yield indisponível
-    e P/L e P/VP pelo mesmo caminho do CNPJ de `calcular_fundamentos_no_dia` (sem balanço: status
-    da foto; com balanço: indisponível, pois BDR não entra no valor de mercado). Sem CNPJ: P/L e
-    P/VP indisponíveis.
+    inteiras (foto do balanço e janela de 12 meses usam o histórico todo). BDR: P/L, P/VP e yield
+    sempre indisponíveis (D9). Sem CNPJ: P/L e P/VP indisponíveis.
     """
     tickers = tickers_do_painel(dados.cadastro, exclusoes)
     idx = indice_pregoes(cal)
@@ -105,7 +103,7 @@ def multiplos_diarios(dados: DadosFundamentos, cal: list, exclusoes: Exclusoes,
     colunas_de_cnpj: dict[str, list[int]] = {}
     for j, ticker in enumerate(tickers):
         cnpj = cnpj_de.get(ticker)
-        if cnpj:
+        if cnpj and tipo_de.get(ticker) != "BDR":  # D9: BDR fica indisponível
             colunas_de_cnpj.setdefault(cnpj, []).append(j)
 
     for cnpj, colunas in sorted(colunas_de_cnpj.items()):
@@ -123,7 +121,8 @@ def multiplos_diarios(dados: DadosFundamentos, cal: list, exclusoes: Exclusoes,
                 )
             foto, qtd = cache[trecho]
             vm = valor_de_mercado(cnpj, fechs[i], cad_c, tickers, qtd)
-            ind = indicadores_empresa(foto, vm, (math.nan, INDISPONIVEL), False)
+            ind = indicadores_empresa(foto, vm, (math.nan, INDISPONIVEL), False,
+                                      pvp_minimo=params.pvp_minimo_plausivel)
             pl_valor[i, colunas], pl_status[i, colunas] = ind["pl.valor"]
             pvp_valor[i, colunas], pvp_status[i, colunas] = ind["pvp.valor"]
 
