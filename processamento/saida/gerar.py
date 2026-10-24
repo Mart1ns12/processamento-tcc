@@ -39,6 +39,7 @@ COLETA_NAO_CONSULTADA = {"consultado": False, "nota": "gatilho da coleta não co
 AVISO_SEM_MODELO = "sem arquivo de modelo em {pasta}: experimento_top não gerado"
 AVISO_RETREINO = "Retreino de {mes} falhou ({tipo}): usando o modelo anterior."
 AVISO_CHECAGEM = "falha na checagem diária ({tipo}): avisos de checagem não gerados."
+AVISO_SUSPEITOS_FALHA = "falha na checagem de retornos suspeitos ({tipo}): aviso não gerado."
 AVISO_COMPLETO = ("Carga completa: pacotes inteiros, sem o envio incremental; o estado do envio e os registros "
                   "do experimento não foram alterados.")
 PASTA_COMPLETA_PADRAO = fontes.RAIZ / "saida_completa"
@@ -133,6 +134,12 @@ def gerar(d: date, *, ler=None, pasta_saida: Path | None = None, pasta_modelos: 
     params_precos = carregar_parametros_precos()
     params_fund = carregar_parametros_fundamentos()
     params_exp = carregar_parametros_experimento()
+    try:
+        aviso_suspeitos = pacote_series.aviso_retornos_suspeitos(ins, params_precos)
+    except Exception as erro:
+        aviso_suspeitos = AVISO_SUSPEITOS_FALHA.format(tipo=type(erro).__name__)
+    if aviso_suspeitos is not None:
+        avisos.append(aviso_suspeitos)
 
     # Cálculos compartilhados entre pacotes: calculados no primeiro uso; se falham, o pacote que usa vira aviso.
     @functools.cache
@@ -175,7 +182,8 @@ def gerar(d: date, *, ler=None, pasta_saida: Path | None = None, pasta_modelos: 
         return quando_muda("acoes", pacotes_fatos.montar_acoes(ins, do_dia, gerado_em, dados_ate))
 
     def series():
-        return pacote_series.montar_series_diarias(ins, multiplos(), estado_de("series_diarias"), gerado_em, dados_ate)
+        return pacote_series.montar_series_diarias(ins, multiplos(), estado_de("series_diarias"), gerado_em, dados_ate,
+                                                   params_precos=params_precos)
 
     def mercado():
         return pacotes_fatos.montar_mercado_dia(ins, grades(), gerado_em, dados_ate), [], None

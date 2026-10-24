@@ -156,7 +156,7 @@ def test_caso_1_carga_completa_tem_o_mesmo_conteudo_da_rodada_sem_estado(banco_t
     # gabarito absoluto (rodada de D = 2025-10-22, banco de teste)
     n = _contagens(pasta_c)
     assert n["acoes"] == 7
-    assert n["series_diarias"] == 14
+    assert n["series_diarias"] == 10   # 6 ações + IBOV, IDIV, CDI, IPCA; nenhum setor com 2 empresas: sem SETOR_SEM (DS15)
     assert n["mercado_dia"] == 1
     assert n["resumo_acao"] == 7
     assert n["fundamentos_trimestrais"] == 16

@@ -17,23 +17,29 @@ import numpy as np
 import pandas as pd
 
 from processamento.fatos.fundamentos import LUCRO_NEGATIVO
+from processamento.experimento.relatorio import pct
 from processamento.fatos.precos import (
     INDISPONIVEL,
     OK,
     Grade,
+    ParametrosPrecos,
+    carregar_parametros_precos,
     grade_de_precos,
     indice_pregoes,
+    mapas_cadastro,
     montar_grade,
     pares_do_painel,
+    retornos_suspeitos,
     tickers_do_painel,
 )
 from processamento.fatos.series import (
     ANTES_DO_INICIO,
+    PREFIXO_SEM,
     indice_base_100,
     indice_cdi,
     indice_ipca,
     indice_pontos,
-    indice_setor,
+    indice_setor_sem_empresa,
 )
 from processamento.saida import contrato
 from processamento.saida.insumos import Insumos
@@ -53,6 +59,37 @@ def inicio_janela(cal: list[date], t: date, n: int = JANELA_PREGOES) -> date:
     if fim == 0:
         raise ValueError(f"nenhum pregão até {t}: não há janela")
     return cal[max(0, fim - n)]
+
+
+AVISO_SUSPEITOS = ("Retornos diários suspeitos (abaixo de {minimo} ou acima de {maximo}) entre {ini} e {t}, "
+                   "fora das séries e das medianas do setor: {lista}.")
+MAX_TICKERS_AVISO = 10
+
+
+def aviso_retornos_suspeitos(ins: Insumos, params_precos: ParametrosPrecos) -> str | None:
+    """Aviso do `execucao` (seção 6): retornos suspeitos das ações ON/PN/UNIT com data em [inicio_janela, t].
+
+    None se não houver. Mais de `MAX_TICKERS_AVISO` tickers: os primeiros e "e mais k".
+    """
+    pares = pares_do_painel(ins.cadastro, ins.exclusoes)
+    g = grade_de_precos(ins.precos, ins.cal, "fechamento_ajustado", pares)
+    susp = retornos_suspeitos(g, params_precos.retorno_suspeito_min, params_precos.retorno_suspeito_max)
+    ini = inicio_janela(ins.cal, ins.t)
+    dentro = (susp.index >= pd.Timestamp(ini)) & (susp.index <= pd.Timestamp(ins.t))
+    janela = susp[dentro]
+    itens = []
+    for tk in sorted(janela.columns):
+        dias = [d.strftime("%Y-%m-%d") for d in janela.index[janela[tk].to_numpy()]]
+        if dias:
+            itens.append(f"{tk} ({', '.join(dias)})")
+    if not itens:
+        return None
+    lista = ", ".join(itens[:MAX_TICKERS_AVISO])
+    if len(itens) > MAX_TICKERS_AVISO:
+        lista += f" e mais {len(itens) - MAX_TICKERS_AVISO}"
+    return AVISO_SUSPEITOS.format(minimo=pct(params_precos.retorno_suspeito_min, 0),
+                                  maximo=pct(params_precos.retorno_suspeito_max, 0),
+                                  ini=ini.isoformat(), t=ins.t.isoformat(), lista=lista)
 
 
 def _cotacao(g: pd.DataFrame) -> Grade:
@@ -108,12 +145,15 @@ def _nomes(cadastro: pd.DataFrame) -> dict[str, str]:
             for t, e in zip(cadastro["ticker"], cadastro["empresa"])}
 
 
-def series_completas(ins: Insumos, multiplos: dict[str, Grade]) -> dict[str, dict]:
+def series_completas(ins: Insumos, multiplos: dict[str, Grade],
+                     params_precos: ParametrosPrecos | None = None) -> dict[str, dict]:
     """Séries do pacote, por ticker, só com as datas de [inicio_janela, t]; sem `substituir_serie`.
 
     `multiplos`: `fatos.multiplos.multiplos_diarios` (chaves "pl", "pvp", "dividend_yield").
     As grades são calculadas no histórico inteiro e o corte da janela é feito por último.
+    Séries `SETOR_SEM:<ticker>` (DS10) no lugar das `SETOR:<nome>`: o setor sem a própria empresa.
     """
+    params_precos = carregar_parametros_precos() if params_precos is None else params_precos
     cal, t = ins.cal, ins.t
     ini = inicio_janela(cal, t)
     idx = indice_pregoes(cal)
@@ -129,7 +169,10 @@ def series_completas(ins: Insumos, multiplos: dict[str, Grade]) -> dict[str, dic
     pontos_base, pontos = indice_pontos(ins.indices, cal, INDICES_PONTOS)
     cdi = indice_cdi(ins.indices, cal)
     ipca = indice_ipca(ins.indices, cal)
-    setor, n_setor = indice_setor(g_aj_bruto, ins.cadastro, pares)
+    suspeitos = retornos_suspeitos(g_aj_bruto, params_precos.retorno_suspeito_min, params_precos.retorno_suspeito_max)
+    sem, n_sem = indice_setor_sem_empresa(g_aj_bruto, ins.cadastro, pares, tickers, params_precos.setor_excluir,
+                                          suspeitos=suspeitos)
+    setor_de = mapas_cadastro(ins.cadastro)[0]
     nomes = _nomes(ins.cadastro)
 
     res: dict[str, dict] = {}
@@ -170,12 +213,14 @@ def series_completas(ins: Insumos, multiplos: dict[str, Grade]) -> dict[str, dic
     for nome, grade in (("CDI", cdi), ("IPCA", ipca)):
         guarda(_serie(nome, "taxa", nome, {"indice_retorno_total": _coluna(grade, nome)}, datas_pregao, ini, t))
 
-    for col in setor.valor.columns:
+    for col in sem.valor.columns:   # DS10: uma série "setor sem a própria empresa" por ticker
+        tk = col.removeprefix(PREFIXO_SEM)
         campos = {
-            "indice_retorno_total": _coluna(setor, col),
-            "n_empresas": (n_setor[col].to_numpy(dtype=float), None),
+            "indice_retorno_total": _coluna(sem, col),
+            "n_empresas": (n_sem[col].to_numpy(dtype=float), None),
         }
-        guarda(_serie(col, "setor", col.removeprefix("SETOR:"), campos, datas_pregao, ini, t))
+        nome = f"{setor_de.get(tk)} sem {nomes.get(tk, tk)}"
+        guarda(_serie(col, "setor_sem_empresa", nome, campos, datas_pregao, ini, t))
 
     return res
 
@@ -276,14 +321,15 @@ def _registro(meta: dict, serie: dict) -> dict:
 
 
 def montar_series_diarias(ins: Insumos, multiplos: dict[str, Grade], estado: list[dict] | None,
-                          gerado_em: str, dados_ate: str) -> tuple[list[dict], list[dict], list[dict]]:
+                          gerado_em: str, dados_ate: str,
+                          params_precos: ParametrosPrecos | None = None) -> tuple[list[dict], list[dict], list[dict]]:
     """(registros, removidos, novo_estado) do `series_diarias`.
 
     `estado` é o que `contrato.ler_estado("series_diarias")` devolve (lista de séries, ou None na
     primeira vez). `novo_estado` é a lista que `contrato.gravar_estado` grava depois do envio aceito.
     Os registros não são validados aqui: a validação é do `contrato.gravar_lote`.
     """
-    atuais = series_completas(ins, multiplos)
+    atuais = series_completas(ins, multiplos, params_precos)
     anterior = None if estado is None else {s["ticker"]: s for s in estado}
     enviar, removidos = comparar_series(atuais, anterior)
     meta = contrato.meta(gerado_em, dados_ate)

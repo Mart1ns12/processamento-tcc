@@ -13,16 +13,20 @@ import pandas as pd
 
 from processamento.fatos.indices import _k, _meses_ipca, _serie_cdi, grade_de_indices
 from processamento.fatos.precos import (
+    HIST,
     INDISPONIVEL,
     OK,
     Grade,
+    _outros_do_setor,
     indice_pregoes,
     mapas_cadastro,
     montar_grade,
     retornos_diarios,
+    variacao,
 )
 
 ANTES_DO_INICIO = "antes_do_inicio"  # status interno: o ponto não é emitido (nunca vai para o JSON)
+PREFIXO_SEM = "SETOR_SEM:"  # série do setor sem a própria empresa, uma por ticker (DS10)
 
 
 def indice_base_100(g: pd.DataFrame) -> Grade:
@@ -145,33 +149,112 @@ def indice_setor(g_aj: pd.DataFrame, cadastro: pd.DataFrame, pares: list[str]) -
     setor_de, cnpj_de = mapas_cadastro(cadastro)
     dias = g_aj.index
     membros_todos = [p for p in pares if p in g_aj.columns and setor_de.get(p) is not None]
-    ret = retornos_diarios(g_aj[membros_todos])
+    ret = _retornos_dos_membros(g_aj, membros_todos, None)
     valor, status, contagem = {}, {}, {}
     for setor in sorted({setor_de[p] for p in membros_todos}):
         membros = [p for p in membros_todos if setor_de[p] == setor]
-        existe = g_aj[membros].notna().any(axis=1).to_numpy()
-        if not existe.any():
+        cadeia = _cadeia(ret, g_aj, membros, cnpj_de)
+        if cadeia is None:
             continue
-        por_empresa = ret[membros].T.groupby([cnpj_de.get(p) or p for p in membros], sort=False).mean().T
-        n = por_empresa.notna().sum(axis=1).to_numpy()
-        media = por_empresa.mean(axis=1).to_numpy()
-        primeiro = int(existe.argmax())
-        nivel = np.full(len(dias), np.nan)
-        st = np.full(len(dias), ANTES_DO_INICIO, dtype=object)
-        cont = np.zeros(len(dias), dtype=int)
-        ultimo = 100.0
-        for i in range(primeiro, len(dias)):
-            if i == primeiro:
-                nivel[i], st[i] = 100.0, OK
-            elif n[i] > 0:
-                ultimo = ultimo * (1 + media[i])
-                nivel[i], st[i], cont[i] = ultimo, OK, n[i]
-            else:
-                st[i] = INDISPONIVEL
         nome = f"SETOR:{setor}"
-        valor[nome], status[nome], contagem[nome] = nivel, st, cont
+        valor[nome], status[nome], contagem[nome] = cadeia
     cols = list(valor)
     valor_df = pd.DataFrame(valor, index=dias, columns=cols)
     status_df = pd.DataFrame(status, index=dias, columns=cols)
     n_df = pd.DataFrame(contagem, index=dias, columns=cols)
     return montar_grade(valor_df, status_df), n_df
+
+
+def _retornos_dos_membros(g_aj: pd.DataFrame, membros: list[str], suspeitos: pd.DataFrame | None) -> pd.DataFrame:
+    """Retorno do dia de cada membro (`retornos_diarios`); com `suspeitos`, o retorno suspeito do dia vira NaN (seção 6)."""
+    ret = retornos_diarios(g_aj[membros])
+    if suspeitos is not None:
+        fora = suspeitos.reindex(index=ret.index, columns=ret.columns, fill_value=False).astype(bool)
+        ret = ret.mask(fora)
+    return ret
+
+
+def _cadeia(ret: pd.DataFrame, g_aj: pd.DataFrame, membros: list[str],
+            cnpj_de: dict) -> tuple[np.ndarray, np.ndarray, np.ndarray] | None:
+    """(nível, status, n_empresas) da média igual por empresa dos retornos de `membros`, em base 100.
+
+    Início = 1º pregão com preço de algum membro (nível 100). Dia sem nenhuma empresa com retorno:
+    `indisponivel` e a cadeia segue do último nível. None se nenhum membro tem preço.
+    """
+    dias = g_aj.index
+    existe = g_aj[membros].notna().any(axis=1).to_numpy()
+    if not existe.any():
+        return None
+    por_empresa = ret[membros].T.groupby([cnpj_de.get(p) or p for p in membros], sort=False).mean().T
+    n = por_empresa.notna().sum(axis=1).to_numpy()
+    media = por_empresa.mean(axis=1).to_numpy()
+    primeiro = int(existe.argmax())
+    nivel = np.full(len(dias), np.nan)
+    st = np.full(len(dias), ANTES_DO_INICIO, dtype=object)
+    cont = np.zeros(len(dias), dtype=int)
+    ultimo = 100.0
+    for i in range(primeiro, len(dias)):
+        if i == primeiro:
+            nivel[i], st[i] = 100.0, OK
+        elif n[i] > 0:
+            ultimo = ultimo * (1 + media[i])
+            nivel[i], st[i], cont[i] = ultimo, OK, n[i]
+        else:
+            st[i] = INDISPONIVEL
+    return nivel, st, cont
+
+
+def indice_setor_sem_empresa(g_aj: pd.DataFrame, cadastro: pd.DataFrame, pares: list[str], tickers: list[str],
+                             modo: str, suspeitos: pd.DataFrame | None = None) -> tuple[Grade, pd.DataFrame]:
+    """Série `SETOR_SEM:<ticker>` de cada ticker: índice base 100 do setor dele sem a própria empresa (DS10).
+
+    Membros: `pares` do mesmo setor sem o próprio ticker e, no modo "empresa", sem nenhuma ação do mesmo CNPJ
+    (`fatos.precos._outros_do_setor`). Conta de `_cadeia` (média igual por empresa dos retornos diários, sem os
+    suspeitos). Ticker sem outro membro, ou cujos membros nunca têm preço, não ganha coluna.
+    Devolve (grade com colunas `SETOR_SEM:<ticker>`, n_empresas com as mesmas colunas).
+    """
+    setor_de, cnpj_de = mapas_cadastro(cadastro)
+    validos = [p for p in pares if p in g_aj.columns]
+    ret = _retornos_dos_membros(g_aj, validos, suspeitos)
+    valor, status, contagem = {}, {}, {}
+    for tk in tickers:
+        outros = _outros_do_setor(tk, validos, setor_de, cnpj_de, modo)
+        if not outros:
+            continue
+        cadeia = _cadeia(ret, g_aj, outros, cnpj_de)
+        if cadeia is None:
+            continue
+        nome = f"{PREFIXO_SEM}{tk}"
+        valor[nome], status[nome], contagem[nome] = cadeia
+    idx, cols = g_aj.index, list(valor)
+    return (montar_grade(pd.DataFrame(valor, index=idx, columns=cols), pd.DataFrame(status, index=idx, columns=cols)),
+            pd.DataFrame(contagem, index=idx, columns=cols))
+
+
+def rentabilidade_setor_sem_empresa(g_aj: pd.DataFrame, cadastro: pd.DataFrame, pares: list[str], tickers: list[str],
+                                    janelas: dict[str, int], modo: str,
+                                    suspeitos: pd.DataFrame | None = None) -> dict[str, Grade]:
+    """`rentabilidade.setor` por janela (chave = nome da janela; colunas = `tickers`): razão da série (DS11).
+
+    N(t)/N(base) − 1 pela `variacao` (base as-of). Sem outro membro no setor: `indisponivel`; membros sem
+    nenhum preço: `historico_insuficiente`; ponto de t vazio: `indisponivel`; base antes do início: HIST.
+    """
+    setor_de, cnpj_de = mapas_cadastro(cadastro)
+    validos = [p for p in pares if p in g_aj.columns]
+    serie, _ = indice_setor_sem_empresa(g_aj, cadastro, pares, tickers, modo, suspeitos)
+    idx = g_aj.index
+    res = {}
+    for nome_janela, n in janelas.items():
+        valor, status = {}, {}
+        for tk in tickers:
+            col = f"{PREFIXO_SEM}{tk}"
+            if col in serie.valor.columns:
+                v = variacao(serie.valor[[col]], n)
+                valor[tk], status[tk] = v.valor[col], v.status[col]
+            else:
+                tem_outros = bool(_outros_do_setor(tk, validos, setor_de, cnpj_de, modo))
+                valor[tk] = pd.Series(np.nan, index=idx)
+                status[tk] = pd.Series(HIST if tem_outros else INDISPONIVEL, index=idx, dtype=object)
+        res[nome_janela] = montar_grade(pd.DataFrame(valor, index=idx, columns=tickers),
+                                        pd.DataFrame(status, index=idx, columns=tickers))
+    return res

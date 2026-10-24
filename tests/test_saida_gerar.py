@@ -312,3 +312,23 @@ def test_caso_9_sem_banco_real_a_trava_esta_ativa_e_o_gerar_funciona(banco_teste
     pasta = _gerar(tmp_path, banco_teste(), modelos=modelos_dir)
 
     assert _execucao(pasta)["status"] == "ok"
+
+
+# ---------------------------------------------------------------- caso 3f: retorno suspeito vira aviso (DS7)
+
+def _salto_petr4(df: pd.DataFrame) -> pd.DataFrame:
+    """PETR4 com fechamento_ajustado 1.000.000 em 2025-10-20 (leitor de texto do banco_teste)."""
+    df = df.copy()
+    m = (df["ticker"] == "PETR4") & (df["data"] == "2025-10-20")
+    df.loc[m, "fechamento_ajustado"] = "1000000.0"
+    return df
+
+
+def test_caso_3f_retorno_suspeito_vira_aviso_e_a_rodada_segue(banco_teste, tmp_path, modelos_dir):
+    pasta = _gerar(tmp_path, banco_teste({"v1-precos": _salto_petr4}), modelos=modelos_dir)
+
+    ex = _execucao(pasta)
+    assert ex["status"] == "ok"
+    assert ("Retornos diários suspeitos (abaixo de -75% ou acima de 100%) entre 2025-10-16 e 2025-10-21, "
+            "fora das séries e das medianas do setor: PETR4 (2025-10-20, 2025-10-21).") in ex["avisos"]
+    assert not any(a.startswith("falha ao gerar") for a in ex["avisos"])

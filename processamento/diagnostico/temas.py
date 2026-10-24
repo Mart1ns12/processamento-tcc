@@ -52,12 +52,20 @@ from processamento.diagnostico.regras import (
     veredito_escala,
 )
 from processamento.exclusoes import Exclusoes, carregar_exclusoes
+from processamento.experimento.relatorio import pct
 from processamento.fatos.fundamentos import (
     carregar_parametros_fundamentos,
     quantidade_suspeita,
     valor_de_mercado,
 )
-from processamento.fatos.precos import grade_de_precos, mapas_cadastro, tickers_do_painel
+from processamento.fatos.precos import (
+    carregar_parametros_precos,
+    grade_de_precos,
+    mapas_cadastro,
+    retornos_asof,
+    retornos_suspeitos,
+    tickers_do_painel,
+)
 from processamento.fatos.proventos import acoes_disponiveis, acoes_na_data
 from processamento.fatos.trimestres import foto_balanco
 from processamento.tickers import classificar_classe, codigos_por_cnpj, ligar_a_cnpj, parse_other_codes
@@ -1037,4 +1045,54 @@ def secao_quantidade_acoes(ler, mapa: dict, existentes: set, exclusoes: Exclusoe
         ["tickers", "cnpj", "data_referencia", "acoes", "pvp"],
         [[", ".join(a["tickers"]), a["cnpj"], a["data_referencia"], a["acoes"], a["pvp"]] for a in achados],
     )
+    return secao
+
+
+# ---------------------------------------------------------------------------
+# Retornos diários suspeitos (seção 6 da especificação; pendência da coleta, seção 10)
+# ---------------------------------------------------------------------------
+
+TABELAS_RETORNOS = ("precos",)
+
+
+def secao_retornos_suspeitos(ler, mapa: dict, existentes: set) -> dict:
+    """Retornos diários do `fechamento_ajustado` fora de [fase1.retorno_suspeito_min, fase1.retorno_suspeito_max].
+
+    Nota + tabela (não é divergência): o processamento isola esses retornos (seção 6). Histórico inteiro,
+    todos os tickers de `v1-precos`, nos pregões do IBOV, contra o último pregão com preço. Lê só por
+    `fontes.ler_tabela`; a conta é a de `fatos.precos.retornos_suspeitos`.
+    """
+    secao = nova_secao("Retornos diários suspeitos")
+    faltam = [c for c in TABELAS_RETORNOS if not _existe(mapa, existentes, c)]
+    if faltam:
+        for c in faltam:
+            secao["notas"].append(_pulada(mapa, c))
+        return secao
+    params = carregar_parametros_precos()
+    precos = fontes.ler_tabela("precos", ler=ler)
+    cal = calendario.pregoes(precos)
+    if not cal:
+        secao["notas"].append("sem pregão com preço do IBOV: checagem não feita")
+        return secao
+    tickers = sorted(precos["ticker"].dropna().unique())
+    g_aj = grade_de_precos(precos, cal, "fechamento_ajustado", tickers)
+    g_fech = grade_de_precos(precos, cal, "fechamento", tickers)
+    suspeitos = retornos_suspeitos(g_aj, params.retorno_suspeito_min, params.retorno_suspeito_max)
+    anterior = g_aj.ffill().shift(1)
+    r_aj, r_fech = retornos_asof(g_aj), retornos_asof(g_fech)
+    linhas = []
+    for tk in tickers:
+        for d in g_aj.index[suspeitos[tk].to_numpy()]:
+            linhas.append([tk, d.date(), float(anterior.at[d, tk]), float(g_aj.at[d, tk]),
+                           float(r_aj.at[d, tk]), float(r_fech.at[d, tk])])
+    limites = f"abaixo de {pct(params.retorno_suspeito_min, 0)} ou acima de {pct(params.retorno_suspeito_max, 0)}"
+    if not linhas:
+        secao["notas"].append(f"nenhum retorno diário suspeito (fechamento_ajustado {limites})")
+        return secao
+    secao["notas"].append(
+        f"{len(linhas)} retornos diários suspeitos em {len({l[0] for l in linhas})} tickers "
+        f"(fechamento_ajustado contra o último pregão com preço, {limites}): saem das séries e das medianas "
+        "do setor; o preço não é corrigido (seção 6)")
+    adicionar_tabela(secao, "Retornos diários suspeitos",
+                     ["ticker", "data", "aj_anterior", "aj", "retorno_aj", "retorno_fech"], linhas)
     return secao

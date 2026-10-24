@@ -41,7 +41,8 @@ CHAVES = {"acoes": ["ticker"], "mercado_dia": ["data_referencia"], "resumo_acao"
 QUANDO_MUDA = ("acoes", "fundamentos_trimestrais", "proventos", "series_diarias")
 CAMPOS_SERIE = {"acao": ("fechamento", "indice_retorno_total", "volume", "pl", "pvp", "dividend_yield"),
                 "etf": ("fechamento", "indice_retorno_total", "volume"), "indice": ("fechamento", "indice_retorno_total"),
-                "taxa": ("indice_retorno_total",), "setor": ("indice_retorno_total", "n_empresas")}
+                "taxa": ("indice_retorno_total",),
+                "setor_sem_empresa": ("indice_retorno_total", "n_empresas")}
 
 _META_CAMPOS = ("versao_contrato", "gerado_em", "dados_ate")
 _CAMPOS_LOTE = ("pacote", "versao_contrato", "chave", "gerado_em", "dados_ate", "registros", "removidos")

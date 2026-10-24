@@ -8,6 +8,7 @@ import pandas as pd
 import pytest
 
 from fabrica_fundamentos import CNPJ, mundo
+from fabrica_precos import precos_de, pregoes_uteis
 from processamento import fontes
 from processamento.diagnostico.esperado import ETAPAS_COLETA, ETAPAS_EXECUCAO_MANUAL
 from processamento.diagnostico.temas import (
@@ -17,6 +18,7 @@ from processamento.diagnostico.temas import (
     secao_painel,
     secao_precos,
     secao_quantidade_acoes,
+    secao_retornos_suspeitos,
     secao_tickers,
 )
 from processamento.exclusoes import Exclusoes
@@ -472,3 +474,72 @@ def test_data_referencia_usada_segue_a_regra_de_acoes_na_data():
     assert _data_referencia_usada(disponiveis, "X", pd.Timestamp("2026-03-16")) == date(2025, 12, 31)
     # Sem linha anterior à data, vale a de menor data_referencia (fallback de acoes_na_data)
     assert _data_referencia_usada(disponiveis, "X", pd.Timestamp("2025-01-01")) == date(2025, 3, 31)
+
+
+# ---------------------------------------------------------------------------
+# Retornos diários suspeitos (Fase 5; gabarito conferido sobre a fábrica)
+# ---------------------------------------------------------------------------
+
+CAL_R = pregoes_uteis(6, "2026-04-06")
+PRECOS_R = pd.concat([
+    precos_de("IBOV", CAL_R, [10.0] * 6),
+    precos_de("AZUL3", CAL_R, [100.0, 102.0, 2040000.0, 2142000.0, 105.0, 105.0]),
+    precos_de("GAPX3", CAL_R, [10.0, None, 25.0, 25.0, 25.0, 25.0]),
+    precos_de("SPLT3", CAL_R, [40.0, 40.0, 10.0, 10.0, 10.0, 10.0], aj=[10.0] * 6),  # desdobramento real: fora
+], ignore_index=True)
+EXISTENTES_RETORNOS = {fontes.nome_real("precos")}
+
+
+def _servir_precos(monkeypatch, precos):
+    """`fontes.ler_tabela` devolve `precos` (sem banco)."""
+    monkeypatch.setattr(fontes, "ler_tabela", lambda tabela, **_kw: precos.copy())
+
+
+def test_retornos_suspeitos_5a_nota_conta_saltos_e_tickers(mapa, monkeypatch):
+    _servir_precos(monkeypatch, PRECOS_R)
+    secao = secao_retornos_suspeitos(_ler_sem_banco, mapa, EXISTENTES_RETORNOS)
+    assert secao["notas"] == [
+        "3 retornos diários suspeitos em 2 tickers (fechamento_ajustado contra o último pregão com preço, "
+        "abaixo de -75% ou acima de 100%): saem das séries e das medianas do setor; o preço não é corrigido (seção 6)"
+    ]
+    assert secao["divergencias"] == []
+
+
+def test_retornos_suspeitos_5b_tabela_com_aj_fechamento_e_retornos(mapa, monkeypatch):
+    _servir_precos(monkeypatch, PRECOS_R)
+    secao = secao_retornos_suspeitos(_ler_sem_banco, mapa, EXISTENTES_RETORNOS)
+    assert len(secao["tabelas"]) == 1
+    tabela = secao["tabelas"][0]
+    assert tabela["colunas"] == ["ticker", "data", "aj_anterior", "aj", "retorno_aj", "retorno_fech"]
+    linhas = tabela["linhas"]
+    assert len(linhas) == 3
+    assert linhas[0][:4] == ["AZUL3", date(2026, 4, 8), 102.0, 2040000.0]
+    assert linhas[0][4:] == pytest.approx([19999.0, 19999.0])
+    assert linhas[1][:4] == ["AZUL3", date(2026, 4, 10), 2142000.0, 105.0]
+    assert linhas[1][4:] == pytest.approx([-0.9999509803921569, -0.9999509803921569])
+    assert linhas[2][:4] == ["GAPX3", date(2026, 4, 8), 10.0, 25.0]
+    assert linhas[2][4:] == pytest.approx([1.5, 1.5])
+
+
+def test_retornos_suspeitos_5c_sem_saltos_vira_nota_sem_tabela(mapa, monkeypatch):
+    _servir_precos(monkeypatch, PRECOS_R[PRECOS_R["ticker"].isin(["IBOV", "SPLT3"])])
+    secao = secao_retornos_suspeitos(_ler_sem_banco, mapa, EXISTENTES_RETORNOS)
+    assert secao["notas"] == [
+        "nenhum retorno diário suspeito (fechamento_ajustado abaixo de -75% ou acima de 100%)"
+    ]
+    assert secao["tabelas"] == []
+    assert secao["divergencias"] == []
+
+
+def test_retornos_suspeitos_5d_sem_pregao_do_ibov_nao_faz_a_checagem(mapa, monkeypatch):
+    _servir_precos(monkeypatch, PRECOS_R[PRECOS_R["ticker"] != "IBOV"])
+    secao = secao_retornos_suspeitos(_ler_sem_banco, mapa, EXISTENTES_RETORNOS)
+    assert secao["notas"] == ["sem pregão com preço do IBOV: checagem não feita"]
+    assert secao["tabelas"] == []
+
+
+def test_retornos_suspeitos_5e_tabela_ausente_pula_sem_consultar(mapa):
+    secao = secao_retornos_suspeitos(_ler_sem_banco, mapa, set())
+    assert len(secao["notas"]) == 1
+    assert secao["notas"][0].startswith("pulada: tabela ausente")
+    assert secao["tabelas"] == []

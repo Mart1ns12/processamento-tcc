@@ -412,6 +412,9 @@ _SETOR_SEM_FINANCEIRA = {
     "endividamento.setor_dl_pl", "endividamento.setor_dl_ebitda",
 }
 
+# Campos de setor que usam o preço de t: a empresa com retorno suspeito recente fica fora (seção 6).
+_SETOR_COM_PRECO = frozenset({"pl.setor", "pvp.setor", "dividend_yield.setor"})
+
 
 @dataclass(frozen=True)
 class DadosFundamentos:
@@ -444,12 +447,15 @@ def _grade_do_dia(ts: pd.Timestamp, tickers: list[str], celulas: dict[str, tuple
 
 
 def calcular_fundamentos_no_dia(t, cal, dados: DadosFundamentos, exclusoes: Exclusoes,
-                                params: ParametrosFundamentos, modo_setor: str) -> dict[str, Grade]:
+                                params: ParametrosFundamentos, modo_setor: str,
+                                fora_do_setor_preco: frozenset[str] = frozenset()) -> dict[str, Grade]:
     """Indicadores de todos os tickers do painel em `t`: uma linha por grade (índice [t]).
 
     Chaves na ordem de `INDICADORES`. `ValueError` se `t` não é pregão em `cal`.
     Cada campo de setor é `media_setor` sobre o indicador da empresa, com `montar_grade` antes:
     a empresa com prejuízo fica fora da média do P/L. `historico_insuficiente` vira indisponivel.
+    `fora_do_setor_preco`: tickers com retorno suspeito recente (`fatos.precos.tickers_com_suspeita`);
+    a empresa inteira (mesmo CNPJ) sai das medianas de P/L, P/VP e yield. Os valores da própria empresa não mudam.
     """
     ts = pd.Timestamp(t).normalize()
     if ts not in indice_pregoes(cal):
@@ -498,8 +504,13 @@ def calcular_fundamentos_no_dia(t, cal, dados: DadosFundamentos, exclusoes: Excl
             ligados, k, tipo_de.get(k), fech.get(k), ts, params.meses_janela
         )
 
+    cnpjs_fora = {cnpj_de[k] for k in fora_do_setor_preco if cnpj_de.get(k)}
+    excluir = {k for k in tickers
+               if k in fora_do_setor_preco or (cnpj_de.get(k) is not None and cnpj_de.get(k) in cnpjs_fora)}
     for campo, origem in _ORIGEM_SETOR.items():
-        bruta = _grade_do_dia(ts, tickers, {k: celulas[k][origem] for k in tickers})
+        tira = excluir if campo in _SETOR_COM_PRECO else set()
+        bruta = _grade_do_dia(ts, tickers, {k: (_falha(INDISPONIVEL) if k in tira else celulas[k][origem])
+                                            for k in tickers})
         media = media_setor(montar_grade(bruta.valor, bruta.status), pares, setor_de, cnpj_de, modo_setor,
                             agregacao="mediana")
         for k in tickers:

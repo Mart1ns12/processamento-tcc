@@ -30,12 +30,14 @@ def test_painel_de_fundamentos_usa_mediana(monkeypatch):
     assert chamadas and set(chamadas) == {"mediana"}
 
 
-def test_painel_de_precos_usa_mediana(monkeypatch):
+def test_rentabilidade_do_setor_no_painel_nao_usa_media_nem_mediana(monkeypatch):
+    """Desde 24/10/2026 a `rentabilidade.setor` é a razão da série SETOR_SEM (DS11), não `media_setor`."""
     chamadas = []
     monkeypatch.setattr(precos, "media_setor", _espiao(chamadas))
     cadastro, _, _, _, precos_df, cal, _ = mundo()
-    precos.calcular_precos(precos_df, cadastro, cal, EXCL, precos.carregar_parametros_precos())
-    assert chamadas and set(chamadas) == {"mediana"}
+    res = precos.calcular_precos(precos_df, cadastro, cal, EXCL, precos.carregar_parametros_precos())
+    assert chamadas == []
+    assert "rentabilidade.setor.d1" in res
 
 
 def test_ret_vs_setor_do_modelo_continua_com_media(monkeypatch):

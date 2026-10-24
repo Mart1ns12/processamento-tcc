@@ -40,6 +40,9 @@ def test_yaml_real_traz_o_bloco_fase1():
     assert params.beta_minimo == 120
     assert params.setor_minimo == 3
     assert params.setor_excluir == "empresa"
+    assert params.retorno_suspeito_min == -0.75
+    assert params.retorno_suspeito_max == 1.0
+    assert params.retorno_suspeito_pregoes_nivel == 21
 
 
 def test_calendario_continua_carregando_o_yaml_real():
@@ -62,6 +65,11 @@ def test_yaml_sem_bloco_fase1_levanta_erro(tmp_path):
         (lambda d: d["fase1"].__setitem__("beta_minimo", 300), "fase1.beta_minimo"),
         (lambda d: d["fase1"].__setitem__("volume_pregoes", True), "fase1.volume_pregoes"),
         (lambda d: d["fase1"].__setitem__("chave_nova", 1), "chave desconhecida"),
+        (lambda d: d["fase1"].__setitem__("retorno_suspeito_min", 0.1), "fase1.retorno_suspeito_min"),
+        (lambda d: d["fase1"].__setitem__("retorno_suspeito_min", True), "fase1.retorno_suspeito_min"),
+        (lambda d: d["fase1"].__setitem__("retorno_suspeito_max", -1.0), "fase1.retorno_suspeito_max"),
+        (lambda d: d["fase1"].__setitem__("retorno_suspeito_pregoes_nivel", 0), "fase1.retorno_suspeito_pregoes_nivel"),
+        (lambda d: d["fase1"].pop("retorno_suspeito_max"), "faltam chaves"),
     ],
 )
 def test_parametros_invalidos_levantam_erro(tmp_path, mudar, trecho):

@@ -80,6 +80,9 @@ fase1:
   beta_minimo: 120
   setor_minimo: 3
   setor_excluir: "empresa"  # "empresa" = tira todas as ações do mesmo CNPJ; "acao" = tira só a própria ação
+  retorno_suspeito_min: -0.75          # retorno diário (fechamento_ajustado, contra o último preço) abaixo disto = suspeito (erro da coleta; seção 6)
+  retorno_suspeito_max: 1.0            # acima disto = suspeito (ex.: AZUL3 com 30.599.848 de 09/04 a 17/04/2026)
+  retorno_suspeito_pregoes_nivel: 21   # P/L, P/VP e yield: empresa fora das medianas do setor se teve retorno suspeito nos últimos N pregões até t
 # Fase 1: fundamentos e proventos (seções 5 e 6 da especificação; plano da etapa 4).
 fundamentos:
   subsetores_financeiros: ["Intermediários Financeiros", "Previdência e Seguros"]  # bancos e seguradoras (subsetor do v1-cadastro)

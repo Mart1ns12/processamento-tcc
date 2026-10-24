@@ -28,6 +28,9 @@ _CHAVES_FASE1 = {
     "beta_minimo",
     "setor_minimo",
     "setor_excluir",
+    "retorno_suspeito_min",
+    "retorno_suspeito_max",
+    "retorno_suspeito_pregoes_nivel",
 }
 _SETOR_EXCLUIR = ("acao", "empresa")
 
@@ -47,6 +50,9 @@ class ParametrosPrecos:
     beta_minimo: int
     setor_minimo: int
     setor_excluir: str
+    retorno_suspeito_min: float = -0.75
+    retorno_suspeito_max: float = 1.0
+    retorno_suspeito_pregoes_nivel: int = 21
 
 
 def _inteiro_positivo(valor: object, onde: str) -> int:
@@ -54,6 +60,13 @@ def _inteiro_positivo(valor: object, onde: str) -> int:
     if isinstance(valor, bool) or not isinstance(valor, int) or valor <= 0:
         raise ErroParametrosPrecos(f"{onde} deve ser um inteiro maior que zero (recebeu {valor!r})")
     return valor
+
+
+def _numero(valor: object, onde: str) -> float:
+    """Confere um número finito (bool não conta); levanta `ErroParametrosPrecos` se não bater."""
+    if isinstance(valor, bool) or not isinstance(valor, (int, float)) or not np.isfinite(valor):
+        raise ErroParametrosPrecos(f"{onde} deve ser um número (recebeu {valor!r})")
+    return float(valor)
 
 
 def carregar_parametros_precos(caminho: str | None = None) -> ParametrosPrecos:
@@ -76,6 +89,13 @@ def carregar_parametros_precos(caminho: str | None = None) -> ParametrosPrecos:
             raise ErroParametrosPrecos(f"nome de janela inválido em fase1.janelas: {nome!r}")
         _inteiro_positivo(n, f"fase1.janelas.{nome}")
 
+    minimo = _numero(bloco["retorno_suspeito_min"], "fase1.retorno_suspeito_min")
+    if not -1 < minimo < 0:
+        raise ErroParametrosPrecos(f"fase1.retorno_suspeito_min deve ficar entre -1 e 0 (recebeu {minimo!r})")
+    maximo = _numero(bloco["retorno_suspeito_max"], "fase1.retorno_suspeito_max")
+    if not maximo > 0:
+        raise ErroParametrosPrecos(f"fase1.retorno_suspeito_max deve ser maior que zero (recebeu {maximo!r})")
+
     params = ParametrosPrecos(
         janelas=dict(janelas),
         volume_pregoes=_inteiro_positivo(bloco["volume_pregoes"], "fase1.volume_pregoes"),
@@ -84,6 +104,11 @@ def carregar_parametros_precos(caminho: str | None = None) -> ParametrosPrecos:
         beta_minimo=_inteiro_positivo(bloco["beta_minimo"], "fase1.beta_minimo"),
         setor_minimo=_inteiro_positivo(bloco["setor_minimo"], "fase1.setor_minimo"),
         setor_excluir=bloco["setor_excluir"],
+        retorno_suspeito_min=minimo,
+        retorno_suspeito_max=maximo,
+        retorno_suspeito_pregoes_nivel=_inteiro_positivo(
+            bloco["retorno_suspeito_pregoes_nivel"], "fase1.retorno_suspeito_pregoes_nivel"
+        ),
     )
     if params.beta_minimo > params.beta_pregoes:
         raise ErroParametrosPrecos(
@@ -145,6 +170,26 @@ def variacao(g: pd.DataFrame, n: int) -> Grade:
 def retornos_diarios(g: pd.DataFrame) -> pd.DataFrame:
     """Retorno do dia: g(t)/g(t−1) − 1, sem preencher lacunas."""
     return g / g.shift(1) - 1
+
+
+def retornos_asof(g: pd.DataFrame) -> pd.DataFrame:
+    """Retorno do dia contra o último preço anterior com valor (base as-of); NaN onde g(t) é NaN."""
+    return g / g.ffill().shift(1) - 1
+
+
+def retornos_suspeitos(g_aj: pd.DataFrame, minimo: float, maximo: float) -> pd.DataFrame:
+    """True onde o retorno as-of do dia é < `minimo` ou > `maximo` (estrito; NaN nunca é suspeito).
+
+    Erro da coleta (seção 6, "Retorno diário suspeito"): o preço não é corrigido, só isolado
+    (fora das séries e das medianas do setor).
+    """
+    r = retornos_asof(g_aj)
+    return (r < minimo) | (r > maximo)
+
+
+def suspeita_na_janela(suspeitos: pd.DataFrame, n: int) -> pd.DataFrame:
+    """True em t se houve retorno suspeito em algum dos `n` pregões até t, inclusive: o intervalo (t-n, t]."""
+    return suspeitos.astype(float).rolling(n, min_periods=1).max() > 0
 
 
 def volume_relativo(gv: pd.DataFrame, n: int) -> tuple[Grade, Grade, Grade]:
@@ -310,6 +355,20 @@ def pares_do_painel(cadastro: pd.DataFrame, exclusoes: Exclusoes) -> list[str]:
     )
 
 
+def tickers_com_suspeita(precos: pd.DataFrame, cal: list, t, tickers: list[str], minimo: float,
+                         maximo: float, n: int) -> set[str]:
+    """Tickers com retorno suspeito (fechamento_ajustado) em algum dos `n` pregões até t.
+
+    `ValueError` se t não é pregão de `cal`. Só olha preços até t (sem vazamento).
+    """
+    ts = pd.Timestamp(t).normalize()
+    g = grade_de_precos(precos, cal, "fechamento_ajustado", tickers)
+    if ts not in g.index:
+        raise ValueError(f"{t} não é pregão")
+    linha = suspeita_na_janela(retornos_suspeitos(g, minimo, maximo), n).loc[ts]
+    return {tk for tk, v in linha.items() if bool(v)}
+
+
 def _repetir(g: Grade, tickers: list[str]) -> Grade:
     """Grade de uma coluna só (ex.: IBOV) repetida em todas as colunas de `tickers`."""
     n = len(tickers)
@@ -339,13 +398,17 @@ def calcular_precos(
     res: dict[str, Grade] = {}
     res["cotacao.fechamento"] = montar_grade(g_fech, _status(g_fech, [(g_fech.isna(), INDISPONIVEL)]))
     res["cotacao.variacao_dia"] = variacao(g_fech, 1)
+    # import local: fatos/series.py importa este módulo (importar no topo daria importação circular)
+    from processamento.fatos.series import rentabilidade_setor_sem_empresa
+    suspeitos = retornos_suspeitos(g_aj, params.retorno_suspeito_min, params.retorno_suspeito_max)
+    setor_rent = rentabilidade_setor_sem_empresa(g_aj, cadastro, pares, tickers, params.janelas,
+                                                 params.setor_excluir, suspeitos=suspeitos)
     for nome, n in params.janelas.items():
         rent = variacao(g_aj, n)
         res[f"variacao_preco.{nome}"] = variacao(g_fech, n)
         res[f"rentabilidade.{nome}"] = rent
         res[f"rentabilidade.ibov.{nome}"] = _repetir(variacao(ibov_aj, n), tickers)
-        res[f"rentabilidade.setor.{nome}"] = media_setor(rent, pares, setor_de, cnpj_de, params.setor_excluir,
-                                                          agregacao="mediana")
+        res[f"rentabilidade.setor.{nome}"] = setor_rent[nome]   # DS11: razão da série SETOR_SEM:<ticker>
 
     total, relativo, mediana = volume_relativo(gv, params.volume_pregoes)
     res["volume.total"] = total

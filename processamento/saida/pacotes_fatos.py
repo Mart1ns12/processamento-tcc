@@ -29,6 +29,7 @@ from processamento.fatos.precos import (
     calcular_precos,
     grade_de_precos,
     resumo_precos_no_dia,
+    tickers_com_suspeita,
     tickers_do_painel,
     variacao,
 )
@@ -65,11 +66,15 @@ def dados_fundamentos(ins: Insumos) -> DadosFundamentos:
 
 def calcular_grades(ins: Insumos, params_precos: ParametrosPrecos, params_fund: ParametrosFundamentos) -> GradesDoDia:
     """Calcula as três grades da rodada no ponto de vista de `ins.t`."""
+    fora = tickers_com_suspeita(ins.precos, ins.cal, ins.t, tickers_do_painel(ins.cadastro, ins.exclusoes),
+                                params_precos.retorno_suspeito_min, params_precos.retorno_suspeito_max,
+                                params_precos.retorno_suspeito_pregoes_nivel)
     return GradesDoDia(
         precos=calcular_precos(ins.precos, ins.cadastro, ins.cal, ins.exclusoes, params_precos),
         indices=calcular_indices(ins.precos, ins.indices, ins.cal, params_precos),
         fundamentos=calcular_fundamentos_no_dia(
-            ins.t, ins.cal, dados_fundamentos(ins), ins.exclusoes, params_fund, params_precos.setor_excluir
+            ins.t, ins.cal, dados_fundamentos(ins), ins.exclusoes, params_fund, params_precos.setor_excluir,
+            fora_do_setor_preco=frozenset(fora),
         ),
     )
 

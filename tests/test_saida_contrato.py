@@ -289,7 +289,7 @@ CASOS_SERIE_INVALIDA = {
     "h_campo_de_outro_tipo": lambda r: (r.__setitem__("tipo", "indice"), r["valores"].__setitem__("pl", [1.0] * 4)),
     "h_campo_faltando": lambda r: r["valores"].pop("volume"),
     "i_n_empresas_com_status": lambda r: (
-        r.__setitem__("tipo", "setor"),
+        r.__setitem__("tipo", "setor_sem_empresa"),
         r["valores"].clear(),
         r["valores"].update({"indice_retorno_total": [100.0, 100.0, None, 100.0],
                              "n_empresas": [0, 1, 0, 1]}),
@@ -297,7 +297,7 @@ CASOS_SERIE_INVALIDA = {
         r["status"].update({"n_empresas": [{"de": "2025-10-20", "ate": "2025-10-20", "status": "indisponivel"}]}),
     ),
     "i_n_empresas_nulo": lambda r: (
-        r.__setitem__("tipo", "setor"),
+        r.__setitem__("tipo", "setor_sem_empresa"),
         r["valores"].clear(),
         r["valores"].update({"indice_retorno_total": [100.0] * 4, "n_empresas": [0, None, 1, 1]}),
         r["status"].clear(),
@@ -313,6 +313,16 @@ CASOS_SERIE_INVALIDA = {
 @pytest.mark.parametrize("caso", sorted(CASOS_SERIE_INVALIDA))
 def test_validar_serie_recusa_casos_invalidos(caso):
     r = _serie_com(CASOS_SERIE_INVALIDA[caso])
+    with pytest.raises(ErroContrato):
+        c.validar_serie(r)
+
+
+def test_serie_setor_sem_empresa_passa_e_tipo_setor_recusado():
+    """DS10: o tipo do setor sem a própria empresa tem `n_empresas` inteiro; o tipo antigo `setor` sai do contrato."""
+    r = _serie_com(CASOS_SERIE_INVALIDA["i_n_empresas_nulo"])
+    r["valores"]["n_empresas"] = [0, 1, 1, 1]
+    c.validar_serie(r)
+    r["tipo"] = "setor"
     with pytest.raises(ErroContrato):
         c.validar_serie(r)
 
