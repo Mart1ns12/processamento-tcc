@@ -1,0 +1,1393 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sala de Operação · Painel de operação do processamento (TCC)</title>
+<style>
+/* Layout: cabeçalho com o estado geral; fluxo Coleta → Processamento → Interface; linha do tempo da manhã;
+   ações com etapas que acendem; saúde dos dados em cartões; experimento com cadeado; histórico e testes. */
+:root{
+  --bg:#f3f5f7; --surface:#ffffff; --ink:#15202b; --muted:#5b6876; --line:#dde3e9;
+  --accent:#1f5fd1; --accent-soft:#e3ecfb;
+  --ok:#14804a; --ok-soft:#dff3e8; --warn:#a36a00; --warn-soft:#fcf1d9; --bad:#c03a2b; --bad-soft:#fbe4e1;
+  --idle:#8a96a3; --track:#e9edf1;
+  --f-sans:"Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --f-mono:ui-monospace, "Cascadia Mono", Consolas, "Courier New", monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f141a; --surface:#171e26; --ink:#e6ebf0; --muted:#97a3b0; --line:#28323d;
+  --accent:#6c9cf0; --accent-soft:#1c2a44;
+  --ok:#4cc58a; --ok-soft:#173528; --warn:#e2b04a; --warn-soft:#382d15; --bad:#ef7b6d; --bad-soft:#3b1f1c;
+  --idle:#6b7785; --track:#222b35; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f141a; --surface:#171e26; --ink:#e6ebf0; --muted:#97a3b0; --line:#28323d;
+  --accent:#6c9cf0; --accent-soft:#1c2a44;
+  --ok:#4cc58a; --ok-soft:#173528; --warn:#e2b04a; --warn-soft:#382d15; --bad:#ef7b6d; --bad-soft:#3b1f1c;
+  --idle:#6b7785; --track:#222b35; color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-sans);font-size:15px;line-height:1.5}
+[hidden]{display:none!important}
+.wrap{max-width:1180px;margin:0 auto;padding-block:22px 56px;padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));display:grid;gap:18px}
+h1,h2,h3{margin:0;line-height:1.2;text-wrap:balance}
+h1{font-size:1.55rem;font-weight:700}
+h2{font-size:1.08rem;font-weight:600}
+h3{font-size:.95rem;font-weight:600}
+h4{font-size:.9rem;font-weight:600;margin:10px 0 4px}
+p{margin:0}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}
+.lbl{font-size:.72rem;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px;display:grid;gap:14px;min-width:0}
+.cardhead{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline;justify-content:space-between}
+.why{font-size:.84rem;color:var(--muted);max-width:68ch}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:.78rem;font-weight:600;padding:3px 10px;border-radius:999px;white-space:nowrap;width:fit-content}
+.pill.ok{background:var(--ok-soft);color:var(--ok)} .pill.warn{background:var(--warn-soft);color:var(--warn)}
+.pill.bad{background:var(--bad-soft);color:var(--bad)} .pill.idle{background:var(--track);color:var(--muted)}
+.dot{width:8px;height:8px;border-radius:50%;background:currentColor;display:inline-block}
+
+/* topo */
+.top{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:end;justify-content:space-between}
+.cabeca{display:grid;gap:6px}
+.top .sub{color:var(--muted);font-size:.9rem;max-width:62ch}
+.state{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.toggle{font:inherit;font-size:.82rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:8px;padding:6px 10px;cursor:pointer}
+.toggle:disabled{opacity:.45;cursor:not-allowed}
+.toggle.perigo{color:var(--bad);border-color:var(--bad)}
+.toggle:focus-visible,summary:focus-visible,.cal .d:focus-visible,tbody tr:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.erro-rede{background:var(--bad-soft);color:var(--bad);font-weight:600;padding:10px 14px;border-radius:8px}
+
+/* fluxo */
+.flow{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;gap:10px;align-items:stretch}
+.stage{border:1px solid var(--line);border-radius:10px;padding:14px;display:grid;gap:6px;position:relative;background:var(--surface);align-content:start}
+.stage::before{content:"";position:absolute;inset:0 auto 0 0;width:4px;border-radius:10px 0 0 10px;background:var(--idle)}
+.stage.ok::before{background:var(--ok)}
+.stage.warn::before{background:var(--warn)}
+.stage.bad::before{background:var(--bad)}
+.stage.idle::before{background:var(--idle)}
+.stage .big{font-size:1.25rem;font-weight:600}
+.stage .meta{font-size:.82rem;color:var(--muted)}
+.arrow{align-self:center;color:var(--idle);font-size:1.4rem}
+@media (max-width:820px){.flow{grid-template-columns:1fr}.arrow{transform:rotate(90deg);justify-self:center}}
+#carga-linha{font-size:.8rem;color:var(--muted)}
+
+/* linha do tempo */
+.tl{position:relative;height:118px;margin:6px 40px 0}
+.tl .bar{position:absolute;left:0;right:0;top:54px;height:10px;border-radius:6px;background:var(--track)}
+.tl .seg{position:absolute;top:54px;height:10px;border-radius:6px}
+.tl .seg.coleta{background:var(--accent)}
+.tl .seg.proc{background:var(--ok)}
+.tl .seg.folga{background:var(--warn-soft);border:1px solid var(--warn)}
+.tl .mk{position:absolute;top:4px;transform:translateX(-50%);display:grid;justify-items:center;gap:2px;font-size:.72rem;white-space:nowrap}
+.tl .mk .t{font-family:var(--f-mono);color:var(--muted)}
+.tl .mk .stem{width:2px;height:12px;background:var(--line)}
+.tl .mk.down{top:66px}
+.tl .mk.down .stem{height:8px}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:.8rem;color:var(--muted)}
+.legend i{display:inline-block;width:12px;height:8px;border-radius:3px;margin-right:6px;vertical-align:middle}
+.lg-accent{background:var(--accent)}
+.lg-ok{background:var(--ok)}
+.lg-warn{background:var(--warn)}
+.lg-bad{background:var(--bad)}
+.lg-track{background:var(--track)}
+.lg-folga{background:var(--warn-soft);border:1px solid var(--warn)}
+.lg-hol{background:transparent;border:1px dashed var(--line)}
+.lg-comp{background:var(--track);box-shadow:inset 0 -3px 0 var(--accent)}
+
+/* ações */
+.actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.act{border:1px solid var(--line);border-radius:10px;padding:14px;display:grid;gap:8px;align-content:start}
+.act button{font:inherit;font-weight:600;font-size:.9rem;border:0;border-radius:8px;padding:9px 12px;background:var(--accent);color:#fff;cursor:pointer;justify-self:start}
+.act button:disabled{opacity:.45;cursor:not-allowed}
+.act button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.act .what{font-size:.84rem;color:var(--muted)}
+.act .safe{font-size:.76rem}
+.linha{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.motivo{font-size:.84rem;color:var(--muted)}
+.comando{display:block;font-family:var(--f-mono);font-size:.78rem;background:var(--track);padding:8px 10px;border-radius:6px;overflow-wrap:anywhere}
+.run{border:1px solid var(--line);border-radius:10px;padding:14px;display:grid;gap:10px}
+.run[hidden]{display:none}
+.steps{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.steps li{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:8px;align-items:center;font-size:.9rem}
+.steps .ic{width:18px;height:18px;border-radius:50%;border:2px solid var(--line);display:grid;place-items:center;font-size:.7rem;font-weight:700;color:#fff}
+.steps li.done .ic{background:var(--ok);border-color:var(--ok)}
+.steps li.now .ic{border-color:var(--accent);border-top-color:transparent;animation:spin .8s linear infinite}
+.steps li.bad .ic{background:var(--bad);border-color:var(--bad)}
+.steps li.wait{color:var(--muted)}
+.steps li.skip{color:var(--muted)}
+.steps .tm{font-family:var(--f-mono);font-size:.78rem;color:var(--muted)}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.steps li.now .ic{animation:none}}
+details{border-top:1px solid var(--line);padding-top:8px}
+summary{cursor:pointer;font-size:.84rem;color:var(--muted)}
+pre{margin:8px 0 0;background:var(--track);border-radius:8px;padding:10px;font-family:var(--f-mono);font-size:.76rem;white-space:pre-wrap;word-break:break-word;max-height:220px;overflow:auto}
+
+/* saúde */
+.health{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:10px}
+.hc{border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:grid;gap:6px;align-content:start;border-left-width:4px}
+.hc.ok{border-left-color:var(--ok)} .hc.warn{border-left-color:var(--warn)} .hc.bad{border-left-color:var(--bad)} .hc.idle{border-left-color:var(--idle)}
+.hc .n{font-family:var(--f-mono);font-size:1.3rem;font-weight:500}
+.hc p{font-size:.84rem}
+.hc .so{font-size:.8rem;color:var(--muted)}
+.ok-texto{color:var(--ok);font-weight:600}
+.alerta{color:var(--bad);font-weight:600}
+
+/* experimento */
+.exp{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:16px}
+@media (max-width:820px){.exp{grid-template-columns:1fr}}
+.coluna{display:grid;gap:12px;align-content:start;min-width:0}
+.lock{border:1px solid var(--line);border-radius:10px;padding:14px;display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:center}
+.cadeado{width:40px;height:40px}
+.cadeado .corpo{fill:none;stroke:var(--ink);stroke-width:2.5}
+.cadeado .furo{fill:var(--ink)}
+.banner{background:var(--warn-soft);color:var(--warn);font-weight:600;font-size:.8rem;letter-spacing:.04em;text-transform:uppercase;padding:6px 10px;border-radius:6px;justify-self:start}
+.cabeca-grafico{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.grafico-tit{font-weight:600;font-size:.9rem}
+.chart svg{display:block;width:100%;height:auto}
+.chart text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
+.chart .lab{font-family:var(--f-sans);font-size:12px;fill:var(--ink)}
+.chart .valor{fill:var(--ink)}
+.chart .acaso{fill:var(--track)}
+.chart .media{stroke:var(--idle);stroke-dasharray:3 3}
+.chart .ic{stroke:var(--line);stroke-width:2}
+.chart circle.ok{fill:var(--ok)}
+.chart circle.idle{fill:var(--idle)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:.88rem;margin:0}
+.kv dt{color:var(--muted)} .kv dd{margin:0}
+
+/* histórico e testes */
+.two{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:18px;align-items:start}
+@media (max-width:820px){.two{grid-template-columns:1fr}}
+.navmes{display:flex;align-items:center;gap:8px}
+.cal{display:grid;grid-template-columns:repeat(5,minmax(0,44px));gap:6px}
+.cal .h{font-size:.72rem;color:var(--muted);text-align:center}
+.cal .d{height:30px;border-radius:6px;background:var(--track);display:grid;place-items:center;font-family:var(--f-mono);font-size:.78rem;color:var(--muted);max-width:100%}
+.cal .d.ok{background:var(--ok);color:#fff}
+.cal .d.warn{background:var(--warn);color:#fff}
+.cal .d.bad{background:var(--bad);color:#fff}
+.cal .d.run{background:var(--accent);color:#fff}
+.cal .d.hol{background:transparent;border:1px dashed var(--line)}
+.cal .d.comp{box-shadow:inset 0 -3px 0 var(--accent)}
+.cal .d[data-clicavel]{cursor:pointer}
+.cal > .motivo{grid-column:1 / -1}
+.legend .lg-hol,.legend .lg-comp{width:12px}
+.tbl{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:.86rem}
+th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600}
+tbody tr.clicavel{cursor:pointer}
+tbody tr.clicavel:hover{background:var(--track)}
+tbody tr.selecionada{background:var(--accent-soft)}
+.detalhe{margin-top:4px;padding:12px 14px;border:1px dashed var(--line);border-radius:8px}
+.detalhe:empty{display:none}
+.campo{font-size:.88rem;margin:3px 0}
+.campo strong{font-weight:600;color:var(--muted)}
+.tag{color:var(--muted);font-size:.8rem}
+.aviso-texto{font-size:.84rem;margin:4px 0}
+.bloco-dia{border-top:1px solid var(--line);padding-top:10px;margin-top:10px;display:grid;gap:6px}
+.rodada{background:var(--track);border-radius:8px;padding:8px 10px;margin:6px 0}
+.rodada ul{margin:4px 0 0;padding-left:20px;font-size:.84rem}
+.etapas{margin:6px 0;font-size:.84rem}
+.etapa{display:inline-block;margin:2px 12px 2px 0}
+ul{margin:4px 0;padding-left:20px}
+.tests{display:grid;gap:10px;align-content:start}
+.tests .big{font-family:var(--f-mono);font-size:2rem;line-height:1}
+.meter{height:10px;border-radius:6px;background:var(--track);overflow:hidden;display:flex}
+.meter i{display:block;height:100%}
+.meter .m-ok{background:var(--ok)}
+.meter .m-idle{background:var(--idle)}
+.meter .m-bad{background:var(--bad)}
+.note{font-size:.8rem;color:var(--muted)}
+.rodape{font-size:.8rem;color:var(--muted)}
+.tbl a,a{color:var(--accent)}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header class="top">
+    <div class="cabeca">
+      <span class="lbl">TCC · Módulo de processamento</span>
+      <h1>Sala de Operação</h1>
+      <p class="sub">Acompanha o que o processamento faz todo dia: espera a coleta, calcula os indicadores, monta os pacotes para a interface e confere a qualidade dos dados.</p>
+      <p class="note" id="atualizado"></p>
+    </div>
+    <div class="state">
+      <span class="pill idle" id="pill-geral">carregando…</span>
+      <span class="pill idle" id="pill-hoje">carregando…</span>
+      <button class="toggle" id="tema" type="button">Tema</button>
+      <button class="toggle" id="btn-atualizar" type="button">Atualizar</button>
+    </div>
+  </header>
+  <div id="erro-rede" class="erro-rede" hidden>Painel sem resposta</div>
+
+  <!-- Fluxo -->
+  <section class="card" id="agora" aria-labelledby="h-fluxo">
+    <div class="cardhead">
+      <h2 id="h-fluxo">Última atualização</h2>
+      <span class="pill idle" id="pill-fluxo">carregando…</span>
+    </div>
+    <div class="flow" id="fluxo"></div>
+    <p class="note" id="fluxo-vazio" hidden></p>
+    <p class="note" id="carga-linha">última carga completa: sem dados</p>
+  </section>
+
+  <!-- Linha do tempo -->
+  <section class="card" id="linha-tempo" aria-labelledby="h-tl">
+    <div class="cardhead">
+      <h2 id="h-tl">A manhã do pregão</h2>
+      <p class="why" id="tl-why"></p>
+    </div>
+    <div class="tl" id="tl" aria-label="Linha do tempo da manhã do pregão"></div>
+    <div class="legend">
+      <span><i class="lg-accent"></i>Coleta trabalhando</span>
+      <span><i class="lg-ok"></i>Processamento</span>
+      <span><i class="lg-folga"></i>Folga até o prazo</span>
+    </div>
+    <p class="note" id="tl-avisos" hidden></p>
+  </section>
+
+  <!-- Ações -->
+  <section class="card" id="comandos" aria-labelledby="h-acoes">
+    <div class="cardhead">
+      <h2 id="h-acoes">Ações</h2>
+      <p class="why">Cada botão chama um comando do projeto. Nenhum escreve no banco da coleta.</p>
+    </div>
+    <div class="actions" id="botoes"></div>
+    <div class="run" id="run" hidden>
+      <div class="cardhead"><h3 id="run-t"></h3><span class="pill idle" id="run-p"></span></div>
+      <p class="note" id="log-status" aria-live="polite"></p>
+      <ol class="steps" id="steps"></ol>
+      <div class="linha"><button class="toggle perigo" id="btn-parar" type="button" hidden>Parar</button></div>
+      <details><summary>Ver o log completo</summary><pre id="log"></pre></details>
+    </div>
+  </section>
+
+  <!-- Saúde -->
+  <section class="card" id="saude" aria-labelledby="h-saude">
+    <div class="cardhead">
+      <h2 id="h-saude">Saúde dos dados</h2>
+      <p class="why">O processamento confere os dados da coleta antes de usar. Quando algo vem errado, ele marca "indisponível" em vez de mostrar um número falso.</p>
+    </div>
+    <p class="note" id="saude-gerado"></p>
+    <div class="health" id="saude-cartoes"></div>
+    <details><summary>Ver o diagnóstico completo</summary><div id="saude-completa"></div></details>
+  </section>
+
+  <!-- Experimento -->
+  <section class="card" id="experimento" aria-labelledby="h-exp">
+    <div class="cardhead">
+      <h2 id="h-exp">Experimento: top 5 com maior chance de superar o Ibovespa</h2>
+      <span class="banner" id="faixa-teste">TESTE DE FUNCIONAMENTO, NÃO É RESULTADO</span>
+    </div>
+    <p class="why">Modelo que estima quais 5 ações têm maior chance de superar o Ibovespa no próximo pregão. Com o histórico atual, serve só para testar o funcionamento.</p>
+    <div class="exp">
+      <div class="coluna">
+        <div class="lock">
+          <svg id="cadeado-fechado" class="cadeado" viewBox="0 0 40 40" aria-hidden="true" hidden>
+            <rect class="corpo" x="7" y="17" width="26" height="19" rx="4"/>
+            <path class="corpo" d="M13 17v-5a7 7 0 0 1 14 0v5"/>
+            <circle class="furo" cx="20" cy="26" r="2.6"/>
+          </svg>
+          <svg id="cadeado-aberto" class="cadeado" viewBox="0 0 40 40" aria-hidden="true" hidden>
+            <rect class="corpo" x="7" y="17" width="26" height="19" rx="4"/>
+            <path class="corpo" d="M13 17v-8a7 7 0 0 1 14 0"/>
+            <circle class="furo" cx="20" cy="26" r="2.6"/>
+          </svg>
+          <div><h3 id="lock-t">Teste final</h3><p class="note" id="lock-p"></p></div>
+        </div>
+        <dl class="kv" id="exp-kv"></dl>
+      </div>
+      <div class="coluna">
+        <h3>Acerto do top 5 no desenvolvimento</h3>
+        <p class="note">Em quantos % dos pregões a ação escolhida superou o Ibovespa no pregão seguinte. A faixa cinza é o que se consegue escolhendo ao acaso; o traço é o intervalo de confiança.</p>
+        <div class="cabeca-grafico">
+          <p class="grafico-tit" id="grafico-tit"></p>
+          <span class="pill idle">em avaliação</span>
+        </div>
+        <div class="chart" id="grafico"></div>
+        <div class="legend">
+          <span><i class="lg-track"></i>faixa cinza = acaso (95% dos sorteios)</span>
+          <span><i class="lg-ok"></i>acima do acaso</span>
+        </div>
+        <p class="note" id="exp-veredito"></p>
+        <a id="link-relatorio" href="/api/relatorio" target="_blank" rel="noopener" hidden>Ver relatório completo</a>
+        <p class="note">Não constitui recomendação de investimento.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Histórico + testes -->
+  <div class="two">
+    <section class="card" id="historico" aria-labelledby="h-hist">
+      <div class="cardhead">
+        <h2 id="h-hist">Histórico de execuções</h2>
+        <div class="navmes">
+          <button class="toggle" id="mes-ant" type="button" aria-label="Mês anterior">‹</button>
+          <span class="note" id="mes-titulo"></span>
+          <button class="toggle" id="mes-prox" type="button" aria-label="Mês seguinte">›</button>
+        </div>
+      </div>
+      <div class="cal" id="cal"></div>
+      <div class="legend">
+        <span><i class="lg-ok"></i>rodou ok</span>
+        <span><i class="lg-warn"></i>com pendências</span>
+        <span><i class="lg-bad"></i>falhou</span>
+        <span><i class="lg-track"></i>sem execução</span>
+        <span><i class="lg-hol"></i>sem pregão</span>
+        <span><i class="lg-comp"></i>carga completa</span>
+      </div>
+      <p class="why">Uma linha por dia da rotina diária ou por carga completa. Clique numa linha ou num dia do calendário para ver os detalhes.</p>
+      <div class="tbl" id="hist-tabela"></div>
+      <div id="detalhe" class="detalhe"></div>
+      <p class="note">Cada dia guarda só a última rodada; as anteriores aparecem no log da rotina, abaixo.</p>
+      <details id="etapas"><summary>Rodadas registradas no log da rotina</summary><div id="etapas-corpo"></div></details>
+    </section>
+    <section class="card" id="testes" aria-labelledby="h-test">
+      <div class="cardhead"><h2 id="h-test">Testes automáticos</h2><span class="pill idle" id="pill-testes">carregando…</span></div>
+      <div class="tests" id="testes-corpo"></div>
+    </section>
+  </div>
+
+</div>
+
+<footer class="wrap" style="padding-top:0">
+  <p class="rodape">Só neste computador (127.0.0.1). O painel não acessa o banco e não lê o .env; os botões chamam os comandos do projeto.</p>
+</footer>
+
+<script>
+"use strict";
+const TOKEN = "__TOKEN_PAINEL__";
+const INTERVALO_LOG_MS = 1000;
+const INTERVALO_PAINEL_MS = 30000;
+const NS_SVG = ["http:", "", "www.w3.org", "2000", "svg"].join("/");
+const CHAVE_TEMA = "painel-tema";
+const SEM = "sem dados";
+
+const ESTADO = {
+  painel: null,
+  rodando: false,
+  logDesde: 0,
+  logCarregado: false,
+  timerLog: null,
+  timerPainel: null,
+  arquivoDetalhe: null,
+  abertos: new Set(),
+  mesIdx: 0,
+};
+
+const DESCRICAO = new Map([
+  ["rotina", "Espera a coleta do dia (aqui com --sem-esperar), calcula os indicadores e grava os pacotes desse pregão."],
+  ["carga", "Gera todos os pacotes inteiros, para a interface começar do zero."],
+  ["diagnostico", "Confere o banco da coleta contra a especificação e reescreve o relatório."],
+  ["testes", "Roda os testes automáticos, sem o banco. Pode ser interrompido."],
+]);
+const CLASSE_STATUS = new Map([["ok", "ok"], ["parcial", "warn"], ["falhou", "bad"], ["em_andamento", "idle"]]);
+const ROTULO_STATUS = new Map([
+  ["ok", "ok"],
+  ["parcial", "parcial"],
+  ["falhou", "falhou"],
+  ["em_andamento", "em andamento"],
+  ["sem_pregao", "sem pregão"],
+  ["configuracao", "configuração"],
+  ["sem_banco", "sem banco"],
+]);
+const CLASSE_MARCO = new Map([
+  ["concluida", ["done", "✓"]],
+  ["agora", ["now", ""]],
+  ["espera", ["wait", ""]],
+  ["erro", ["bad", "✗"]],
+  ["pulada", ["skip", "–"]],
+]);
+const CLASSE_TRECHO = new Map([["coleta", "coleta"], ["processamento", "proc"], ["folga", "folga"]]);
+const ESTADOS = ["ok", "warn", "bad", "idle"];
+
+const $ = (id) => document.getElementById(id);
+
+// Monta o DOM só com createElement e textContent: os textos vêm de arquivos do projeto.
+function criar(tag, texto, classe) {
+  const no = document.createElement(tag);
+  if (texto !== undefined && texto !== null) no.textContent = String(texto);
+  if (classe) no.className = classe;
+  return no;
+}
+
+function svgEl(tag, atributos, classe, texto) {
+  const no = document.createElementNS(NS_SVG, tag);
+  Object.keys(atributos).forEach((k) => no.setAttribute(k, String(atributos[k])));
+  if (classe) no.setAttribute("class", classe);
+  if (texto !== undefined) no.textContent = texto;
+  return no;
+}
+
+function txt(valor) {
+  return valor === null || valor === undefined || valor === "" ? SEM : String(valor);
+}
+
+function farol(valor) {
+  return ESTADOS.includes(valor) ? valor : "idle";
+}
+
+// "2026-10-24T22:46:25-03:00" -> "24/10/2026 22:46"; "2026-10-23" -> "23/10/2026".
+function dataBr(iso) {
+  if (typeof iso !== "string") return SEM;
+  const m = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2}))?/.exec(iso);
+  if (!m) return iso;
+  return m[3] + "/" + m[2] + "/" + m[1] + (m[4] ? " " + m[4] + ":" + m[5] : "");
+}
+
+function intervaloDatas(inicio, fim) {
+  return dataBr(inicio) + " a " + dataBr(fim);
+}
+
+// Fração -> "50,2%".
+function pct(v) {
+  return typeof v === "number" ? (v * 100).toFixed(1).replace(".", ",") + "%" : SEM;
+}
+
+function listaSegura(v) {
+  return Array.isArray(v) ? v : [];
+}
+
+function indisponivel(v) {
+  return Boolean(v) && typeof v === "object" && v.disponivel === false;
+}
+
+function vazio(v) {
+  return !v || typeof v !== "object" || Object.keys(v).length === 0;
+}
+
+function pilula(el, classe, texto) {
+  el.className = "pill " + classe;
+  el.replaceChildren(criar("span", null, "dot"), document.createTextNode(txt(texto)));
+}
+
+function selo(status) {
+  const valor = typeof status === "string" && status !== "" ? status : null;
+  const rotulo = valor === null ? SEM : ROTULO_STATUS.get(valor) || valor;
+  const classe = valor === null ? "idle" : CLASSE_STATUS.get(valor) || "idle";
+  return criar("span", rotulo, "pill " + classe);
+}
+
+function statusPill(it) {
+  if (it.legivel === false) return criar("span", "ilegível", "pill bad");
+  return selo(it.status);
+}
+
+function campo(rotulo, valor) {
+  const p = criar("p", null, "campo");
+  p.appendChild(criar("strong", rotulo + ": "));
+  if (valor instanceof Node) p.appendChild(valor);
+  else p.appendChild(document.createTextNode(txt(valor)));
+  return p;
+}
+
+function motivo(texto) {
+  return criar("p", txt(texto), "motivo");
+}
+
+function ul(itens) {
+  const lista = criar("ul");
+  itens.forEach((item) => lista.appendChild(criar("li", txt(item))));
+  return lista;
+}
+
+// linhas: arrays de valores (texto ou nó). Valores nulos aparecem como "sem dados".
+function tabela(cabecalhos, linhas) {
+  const wrap = criar("div", null, "tabela-rolagem");
+  const tab = criar("table");
+  const thead = criar("thead");
+  const trCab = criar("tr");
+  cabecalhos.forEach((t) => trCab.appendChild(criar("th", t)));
+  thead.appendChild(trCab);
+  tab.appendChild(thead);
+  const corpo = criar("tbody");
+  linhas.forEach((valores) => {
+    const tr = criar("tr");
+    valores.forEach((v) => {
+      const td = criar("td");
+      if (v instanceof Node) td.appendChild(v);
+      else td.textContent = txt(v);
+      tr.appendChild(td);
+    });
+    corpo.appendChild(tr);
+  });
+  tab.appendChild(corpo);
+  wrap.appendChild(tab);
+  return wrap;
+}
+
+// Bloco recolhível que lembra se ficou aberto entre as atualizações.
+function detalhes(chave, resumo) {
+  const det = criar("details");
+  det.open = ESTADO.abertos.has(chave);
+  det.addEventListener("toggle", () => {
+    if (det.open) ESTADO.abertos.add(chave);
+    else ESTADO.abertos.delete(chave);
+  });
+  det.appendChild(criar("summary", resumo));
+  return det;
+}
+
+// Etapas de uma coleta: {nome: status} ou {nome: {status}}.
+function etapasNode(etapas) {
+  const bloco = criar("div", null, "etapas");
+  bloco.appendChild(criar("strong", "Etapas: "));
+  if (!etapas || typeof etapas !== "object") return bloco;
+  Object.keys(etapas).forEach((nome) => {
+    const v = etapas[nome];
+    const st = v && typeof v === "object" ? v.status : v;
+    const item = criar("span", null, "etapa");
+    item.appendChild(selo(typeof st === "string" ? st : null));
+    item.appendChild(document.createTextNode(" " + nome.replace(/_/g, " ")));
+    bloco.appendChild(item);
+  });
+  return bloco;
+}
+
+// dataRef: data da rotina (dd/mm/aaaa), usada quando a entrega só traz a hora.
+function coletaNos(c, dataRef) {
+  const entrega = c.entrega_hhmm
+    ? "entrega concluída em " + (typeof c.entrega_concluida_em === "string"
+      ? dataBr(c.entrega_concluida_em)
+      : dataBr(dataRef) + " " + c.entrega_hhmm)
+    : txt(c.motivo_texto);
+  const nos = [campo("Coleta", entrega), campo("Daily", c.daily), campo("Origem", c.origem)];
+  if (c.etapas) nos.push(etapasNode(c.etapas));
+  return nos;
+}
+
+// ---- estado geral ----
+
+function pillGeral(d) {
+  const a = d.acao || {};
+  const t = d.trava || {};
+  const ag = d.agora;
+  const el = $("pill-geral");
+  if (a.rodando === true) pilula(el, "idle", "Rodando: " + txt(a.titulo));
+  else if (t.ativa) pilula(el, "warn", "Rotina em andamento (trava)");
+  else if (!ag) pilula(el, "idle", "Sem execução");
+  else if (ag.legivel === false) pilula(el, "bad", "Última execução ilegível");
+  else if (ag.status === "em_andamento") {
+    if (ag.possivelmente_interrompida) pilula(el, "warn", "Última rotina: interrompida?");
+    else pilula(el, "idle", "Rotina em andamento");
+  } else pilula(el, CLASSE_STATUS.get(ag.status) || "idle", "Última rotina: " + txt(ag.status));
+}
+
+function pillHoje(d) {
+  const h = d.hoje || {};
+  const el = $("pill-hoje");
+  if (h.erro) {
+    pilula(el, "bad", "Calendário com erro");
+    return;
+  }
+  if (indisponivel(h)) {
+    pilula(el, "idle", h.motivo);
+    return;
+  }
+  const dia = txt(h.dia_semana);
+  const cap = dia.charAt(0).toUpperCase() + dia.slice(1);
+  if (h.pregao === true) pilula(el, "ok", cap + " · dia de pregão");
+  else if (h.pregao === false) {
+    const sufixo = !h.motivo || h.motivo === h.dia_semana ? "sem pregão" : "sem pregão (" + h.motivo + ")";
+    pilula(el, "idle", cap + " · " + sufixo);
+  } else pilula(el, "idle", cap + " · " + SEM);
+}
+
+// ---- fluxo: Coleta → Processamento → Interface ----
+
+function seloFluxo(fx) {
+  if (fx.status === "em_andamento") {
+    return fx.possivelmente_interrompida ? ["warn", "Pode ter sido interrompida"] : ["idle", "Em andamento"];
+  }
+  if (fx.status === "ok") return ["ok", "Concluída"];
+  if (fx.status === "parcial") return ["warn", "Concluída com pendências"];
+  if (fx.status === "falhou") return ["bad", "Falhou"];
+  return ["idle", SEM];
+}
+
+function estagio(bloco, rotulo, linhas) {
+  const b = bloco || {};
+  const e = criar("div", null, "stage " + farol(b.estado));
+  e.appendChild(criar("span", rotulo, "lbl"));
+  e.appendChild(criar("span", txt(b.titulo), "big"));
+  linhas.forEach((l) => e.appendChild(criar("span", l, "meta")));
+  return e;
+}
+
+function seta() {
+  const s = criar("span", "→", "arrow");
+  s.setAttribute("aria-hidden", "true");
+  return s;
+}
+
+function renderFluxo(d) {
+  const v = d.visao || {};
+  const fx = v.fluxo || {};
+  const lt = v.linha_tempo || {};
+  const pregao = lt.dia_rotulo || (fx.data ? dataBr(fx.data) : SEM);
+  $("h-fluxo").textContent = "Última atualização · pregão de " + pregao;
+  $("carga-linha").textContent = fx.carga && fx.carga.rotulo ? fx.carga.rotulo : "última carga completa: " + SEM;
+  const fluxo = $("fluxo");
+  const aviso = $("fluxo-vazio");
+  if (fx.disponivel !== true) {
+    pilula($("pill-fluxo"), "idle", SEM);
+    fluxo.replaceChildren();
+    fluxo.hidden = true;
+    aviso.textContent = txt(fx.motivo);
+    aviso.hidden = false;
+    return;
+  }
+  const [classe, texto] = seloFluxo(fx);
+  pilula($("pill-fluxo"), classe, texto);
+  fluxo.hidden = false;
+  aviso.hidden = true;
+
+  const c = fx.coleta || {};
+  const p = fx.processamento || {};
+  const i = fx.interface || {};
+  const exp = d.experimento || {};
+
+  const etapas = typeof c.etapas_concluidas === "number" && typeof c.etapas_total === "number"
+    ? c.etapas_concluidas + " de " + c.etapas_total + " etapas concluídas"
+    : txt(c.nota);
+  const coleta = estagio(c, "1 · Coleta (outro módulo)", [txt(c.resumo), etapas]);
+
+  const duracao = "Duração " + txt(p.duracao_texto) + (typeof p.n_acoes === "number" ? " · " + p.n_acoes + " ações" : "");
+  const rodada = "Rodada " + txt(p.rodada) + (typeof p.n_avisos === "number" ? " · " + p.n_avisos + " avisos" : "");
+  const processamento = estagio(p, "2 · Processamento (este módulo)", [txt(p.quando), txt(p.rotulo), duracao, rodada]);
+
+  const contrato = "Contrato " + txt(i.versao_contrato) + " · "
+    + (typeof i.registros_total === "number" ? i.registros_total.toLocaleString("pt-BR") + " registros" : SEM);
+  let publicado = "Top 5: " + SEM;
+  if (exp.top_publicado === true) publicado = "Top 5 publicado na interface";
+  else if (exp.top_publicado === false) publicado = "Top 5 retido (não enviado à interface)";
+  const interfaceNo = estagio(i, "3 · Interface", [contrato, publicado]);
+
+  fluxo.replaceChildren(coleta, seta(), processamento, seta(), interfaceNo);
+}
+
+// ---- linha do tempo da manhã ----
+
+function renderLinhaTempo(d) {
+  const lt = (d.visao || {}).linha_tempo || {};
+  $("h-tl").textContent = "A manhã do pregão de " + txt(lt.dia_rotulo);
+  let porque = "A rotina precisa terminar antes da abertura da bolsa para o top 5 valer como previsão.";
+  if (lt.folga_texto) porque += " Folga na última execução: " + lt.folga_texto + ".";
+  $("tl-why").textContent = porque;
+
+  const tl = $("tl");
+  const avisos = $("tl-avisos");
+  const eixo = lt.eixo || {};
+  const temEixo = lt.disponivel === true && typeof eixo.de === "number"
+    && typeof eixo.ate === "number" && eixo.ate > eixo.de;
+  if (!temEixo) {
+    tl.replaceChildren(motivo(lt.disponivel === false ? lt.motivo : SEM));
+    avisos.hidden = true;
+    return;
+  }
+  const de = eixo.de;
+  const escala = eixo.ate - eixo.de;
+  const pos = (m) => ((m - de) / escala * 100).toFixed(2) + "%";
+  const nos = [criar("div", null, "bar")];
+  listaSegura(lt.trechos).forEach((t) => {
+    const classe = CLASSE_TRECHO.get(t.id);
+    if (!classe || typeof t.de !== "number" || typeof t.ate !== "number") return;
+    const seg = criar("div", null, "seg " + classe);
+    seg.style.left = pos(t.de);
+    seg.style.width = ((t.ate - t.de) / escala * 100).toFixed(2) + "%";
+    nos.push(seg);
+  });
+  listaSegura(lt.marcos).forEach((m, i) => {
+    if (typeof m.minuto !== "number") return;
+    const baixo = i % 2 === 1;
+    const mk = criar("div", null, baixo ? "mk down" : "mk");
+    mk.style.left = pos(m.minuto);
+    const hora = criar("span", txt(m.hora), "t");
+    const rotulo = criar("span", txt(m.rotulo));
+    const haste = criar("span", null, "stem");
+    if (baixo) mk.append(haste, hora, rotulo);
+    else mk.append(hora, rotulo, haste);
+    nos.push(mk);
+  });
+  tl.replaceChildren(...nos);
+  const notas = listaSegura(lt.avisos);
+  avisos.textContent = notas.join(" ");
+  avisos.hidden = notas.length === 0;
+}
+
+// ---- ações ----
+
+function origemData(id, d) {
+  if (id === "carga") return " (última rotina diária)";
+  if (id !== "rotina") return "";
+  const origem = (d.data_rotina || {}).origem;
+  return origem === "hoje" ? " (hoje)" : origem === "ultimo_pregao" ? " (último pregão)" : "";
+}
+
+function cartaoBotao(id, b, d) {
+  const cartao = criar("div", null, "act");
+  cartao.appendChild(criar("h3", b.titulo || id));
+  cartao.appendChild(criar("p", DESCRICAO.get(id) || SEM, "what"));
+  cartao.appendChild(criar("p", b.aviso || SEM, "safe muted"));
+  if (b.data) cartao.appendChild(criar("p", "Data usada: " + dataBr(b.data) + origemData(id, d), "note"));
+  cartao.appendChild(criar("code", b.comando || SEM, "comando"));
+  const linha = criar("div", null, "linha");
+  const bt = criar("button", id === "carga" ? "Gerar" : "Rodar");
+  bt.type = "button";
+  bt.disabled = b.habilitado !== true;
+  bt.addEventListener("click", () => pedirAcao(id, b));
+  linha.appendChild(bt);
+  if (b.habilitado !== true && b.motivo) linha.appendChild(criar("span", b.motivo, "motivo"));
+  cartao.appendChild(linha);
+  return cartao;
+}
+
+function renderBotoes(d) {
+  const botoes = d.botoes || {};
+  $("botoes").replaceChildren(...Object.keys(botoes).map((id) => cartaoBotao(id, botoes[id] || {}, d)));
+}
+
+// Etapas do Executor vêm prontas em `marcos` (servidor); aqui só se desenha.
+function renderMarcos(acao) {
+  const itens = listaSegura(acao.marcos).map((m) => {
+    const [classe, icone] = CLASSE_MARCO.get(m.estado) || ["wait", ""];
+    const li = criar("li", null, classe);
+    li.appendChild(criar("span", icone, "ic"));
+    li.appendChild(criar("span", txt(m.rotulo)));
+    li.appendChild(criar("span", m.detalhe ? String(m.detalhe) : "", "tm"));
+    return li;
+  });
+  $("steps").replaceChildren(...itens);
+}
+
+function renderRun(acao) {
+  const a = acao || {};
+  $("run").hidden = !a.id;
+  $("btn-parar").hidden = !(a.rodando === true && a.pode_parar === true);
+  mostrarStatusLog(a);
+  if (!a.id) {
+    $("steps").replaceChildren();
+    return;
+  }
+  $("run-t").textContent = txt(a.titulo);
+  renderMarcos(a);
+  const p = $("run-p");
+  if (a.rodando === true) pilula(p, "idle", "em andamento");
+  else if (a.codigo === 0) pilula(p, "ok", "concluído");
+  else if (a.significado === "parado pelo painel") pilula(p, "warn", "parado");
+  else pilula(p, "bad", "falhou (código " + txt(a.codigo) + ")");
+}
+
+// ---- histórico ----
+
+function itensHistorico(d) {
+  const h = d.historico || {};
+  const itens = listaSegura(h.diarias).concat(listaSegura(h.completas));
+  return itens.sort((x, y) => (x.data_referencia < y.data_referencia ? 1 : x.data_referencia > y.data_referencia ? -1 : 0));
+}
+
+function tabelaHistorico(itens) {
+  const linhas = itens.map((it) => {
+    const tipo = it.tipo === "completa" ? "Carga completa" : "Rotina diária";
+    const data = dataBr(it.data_referencia);
+    if (it.legivel === false) return [data, tipo, null, null, statusPill(it)];
+    return [data, tipo, it.duracao_texto, it.n_pacotes, statusPill(it)];
+  });
+  const wrap = tabela(["Pregão", "Tipo", "Duração", "Pacotes", "Status"], linhas);
+  wrap.querySelectorAll("tbody tr").forEach((tr, i) => {
+    const it = itens[i];
+    const abrir = () => {
+      ESTADO.arquivoDetalhe = it.arquivo;
+      renderHistorico(ESTADO.painel);
+    };
+    tr.classList.add("clicavel");
+    if (it.arquivo === ESTADO.arquivoDetalhe) tr.classList.add("selecionada");
+    tr.tabIndex = 0;
+    tr.addEventListener("click", abrir);
+    tr.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") abrir();
+    });
+  });
+  return wrap;
+}
+
+function mostrarDetalhe(it) {
+  const nos = [criar("h3", dataBr(it.data_referencia) + " · " + (it.tipo === "completa" ? "carga completa" : "diária") + " · rodada " + txt(it.rodada))];
+  nos.push(campo("Arquivo", it.arquivo));
+  if (it.legivel === false) {
+    nos.push(criar("p", "arquivo ilegível (" + txt(it.erro) + ")", "alerta"));
+  } else {
+    nos.push(campo("Status", selo(it.status)));
+    nos.push(campo("Início", dataBr(it.inicio)));
+    nos.push(campo("Fim", it.fim ? dataBr(it.fim) : null));
+    nos.push(campo("Duração", it.duracao_texto));
+    nos.push(criar("h4", "Avisos"));
+    const avisos = listaSegura(it.avisos);
+    nos.push(avisos.length ? ul(avisos) : motivo("Sem avisos."));
+    nos.push(criar("h4", "Pacotes enviados"));
+    const pacotes = listaSegura(it.pacotes);
+    nos.push(pacotes.length
+      ? tabela(["Pacote", "Registros", "Removidos"], pacotes.map((p) => [p.pacote, p.registros, p.removidos]))
+      : motivo("Nenhum pacote enviado."));
+    if (it.coleta) nos.push(...coletaNos(it.coleta, it.data_referencia));
+  }
+  $("detalhe").replaceChildren(...nos);
+}
+
+function motivoDe(v) {
+  return indisponivel(v) ? v.motivo : null;
+}
+
+function renderHistorico(d) {
+  const h = d.historico || {};
+  const itens = itensHistorico(d);
+  const alvo = $("hist-tabela");
+  if (!itens.length) {
+    alvo.replaceChildren(motivo(motivoDe(h.diarias) || motivoDe(h.completas) || "Nenhuma execução encontrada em saida/."));
+  } else {
+    alvo.replaceChildren(tabelaHistorico(itens));
+  }
+  const selecionado = itens.find((it) => it.arquivo === ESTADO.arquivoDetalhe);
+  if (selecionado) {
+    mostrarDetalhe(selecionado);
+  } else {
+    ESTADO.arquivoDetalhe = null;
+    $("detalhe").replaceChildren();
+  }
+}
+
+// Calendário: mês em ESTADO.mesIdx (0 = mês mais novo de visao.calendario).
+function celulaDia(dia) {
+  const classes = ["d"];
+  if (dia.status === "ok") classes.push("ok");
+  else if (dia.status === "parcial") classes.push("warn");
+  else if (dia.status === "falhou" || dia.status === "ilegivel") classes.push("bad");
+  else if (dia.status === "em_andamento") classes.push("run");
+  else if (dia.pregao === false) classes.push("hol");
+  if (dia.completa === true) classes.push("comp");
+  const celula = criar("span", txt(dia.dia), classes.join(" "));
+  celula.title = dataBr(dia.data).slice(0, 5) + (dia.motivo ? " · " + dia.motivo : "");
+  if (dia.status) {
+    celula.setAttribute("data-clicavel", "");
+    celula.tabIndex = 0;
+    const abrir = () => abrirDiaNoHistorico(dia.data);
+    celula.addEventListener("click", abrir);
+    celula.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") abrir();
+    });
+  }
+  return celula;
+}
+
+function abrirDiaNoHistorico(data) {
+  const it = itensHistorico(ESTADO.painel || {}).find((x) => x.data_referencia === data && x.tipo !== "completa");
+  if (!it) return;
+  ESTADO.arquivoDetalhe = it.arquivo;
+  renderHistorico(ESTADO.painel);
+}
+
+function renderCalendario(d) {
+  const meses = listaSegura((d.visao || {}).calendario);
+  const cal = $("cal");
+  if (!meses.length) {
+    $("mes-titulo").textContent = SEM;
+    $("mes-ant").disabled = true;
+    $("mes-prox").disabled = true;
+    cal.replaceChildren(motivo(SEM));
+    return;
+  }
+  ESTADO.mesIdx = Math.min(Math.max(ESTADO.mesIdx, 0), meses.length - 1);
+  const mes = meses[ESTADO.mesIdx];
+  $("mes-titulo").textContent = txt(mes.titulo);
+  $("mes-ant").disabled = ESTADO.mesIdx >= meses.length - 1;
+  $("mes-prox").disabled = ESTADO.mesIdx <= 0;
+  const dias = listaSegura(mes.dias);
+  const nos = ["seg", "ter", "qua", "qui", "sex"].map((t) => criar("span", t, "h"));
+  // dias começa no primeiro dia útil do mês: os vazios antes dele são o dia da semana dele.
+  const vazios = dias.length && typeof dias[0].dia_semana === "number" ? dias[0].dia_semana : 0;
+  for (let i = 0; i < vazios; i++) nos.push(criar("span"));
+  dias.forEach((dia) => nos.push(celulaDia(dia)));
+  cal.replaceChildren(...nos);
+}
+
+// ---- etapas da rotina (log) ----
+
+function cartaoRodada(r, numero, dia) {
+  const cartao = criar("div", null, "rodada");
+  const cab = criar("p", null, "campo");
+  cab.appendChild(criar("strong", "Rodada " + numero + " · início " + dia + " " + txt(r.inicio) + " "));
+  if (r.sem_esperar) cab.appendChild(criar("span", "(--sem-esperar) ", "tag"));
+  cab.appendChild(selo(r.resultado));
+  cartao.appendChild(cab);
+  if (r.detalhe) cartao.appendChild(criar("p", r.detalhe, "motivo"));
+  const consultas = listaSegura(r.consultas);
+  if (consultas.length) {
+    cartao.appendChild(criar("p", "Consultas à coleta:", "tag"));
+    cartao.appendChild(ul(consultas.map((c) => dia + " " + txt(c.hora) + " · consulta " + txt(c.numero) + ": " + txt(c.texto))));
+  }
+  const avisos = listaSegura(r.avisos);
+  if (avisos.length) {
+    cartao.appendChild(criar("p", "Avisos:", "tag"));
+    cartao.appendChild(ul(avisos));
+  }
+  return cartao;
+}
+
+function renderEtapas(d) {
+  const e = d.etapas || {};
+  const alvo = $("etapas-corpo");
+  if (vazio(e)) {
+    alvo.replaceChildren(motivo(SEM));
+    return;
+  }
+  if (indisponivel(e)) {
+    alvo.replaceChildren(motivo(e.motivo));
+    return;
+  }
+  const nos = [];
+  const arquivos = listaSegura(e.arquivos);
+  if (!arquivos.length) nos.push(motivo("Nenhum log da rotina em logs/."));
+  arquivos.forEach((arq) => {
+    const dia = dataBr(arq.data);
+    const bloco = criar("div", null, "bloco-dia");
+    bloco.appendChild(criar("h3", "Dia " + dia + " (arquivo " + txt(arq.arquivo) + ")"));
+    const rodadas = listaSegura(arq.rodadas);
+    if (!rodadas.length) bloco.appendChild(motivo("Nenhuma rodada registrada nesse arquivo."));
+    // Mais nova primeiro; o número é a posição cronológica dentro do arquivo.
+    for (let i = rodadas.length - 1; i >= 0; i--) bloco.appendChild(cartaoRodada(rodadas[i], i + 1, dia));
+    nos.push(bloco);
+  });
+  alvo.replaceChildren(...nos);
+}
+
+// ---- saúde dos dados ----
+
+function cartaoSaude(c) {
+  const cartao = criar("div", null, "hc " + farol(c.farol));
+  cartao.appendChild(criar("span", txt(c.titulo), "lbl"));
+  cartao.appendChild(criar("span", txt(c.numero), "n"));
+  cartao.appendChild(criar("p", txt(c.texto)));
+  if (c.fonte) cartao.appendChild(criar("span", c.fonte, "so"));
+  return cartao;
+}
+
+function renderSaudeCartoes(d) {
+  const sv = (d.visao || {}).saude || {};
+  const geradoEm = sv.gerado_em || (d.saude || {}).gerado_em;
+  $("saude-gerado").textContent = geradoEm ? "Diagnóstico de " + dataBr(geradoEm) : "Diagnóstico: " + SEM;
+  const cont = $("saude-cartoes");
+  if (sv.disponivel !== true) {
+    cont.replaceChildren(motivo(sv.disponivel === false ? sv.motivo : SEM));
+    return;
+  }
+  cont.replaceChildren(...listaSegura(sv.cartoes).map(cartaoSaude));
+}
+
+// Diagnóstico completo (dentro do bloco recolhível de Saúde).
+function renderSaude(d) {
+  const s = d.saude || {};
+  const nos = [];
+  if (vazio(s)) {
+    nos.push(motivo(SEM));
+  } else if (indisponivel(s)) {
+    nos.push(motivo(s.motivo));
+  } else {
+    nos.push(campo("Gerado em", dataBr(s.gerado_em)));
+    if (s.sem_divergencias) {
+      nos.push(criar("p", "Nenhuma divergência.", "ok-texto"));
+    } else {
+      nos.push(tabela(["Tema", "Tabela", "Detalhe"], listaSegura(s.divergencias).map((x) => [x.tema, x.tabela, x.detalhe])));
+    }
+    listaSegura(s.secoes).forEach((sec) => {
+      const det = detalhes("saude-" + txt(sec.numero), txt(sec.numero) + ". " + txt(sec.titulo));
+      const notas = listaSegura(sec.notas);
+      det.appendChild(notas.length ? ul(notas) : motivo("Sem notas."));
+      nos.push(det);
+    });
+  }
+  $("saude-completa").replaceChildren(...nos);
+}
+
+// ---- experimento ----
+
+function renderTrava(tf) {
+  const estado = tf.estado;
+  $("cadeado-fechado").hidden = !(estado === "ativa" || estado === "definido_nao_liberado");
+  $("cadeado-aberto").hidden = !(estado === "liberado" || estado === "usado");
+  let titulo;
+  let texto = txt(tf.texto);
+  if (estado === "ativa") {
+    titulo = "Teste final trancado";
+    const inicio = tf.inicio ? "O período a partir de " + dataBr(tf.inicio) + " fica fora do desenvolvimento." : "O período de teste final fica fora do desenvolvimento.";
+    texto = inicio + " Ele será aberto uma única vez, na avaliação final.";
+  } else if (estado === "definido_nao_liberado") {
+    titulo = "Teste final definido, ainda trancado";
+  } else if (estado === "liberado") {
+    titulo = "Teste final liberado (uso único)";
+  } else if (estado === "usado") {
+    titulo = "Teste final já usado";
+  } else {
+    titulo = "Teste final: sem dados";
+  }
+  $("lock-t").textContent = titulo;
+  $("lock-p").textContent = texto;
+}
+
+function preencherKv(id, pares) {
+  const dl = $(id);
+  const nos = [];
+  pares.forEach(([termo, valor]) => {
+    nos.push(criar("dt", termo));
+    nos.push(criar("dd", valor));
+  });
+  dl.replaceChildren(...nos);
+}
+
+function treinoTexto(m) {
+  if (!m || !m.periodo_treino) return SEM;
+  const linhas = typeof m.n_linhas_treino === "number" ? m.n_linhas_treino.toLocaleString("pt-BR") + " linhas" : SEM;
+  return intervaloDatas(m.periodo_treino.inicio, m.periodo_treino.fim) + " · " + linhas;
+}
+
+function devTexto(dv) {
+  if (vazio(dv)) return SEM;
+  if (dv.disponivel === false) return txt(dv.motivo);
+  const n = dv.periodo && typeof dv.periodo.n_pregoes === "number" ? dv.periodo.n_pregoes + " pregões" : SEM;
+  return txt(dv.pasta) + " · " + n;
+}
+
+function renderGrafico(dv) {
+  const cont = $("grafico");
+  if (dv.disponivel === false) {
+    cont.replaceChildren(motivo(dv.motivo));
+    return;
+  }
+  const modelos = listaSegura(dv.modelos).filter((m) => typeof m.acerto_top5 === "number"
+    && Array.isArray(m.ic_top5) && m.ic_top5.length === 2 && m.ic_top5.every((v) => typeof v === "number"));
+  const acaso = dv.acaso_top5 || {};
+  const faixa = Array.isArray(acaso.faixa) && acaso.faixa.length === 2 && acaso.faixa.every((v) => typeof v === "number")
+    ? acaso.faixa
+    : null;
+  if (!modelos.length || !faixa) {
+    cont.replaceChildren(motivo(SEM));
+    return;
+  }
+  const media = typeof acaso.media === "number" ? acaso.media : null;
+  const valores = [faixa[0], faixa[1]];
+  if (media !== null) valores.push(media);
+  modelos.forEach((m) => valores.push(m.acerto_top5, m.ic_top5[0], m.ic_top5[1]));
+  const mn = Math.floor((Math.min(...valores) - 0.005) * 100) / 100;
+  const mx = Math.ceil((Math.max(...valores) + 0.005) * 100) / 100;
+  const W = 520, pl = 170, pr = 60, pt = 18, pb = 24, rh = 36;
+  const H = pt + pb + rh * modelos.length;
+  const x = (v) => pl + (v - mn) / (mx - mn) * (W - pl - pr);
+
+  const svg = svgEl("svg", {
+    viewBox: "0 0 " + W + " " + H,
+    role: "img",
+    "aria-label": "Acerto do top 5 por modelo comparado com a faixa do acaso",
+  });
+  svg.appendChild(svgEl("rect", { x: x(faixa[0]), y: pt, width: x(faixa[1]) - x(faixa[0]), height: H - pt - pb }, "acaso"));
+  if (media !== null) svg.appendChild(svgEl("line", { x1: x(media), x2: x(media), y1: pt, y2: H - pb }, "media"));
+  svg.appendChild(svgEl("text", { x: (x(faixa[0]) + x(faixa[1])) / 2, y: pt + 12, "text-anchor": "middle" }, null, "acaso"));
+  const passo = Math.max(1, Math.ceil((mx - mn) * 100 / 5));
+  for (let k = Math.ceil(mn * 100 - 1e-6); k <= Math.floor(mx * 100 + 1e-6); k += passo) {
+    svg.appendChild(svgEl("text", { x: x(k / 100), y: H - 8, "text-anchor": "middle" }, null, k + "%"));
+  }
+  modelos.forEach((m, i) => {
+    const cy = pt + rh * i + rh / 2;
+    const acima = m.acerto_top5 > faixa[1];
+    svg.appendChild(svgEl("text", { x: 0, y: cy + 4 }, "lab", txt(m.rotulo)));
+    svg.appendChild(svgEl("line", { x1: x(m.ic_top5[0]), x2: x(m.ic_top5[1]), y1: cy, y2: cy }, "ic"));
+    svg.appendChild(svgEl("circle", { cx: x(m.acerto_top5), cy: cy, r: 6 }, acima ? "ok" : "idle"));
+    svg.appendChild(svgEl("text", { x: x(m.acerto_top5) + 10, y: cy + 4 }, "valor", pct(m.acerto_top5)));
+  });
+  cont.replaceChildren(svg);
+}
+
+function renderExperimento(d) {
+  const x = d.experimento || {};
+  $("faixa-teste").hidden = x.mostrar_aviso === false;
+  const dv = x.desenvolvimento || {};
+  $("grafico-tit").textContent = "Teste de funcionamento (treino " + txt(dv.pasta) + "), não é o resultado do TCC";
+  renderTrava(x.trava_teste_final || {});
+
+  const m = x.modelo_em_uso || {};
+  const sombra = x.modelo_sombra || {};
+  const r = x.registros || {};
+  let modelo = SEM;
+  if (m.arquivo) modelo = String(m.arquivo).replace(".meta.json", "") + " · " + txt(x.situacao_modelo);
+  let publicado = SEM;
+  if (x.top_publicado === true) publicado = "Publicado";
+  else if (x.top_publicado === false) publicado = "Retido (não enviado à interface)";
+  let chance = SEM;
+  if (m.chance_exibida === true) chance = "Sim";
+  else if (m.chance_exibida === false) chance = m.calibracao_aprovada === true
+    ? "Escondida (calibração ok no teste de funcionamento, falta liberar a exibição)"
+    : "Escondida até a calibração ser aprovada";
+  let modeloSombra = SEM;
+  if (sombra.arquivo) modeloSombra = String(sombra.arquivo).replace(".meta.json", "") + " · acerto top 5 " + pct(sombra.acerto_top5);
+  preencherKv("exp-kv", [
+    ["Modelo", modelo],
+    ["Treinado com", treinoTexto(m)],
+    ["Último treino de desenvolvimento", devTexto(dv)],
+    ["Top 5 na interface", publicado],
+    ["Chance exibida", chance],
+    ["Modelo sombra", modeloSombra],
+    ["Registros", txt(r.tops) + (r.tops === 1 ? " top" : " tops") + " · " + txt(r.resultados) + (r.resultados === 1 ? " resultado" : " resultados")],
+  ]);
+
+  renderGrafico(dv);
+  $("exp-veredito").textContent = txt(dv.veredito);
+  $("link-relatorio").hidden = dv.tem_relatorio !== true;
+}
+
+// ---- testes automáticos ----
+
+function renderTestes(d) {
+  const t = d.testes || {};
+  const corpo = $("testes-corpo");
+  if (t.disponivel === false || vazio(t)) {
+    pilula($("pill-testes"), "idle", SEM);
+    corpo.replaceChildren(motivo(t.motivo || "Nenhum pytest rodado pelo painel ainda."));
+    return;
+  }
+  let situacao = ["idle", SEM];
+  if (t.interrompido) situacao = ["warn", "interrompido"];
+  else if (t.aprovado === true) situacao = ["ok", "todos passando"];
+  else if (t.aprovado === false) situacao = ["bad", "com falhas"];
+  pilula($("pill-testes"), situacao[0], situacao[1]);
+
+  // O pytest só imprime as categorias com contagem: se a linha de resumo foi lida, categoria ausente é zero.
+  const c = t.contagens && typeof t.contagens === "object" ? t.contagens : {};
+  const lido = Object.keys(c).length > 0;
+  const n = (k) => (typeof c[k] === "number" ? c[k] : 0);
+  const passou = lido ? n("passed") : null;
+  const falhou = lido ? n("failed") + n("errors") : null;
+  const pulou = lido ? n("skipped") : null;
+  const total = lido ? n("passed") + n("failed") + n("errors") + n("skipped") + n("xfailed") + n("xpassed") : 0;
+
+  const grande = criar("div");
+  grande.appendChild(criar("span", passou === null ? SEM : passou.toLocaleString("pt-BR"), "big"));
+  grande.appendChild(document.createTextNode(" "));
+  grande.appendChild(criar("span", "testes passaram", "muted"));
+  const meter = criar("div", null, "meter");
+  meter.setAttribute("aria-hidden", "true");
+  if (total > 0) {
+    [["m-ok", passou], ["m-idle", pulou], ["m-bad", falhou]].forEach(([classe, valor]) => {
+      const barra = criar("i", null, classe);
+      barra.style.width = (valor / total * 100).toFixed(1) + "%";
+      meter.appendChild(barra);
+    });
+  }
+  const nos = [
+    grande,
+    meter,
+    criar("p", lido ? falhou + " falhas · " + pulou + " pulados" : SEM, "note"),
+  ];
+  const kv = criar("dl", null, "kv");
+  [
+    ["Rodado em", dataBr(t.inicio)],
+    ["Tempo", t.tempo],
+    ["Arquivo", t.arquivo ? "logs/painel/" + t.arquivo : null],
+    ["Código de saída", t.codigo],
+  ].forEach(([termo, valor]) => {
+    kv.appendChild(criar("dt", termo));
+    kv.appendChild(criar("dd", txt(valor)));
+  });
+  nos.push(kv);
+  if (listaSegura(t.falhas).length) {
+    nos.push(criar("h4", "Falhas"));
+    nos.push(ul(t.falhas));
+  }
+  corpo.replaceChildren(...nos);
+}
+
+// ---- painel ----
+
+function renderizarPainel(d) {
+  ESTADO.painel = d;
+  $("atualizado").textContent = d.gerado_em ? "Dados de " + dataBr(d.gerado_em) : "";
+  pillGeral(d);
+  pillHoje(d);
+  renderFluxo(d);
+  renderLinhaTempo(d);
+  renderBotoes(d);
+  renderRun(d.acao || {});
+  renderHistorico(d);
+  renderCalendario(d);
+  renderEtapas(d);
+  renderSaudeCartoes(d);
+  renderSaude(d);
+  renderExperimento(d);
+  renderTestes(d);
+}
+
+// ---- tema (escolha guardada só neste navegador) ----
+
+function aplicarTema(t) {
+  if (t === "dark" || t === "light") document.documentElement.setAttribute("data-theme", t);
+}
+try { aplicarTema(localStorage.getItem(CHAVE_TEMA)); } catch (e) {}
+
+// ---- rede ----
+
+function mostrarErroRede(ativo, texto) {
+  const aviso = $("erro-rede");
+  aviso.textContent = texto || "Painel sem resposta";
+  aviso.hidden = !ativo;
+}
+
+async function pedir(caminho, opcoes) {
+  const r = await fetch(caminho, Object.assign({ cache: "no-store" }, opcoes || {}));
+  let corpo = null;
+  try {
+    corpo = await r.json();
+  } catch (e) {
+    corpo = null;
+  }
+  return { status: r.status, corpo: corpo };
+}
+
+function postar(caminho, corpo) {
+  return pedir(caminho, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Painel-Token": TOKEN },
+    body: JSON.stringify(corpo),
+  });
+}
+
+function erroDe(r) {
+  return r.corpo && r.corpo.erro ? r.corpo.erro : "resposta " + r.status;
+}
+
+// ---- log da ação ----
+
+function acrescentarLinhas(linhas) {
+  const pre = $("log");
+  linhas.forEach((linha) => pre.appendChild(document.createTextNode(linha + "\n")));
+  if (linhas.length) pre.scrollTop = pre.scrollHeight;
+}
+
+function mostrarStatusLog(e) {
+  let texto;
+  if (e.rodando) texto = "rodando…";
+  else if (!e.id) texto = "Nenhuma ação rodada nesta sessão do painel.";
+  else texto = "terminou: código " + txt(e.codigo) + (e.significado ? " (" + e.significado + ")" : "");
+  $("log-status").textContent = (e.titulo ? e.titulo + ": " : "") + texto;
+}
+
+async function buscarLog() {
+  const r = await pedir("/api/acao?desde=" + ESTADO.logDesde);
+  if (r.status !== 200 || !r.corpo) throw new Error("resposta " + r.status);
+  acrescentarLinhas(listaSegura(r.corpo.linhas));
+  if (typeof r.corpo.proximo === "number") ESTADO.logDesde = r.corpo.proximo;
+  ESTADO.logCarregado = true;
+  renderRun(r.corpo);
+  return r.corpo;
+}
+
+function agendarLog() {
+  if (ESTADO.timerLog === null) ESTADO.timerLog = setTimeout(sondarLog, INTERVALO_LOG_MS);
+}
+
+async function sondarLog() {
+  ESTADO.timerLog = null;
+  try {
+    const e = await buscarLog();
+    mostrarErroRede(false);
+    if (e.rodando) {
+      agendarLog();
+      return;
+    }
+  } catch (err) {
+    mostrarErroRede(true);
+    agendarLog();
+    return;
+  }
+  // A ação terminou: atualiza os cartões (histórico, testes, botões).
+  await carregarPainel();
+}
+
+// ---- painel: busca e atualização ----
+
+async function carregarPainel() {
+  clearTimeout(ESTADO.timerPainel);
+  try {
+    const r = await pedir("/api/painel");
+    if (r.status !== 200 || !r.corpo) throw new Error("resposta " + r.status);
+    mostrarErroRede(false);
+    try {
+      renderizarPainel(r.corpo);
+    } catch (e) {
+      mostrarErroRede(true, "Erro ao mostrar os dados (" + e.name + ")");
+    }
+    const a = r.corpo.acao || {};
+    ESTADO.rodando = a.rodando === true;
+    if (ESTADO.rodando) {
+      agendarLog();
+    } else if (a.id && !ESTADO.logCarregado) {
+      try {
+        await buscarLog();
+      } catch (e) {
+        mostrarErroRede(true);
+      }
+    }
+  } catch (e) {
+    mostrarErroRede(true);
+  }
+  if (!ESTADO.rodando) ESTADO.timerPainel = setTimeout(carregarPainel, INTERVALO_PAINEL_MS);
+}
+
+async function pedirAcao(id, b) {
+  const pergunta = (b.data ? "Data: " + dataBr(b.data) + "\n" : "") + (b.aviso || "") + "\n\nComando: " + (b.comando || "");
+  if (!confirm(pergunta)) return;
+  try {
+    const r = await postar("/api/acao/iniciar", { acao: id });
+    if (r.status !== 202) {
+      $("log-status").textContent = "Não foi possível iniciar: " + erroDe(r);
+      return;
+    }
+    ESTADO.logDesde = 0;
+    ESTADO.logCarregado = true;
+    $("log").textContent = "";
+    await carregarPainel();
+  } catch (e) {
+    mostrarErroRede(true);
+  }
+}
+
+async function pararAcao() {
+  try {
+    const r = await postar("/api/acao/parar", {});
+    if (r.status !== 200) $("log-status").textContent = "Não foi possível parar: " + erroDe(r);
+    await carregarPainel();
+  } catch (e) {
+    mostrarErroRede(true);
+  }
+}
+
+$("tema").addEventListener("click", () => {
+  const raiz = document.documentElement;
+  const atual = raiz.getAttribute("data-theme");
+  const escuro = atual === "dark" || (!atual && matchMedia("(prefers-color-scheme: dark)").matches);
+  const novo = escuro ? "light" : "dark";
+  aplicarTema(novo);
+  try { localStorage.setItem(CHAVE_TEMA, novo); } catch (e) {}
+});
+$("mes-ant").addEventListener("click", () => {
+  ESTADO.mesIdx += 1;
+  renderCalendario(ESTADO.painel || {});
+});
+$("mes-prox").addEventListener("click", () => {
+  ESTADO.mesIdx -= 1;
+  renderCalendario(ESTADO.painel || {});
+});
+$("btn-atualizar").addEventListener("click", () => carregarPainel());
+$("btn-parar").addEventListener("click", () => pararAcao());
+carregarPainel();
+</script>
+</body>
+</html>

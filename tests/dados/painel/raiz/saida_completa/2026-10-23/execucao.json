@@ -1,0 +1,24 @@
+{
+  "pacote": "execucao",
+  "versao_contrato": "1.0",
+  "chave": ["data_referencia", "rodada"],
+  "gerado_em": "2026-10-24T23:00:00-03:00",
+  "dados_ate": "2026-10-23T08:00:00-03:00",
+  "removidos": [],
+  "registros": [
+    {
+      "gerado_em": "2026-10-24T23:00:00-03:00",
+      "data_referencia": "2026-10-23",
+      "rodada": 1,
+      "inicio": "2026-10-24T23:00:00-03:00",
+      "fim": "2026-10-24T23:03:00-03:00",
+      "status": "ok",
+      "coleta_status": {"consultado": false, "nota": "gatilho da coleta não consultado (etapa 8)"},
+      "pacotes_enviados": [
+        {"pacote": "acoes", "arquivo": "acoes.json", "registros": 85, "removidos": 0},
+        {"pacote": "series_diarias", "arquivo": "series_diarias.json", "registros": 120, "removidos": 0}
+      ],
+      "avisos": ["Carga completa."]
+    }
+  ]
+}

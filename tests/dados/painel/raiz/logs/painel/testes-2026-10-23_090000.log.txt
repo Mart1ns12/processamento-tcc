@@ -1,0 +1,4 @@
+# painel: acao=testes inicio=2026-10-23T09:00:00-03:00 comando=python -m pytest -q
+FAILED tests/test_x.py::test_y - assert 1 == 2
+2 failed, 1698 passed, 43 skipped in 99.00s
+# painel: fim=2026-10-23T09:01:39-03:00 codigo=1

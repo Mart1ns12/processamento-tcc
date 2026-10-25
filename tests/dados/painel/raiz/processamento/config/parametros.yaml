@@ -1,0 +1,14 @@
+treino:
+  teste_final:
+    inicio: "2026-06-23"
+    fim: null
+    liberado: false
+  modelo_oficial: false
+saida:
+  pasta: "saida"
+  publicar_top_provisorio: false
+rotina:
+  pasta_logs: "logs"
+  trava: "saida/estado/rotina.trava"
+  trava_validade_horas: 6
+  prazo: "09:45"

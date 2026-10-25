@@ -1,0 +1,2 @@
+Rotina de 2026-10-26 (início 08:00:00)
+08:00:00 consulta 1: nenhum daily de hoje, entrega ausente -> esperar (sem_daily)

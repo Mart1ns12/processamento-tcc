@@ -1,0 +1,12 @@
+Rotina de 2026-10-23 (início 00:34:09, --sem-esperar)
+00:34:09 consulta 1: daily 2026-10-23-daily-080001 (cron, concluida), entrega concluida -> gerar
+Saída de 2026-10-23 em C:\x\saida\2026-10-23: status ok
+- Composição do Ibovespa vazia: universo = composição atual (ações do cadastro).
+- Gerado depois das 10h: não entra no histórico do experimento.
+Rotina de 2026-10-23 (início 08:00:00)
+08:00:00 consulta 1: daily 2026-10-23-daily-080001 (cron, em_andamento), entrega em_andamento -> esperar (entrega_pendente)
+08:05:00 consulta 2: daily 2026-10-23-daily-080001 (cron, em_andamento), entrega concluida -> gerar
+Saída de 2026-10-23 em C:\x\saida\2026-10-23: status parcial
+- Pacote noticias_dia reprovado na validação.
+Rotina de 2026-10-23 (início 09:00:00)
+outra rotina em andamento desde 2026-10-23T08:00:00-03:00 (pid 999). Rodada cancelada; nada foi gravado.

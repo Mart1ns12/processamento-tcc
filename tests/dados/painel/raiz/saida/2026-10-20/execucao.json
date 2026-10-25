@@ -1,0 +1,21 @@
+{
+  "pacote": "execucao",
+  "versao_contrato": "1.0",
+  "chave": ["data_referencia", "rodada"],
+  "gerado_em": "2026-10-20T08:30:00-03:00",
+  "dados_ate": "2026-10-20T08:00:00-03:00",
+  "removidos": [],
+  "registros": [
+    {
+      "gerado_em": "2026-10-20T08:30:00-03:00",
+      "data_referencia": "2026-10-20",
+      "rodada": 2,
+      "inicio": "2026-10-20T08:30:00-03:00",
+      "fim": null,
+      "status": "em_andamento",
+      "coleta_status": {"consultado": false, "nota": "gatilho da coleta não consultado (etapa 8)"},
+      "pacotes_enviados": [],
+      "avisos": []
+    }
+  ]
+}

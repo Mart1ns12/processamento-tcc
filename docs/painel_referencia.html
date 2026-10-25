@@ -1,0 +1,353 @@
+<title>Sala de Operação</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: cabeçalho com o estado geral; fluxo Coleta → Processamento → Interface; linha do tempo da manhã;
+   ações com etapas que acendem; saúde dos dados em cartões; experimento com cadeado; histórico e testes. */
+:root{
+  --bg:#f3f5f7; --surface:#ffffff; --ink:#15202b; --muted:#5b6876; --line:#dde3e9;
+  --accent:#1f5fd1; --accent-soft:#e3ecfb;
+  --ok:#14804a; --ok-soft:#dff3e8; --warn:#a36a00; --warn-soft:#fcf1d9; --bad:#c03a2b; --bad-soft:#fbe4e1;
+  --idle:#8a96a3; --track:#e9edf1;
+  --f-sans:"IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono:"IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f141a; --surface:#171e26; --ink:#e6ebf0; --muted:#97a3b0; --line:#28323d;
+  --accent:#6c9cf0; --accent-soft:#1c2a44;
+  --ok:#4cc58a; --ok-soft:#173528; --warn:#e2b04a; --warn-soft:#382d15; --bad:#ef7b6d; --bad-soft:#3b1f1c;
+  --idle:#6b7785; --track:#222b35; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f141a; --surface:#171e26; --ink:#e6ebf0; --muted:#97a3b0; --line:#28323d;
+  --accent:#6c9cf0; --accent-soft:#1c2a44;
+  --ok:#4cc58a; --ok-soft:#173528; --warn:#e2b04a; --warn-soft:#382d15; --bad:#ef7b6d; --bad-soft:#3b1f1c;
+  --idle:#6b7785; --track:#222b35; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-sans);font-size:15px;line-height:1.5}
+.wrap{max-width:1180px;margin:0 auto;padding-block:22px 56px;padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));display:grid;gap:18px}
+h1,h2,h3{margin:0;line-height:1.2;text-wrap:balance}
+h1{font-size:1.55rem;font-weight:700}
+h2{font-size:1.08rem;font-weight:600}
+h3{font-size:.95rem;font-weight:600}
+p{margin:0}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}
+.lbl{font-size:.72rem;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px;display:grid;gap:14px;min-width:0}
+.cardhead{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline;justify-content:space-between}
+.why{font-size:.84rem;color:var(--muted);max-width:68ch}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:.78rem;font-weight:600;padding:3px 10px;border-radius:999px;white-space:nowrap}
+.pill.ok{background:var(--ok-soft);color:var(--ok)} .pill.warn{background:var(--warn-soft);color:var(--warn)}
+.pill.bad{background:var(--bad-soft);color:var(--bad)} .pill.idle{background:var(--track);color:var(--muted)}
+.dot{width:8px;height:8px;border-radius:50%;background:currentColor;display:inline-block}
+
+/* topo */
+.top{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:end;justify-content:space-between}
+.top .sub{color:var(--muted);font-size:.9rem;max-width:62ch}
+.state{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.toggle{font:inherit;font-size:.82rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:8px;padding:6px 10px;cursor:pointer}
+
+/* fluxo */
+.flow{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;gap:10px;align-items:stretch}
+.stage{border:1px solid var(--line);border-radius:10px;padding:14px;display:grid;gap:6px;position:relative;background:var(--surface)}
+.stage::before{content:"";position:absolute;inset:0 auto 0 0;width:4px;border-radius:10px 0 0 10px;background:var(--ok)}
+.stage .big{font-size:1.25rem;font-weight:600}
+.stage .meta{font-size:.82rem;color:var(--muted)}
+.arrow{align-self:center;color:var(--idle);font-size:1.4rem}
+@media (max-width:820px){.flow{grid-template-columns:1fr}.arrow{transform:rotate(90deg);justify-self:center}}
+
+/* linha do tempo */
+.tl{position:relative;height:118px;margin:6px 40px 0}
+.tl .bar{position:absolute;left:0;right:0;top:54px;height:10px;border-radius:6px;background:var(--track)}
+.tl .seg{position:absolute;top:54px;height:10px;border-radius:6px}
+.tl .mk{position:absolute;top:4px;transform:translateX(-50%);display:grid;justify-items:center;gap:2px;font-size:.72rem;white-space:nowrap}
+.tl .mk .t{font-family:var(--f-mono);color:var(--muted)}
+.tl .mk .stem{width:2px;height:12px;background:var(--line)}
+.tl .mk.down{top:66px}
+.tl .mk.down .stem{order:-1;height:8px}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:.8rem;color:var(--muted)}
+.legend i{display:inline-block;width:12px;height:8px;border-radius:3px;margin-right:6px;vertical-align:middle}
+
+/* ações */
+.actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.act{border:1px solid var(--line);border-radius:10px;padding:14px;display:grid;gap:8px;align-content:start}
+.act button{font:inherit;font-weight:600;font-size:.9rem;border:0;border-radius:8px;padding:9px 12px;background:var(--accent);color:#fff;cursor:pointer;justify-self:start}
+.act button:disabled{opacity:.45;cursor:not-allowed}
+.act button:focus-visible,.toggle:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.act .what{font-size:.84rem;color:var(--muted)}
+.act .safe{font-size:.76rem}
+.run[hidden]{display:none}
+.run{border:1px solid var(--line);border-radius:10px;padding:14px;display:grid;gap:10px}
+.steps{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.steps li{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:8px;align-items:center;font-size:.9rem}
+.steps .ic{width:18px;height:18px;border-radius:50%;border:2px solid var(--line);display:grid;place-items:center;font-size:.7rem;font-weight:700;color:#fff}
+.steps li.done .ic{background:var(--ok);border-color:var(--ok)}
+.steps li.now .ic{border-color:var(--accent);border-top-color:transparent;animation:spin .8s linear infinite}
+.steps li.wait{color:var(--muted)}
+.steps .tm{font-family:var(--f-mono);font-size:.78rem;color:var(--muted)}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.steps li.now .ic{animation:none}}
+details{border-top:1px solid var(--line);padding-top:8px}
+summary{cursor:pointer;font-size:.84rem;color:var(--muted)}
+pre{margin:8px 0 0;background:var(--track);border-radius:8px;padding:10px;font-family:var(--f-mono);font-size:.76rem;white-space:pre-wrap;word-break:break-word;max-height:220px;overflow:auto}
+
+/* saúde */
+.health{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:10px}
+.hc{border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:grid;gap:6px;align-content:start;border-left-width:4px}
+.hc.ok{border-left-color:var(--ok)} .hc.warn{border-left-color:var(--warn)} .hc.bad{border-left-color:var(--bad)}
+.hc .n{font-family:var(--f-mono);font-size:1.3rem;font-weight:500}
+.hc p{font-size:.84rem}
+.hc .so{font-size:.8rem;color:var(--muted)}
+
+/* experimento */
+.exp{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:16px}
+@media (max-width:820px){.exp{grid-template-columns:1fr}}
+.lock{border:1px solid var(--line);border-radius:10px;padding:14px;display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:center}
+.lock svg{width:40px;height:40px}
+.banner{background:var(--warn-soft);color:var(--warn);font-weight:600;font-size:.8rem;letter-spacing:.04em;text-transform:uppercase;padding:6px 10px;border-radius:6px;justify-self:start}
+.chart svg{display:block;width:100%;height:auto}
+.chart text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
+.chart .lab{font-family:var(--f-sans);font-size:12px;fill:var(--ink)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:.88rem}
+.kv dt{color:var(--muted)} .kv dd{margin:0}
+
+/* histórico e testes */
+.two{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:18px;align-items:start}
+@media (max-width:820px){.two{grid-template-columns:1fr}}
+.cal{display:grid;grid-template-columns:repeat(5,minmax(0,44px));gap:6px}
+.cal .h{font-size:.72rem;color:var(--muted);text-align:center}
+.cal .d{height:30px;border-radius:6px;background:var(--track);display:grid;place-items:center;font-family:var(--f-mono);font-size:.78rem;color:var(--muted);max-width:100%}
+.cal .d.ok{background:var(--ok);color:#fff} .cal .d.bad{background:var(--bad);color:#fff} .cal .d.hol{background:transparent;border:1px dashed var(--line)}
+.tbl{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:.86rem}
+th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600}
+td.r,th.r{text-align:right}
+.tests{display:grid;gap:10px;align-content:start}
+.tests .big{font-family:var(--f-mono);font-size:2rem;line-height:1}
+.meter{height:10px;border-radius:6px;background:var(--track);overflow:hidden;display:flex}
+.meter i{display:block;height:100%}
+.note{font-size:.8rem;color:var(--muted)}
+</style>
+
+<div class="wrap">
+
+  <header class="top">
+    <div style="display:grid;gap:6px">
+      <span class="lbl">TCC · Módulo de processamento</span>
+      <h1>Sala de Operação</h1>
+      <p class="sub">Acompanha o que o processamento faz todo dia: espera a coleta, calcula os indicadores, monta os pacotes para a interface e confere a qualidade dos dados.</p>
+    </div>
+    <div class="state">
+      <span class="pill ok"><span class="dot"></span>Sistema operacional</span>
+      <span class="pill idle">Domingo · sem pregão</span>
+      <button class="toggle" id="tema" type="button">Tema</button>
+    </div>
+  </header>
+
+  <!-- Fluxo -->
+  <section class="card" aria-labelledby="h-fluxo">
+    <div class="cardhead">
+      <h2 id="h-fluxo">Última atualização · pregão de sexta, 23/10/2026</h2>
+      <span class="pill ok"><span class="dot"></span>Concluída sem erros</span>
+    </div>
+    <div class="flow">
+      <div class="stage">
+        <span class="lbl">1 · Coleta (outro módulo)</span>
+        <span class="big">Dados entregues</span>
+        <span class="meta">Começou <span class="mono">08:00</span> · entregou <span class="mono">08:22</span></span>
+        <span class="meta">9 de 9 etapas concluídas · preços, notícias, balanços</span>
+      </div>
+      <span class="arrow" aria-hidden="true">→</span>
+      <div class="stage">
+        <span class="lbl">2 · Processamento (este módulo)</span>
+        <span class="big">Calculado e validado</span>
+        <span class="meta">Duração <span class="mono">1 min 58 s</span> · 85 ações</span>
+        <span class="meta">Indicadores, séries, notícias e top 5 de teste</span>
+      </div>
+      <span class="arrow" aria-hidden="true">→</span>
+      <div class="stage">
+        <span class="lbl">3 · Interface</span>
+        <span class="big">7 pacotes prontos</span>
+        <span class="meta">Contrato <span class="mono">1.0</span> · 17.123 valores conferidos</span>
+        <span class="meta">Top 5 retido até o modelo oficial</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Linha do tempo -->
+  <section class="card" aria-labelledby="h-tl">
+    <div class="cardhead">
+      <h2 id="h-tl">A manhã de um pregão</h2>
+      <p class="why">A rotina tem que terminar antes da abertura da bolsa, para o top 5 valer como previsão. Folga na última execução: <b class="mono">1 h 18 min</b>.</p>
+    </div>
+    <div class="tl" id="tl" aria-label="Linha do tempo das 7h55 às 10h"></div>
+    <div class="legend">
+      <span><i style="background:var(--accent)"></i>Coleta trabalhando</span>
+      <span><i style="background:var(--ok)"></i>Processamento</span>
+      <span><i style="background:var(--warn-soft);border:1px solid var(--warn)"></i>Folga até o prazo</span>
+    </div>
+  </section>
+
+  <!-- Ações -->
+  <section class="card" aria-labelledby="h-acoes">
+    <div class="cardhead">
+      <h2 id="h-acoes">Ações</h2>
+      <p class="why">Cada botão chama um comando do projeto. Nenhum escreve no banco da coleta.</p>
+    </div>
+    <div class="actions" id="actions"></div>
+    <div class="run" id="run" hidden>
+      <div class="cardhead"><h3 id="run-t">Rodando</h3><span class="pill idle" id="run-p">em andamento</span></div>
+      <ol class="steps" id="steps"></ol>
+      <details><summary>Ver o log completo</summary><pre id="log"></pre></details>
+    </div>
+  </section>
+
+  <!-- Saúde -->
+  <section class="card" aria-labelledby="h-saude">
+    <div class="cardhead">
+      <h2 id="h-saude">Saúde dos dados</h2>
+      <p class="why">O processamento confere os dados da coleta antes de usar. Quando algo vem errado, ele marca "indisponível" em vez de mostrar um número falso.</p>
+    </div>
+    <div class="health">
+      <div class="hc ok"><span class="lbl">Contrato com a coleta</span><span class="n">0 divergências</span><p>Tabelas, colunas e formatos batem com o combinado.</p><span class="so">Diagnóstico de 24/10, 12:02</span></div>
+      <div class="hc warn"><span class="lbl">Quantidade de ações</span><span class="n">19 empresas</span><p>Vieram em milhares (ex.: VALE3, ITUB4). P/L e P/VP delas saem "indisponível".</p><span class="so">Pedido de correção enviado à coleta</span></div>
+      <div class="hc warn"><span class="lbl">Preços suspeitos</span><span class="n">5 saltos</span><p>AZUL3 (3), PCAR3 e UGPA3: variações acima de 100% num dia. Ficam fora das médias, do beta e da volatilidade.</p><span class="so">O preço não é corrigido, só isolado</span></div>
+      <div class="hc warn"><span class="lbl">Índices IDIV, SMLL, IFIX</span><span class="n">449 pregões</span><p>Faltam de 02/01/2025 a 19/10/2026. Os % desses índices saem "histórico insuficiente".</p><span class="so">Lacuna avisada à coleta</span></div>
+      <div class="hc warn"><span class="lbl">Horário das notícias</span><span class="n">~89% só data</span><p>A maioria das notícias veio sem hora. Elas entram na janela do dia de forma conservadora, sem olhar o futuro.</p><span class="so">Correção agendada pela coleta</span></div>
+      <div class="hc ok"><span class="lbl">Histórico disponível</span><span class="n">2019 → hoje</span><p>Preços desde 2019, balanços desde 2022, notícias desde 2024, composição do Ibovespa desde 2021.</p><span class="so">117 mil linhas no dataset do modelo</span></div>
+    </div>
+  </section>
+
+  <!-- Experimento -->
+  <section class="card" aria-labelledby="h-exp">
+    <div class="cardhead">
+      <h2 id="h-exp">Experimento: top 5 com maior chance de superar o Ibovespa</h2>
+      <span class="banner">Teste de funcionamento · não é resultado</span>
+    </div>
+    <div class="exp">
+      <div style="display:grid;gap:12px;align-content:start">
+        <div class="lock">
+          <svg viewBox="0 0 40 40" aria-hidden="true"><rect x="7" y="17" width="26" height="19" rx="4" fill="none" stroke="var(--ink)" stroke-width="2.5"/><path d="M13 17v-5a7 7 0 0 1 14 0v5" fill="none" stroke="var(--ink)" stroke-width="2.5"/><circle cx="20" cy="26" r="2.6" fill="var(--ink)"/></svg>
+          <div><h3>Teste final trancado</h3><p class="note">O período a partir de 23/06/2026 nunca foi olhado. Ele será aberto uma única vez, na avaliação final, para o resultado ser honesto.</p></div>
+        </div>
+        <dl class="kv">
+          <dt>Modelo</dt><dd><span class="mono">xgb-2026-06</span> · provisório</dd>
+          <dt>Treinado com</dt><dd>02/01/2024 a 19/06/2026 · 616 pregões</dd>
+          <dt>Top 5 na interface</dt><dd>Retido até o modelo oficial</dd>
+          <dt>Chance exibida</dt><dd>Escondida até a calibração ser liberada</dd>
+        </dl>
+      </div>
+      <div style="display:grid;gap:8px">
+        <h3>Acerto do top 5 no desenvolvimento</h3>
+        <p class="note">Em quantos % das vezes a ação escolhida superou o Ibovespa no pregão seguinte. A faixa cinza é o que se consegue escolhendo ao acaso.</p>
+        <div class="chart" id="chart"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Histórico + testes -->
+  <div class="two">
+    <section class="card" aria-labelledby="h-hist">
+      <div class="cardhead"><h2 id="h-hist">Histórico de execuções</h2><span class="note">outubro de 2026</span></div>
+      <div class="cal" id="cal"></div>
+      <div class="legend"><span><i style="background:var(--ok)"></i>rodou ok</span><span><i style="background:var(--bad)"></i>falhou</span><span><i style="background:var(--track)"></i>sem execução</span><span><i style="border:1px dashed var(--line)"></i>sem pregão</span></div>
+      <div class="tbl"><table>
+        <thead><tr><th>Pregão</th><th>Tipo</th><th class="r">Duração</th><th class="r">Pacotes</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">23/10/2026</td><td>Rotina diária</td><td class="r mono">1 min 58 s</td><td class="r mono">7</td><td><span class="pill ok">ok</span></td></tr>
+          <tr><td class="mono">23/10/2026</td><td>Carga completa</td><td class="r mono">1 min 48 s</td><td class="r mono">7</td><td><span class="pill ok">ok</span></td></tr>
+        </tbody>
+      </table></div>
+    </section>
+    <section class="card" aria-labelledby="h-test">
+      <div class="cardhead"><h2 id="h-test">Testes automáticos</h2><span class="pill ok"><span class="dot"></span>todos passando</span></div>
+      <div class="tests">
+        <div><span class="big">1.809</span> <span class="muted">testes passaram</span></div>
+        <div class="meter" aria-hidden="true"><i style="width:98.7%;background:var(--ok)"></i><i style="width:1.3%;background:var(--idle)"></i></div>
+        <p class="note">0 falhas · 23 pulados (os que usam o banco real) · cada regra de cálculo tem valor esperado conferido à mão.</p>
+        <dl class="kv"><dt>Vazamento de futuro</dt><dd>testado com dados "envenenados"</dd><dt>Contrato dos pacotes</dt><dd>validado antes de gravar</dd><dt>Banco da coleta</dt><dd>sessão só leitura conferida</dd></dl>
+      </div>
+    </section>
+  </div>
+
+  <p class="note">Protótipo visual com os dados reais da execução de 23/10/2026. Os botões aqui só simulam a execução.</p>
+</div>
+
+<script>
+(function(){
+const $=s=>document.querySelector(s);
+/* tema */
+$('#tema').addEventListener('click',()=>{const r=document.documentElement;const dark=r.getAttribute('data-theme')==='dark'||(!r.getAttribute('data-theme')&&matchMedia('(prefers-color-scheme: dark)').matches);r.setAttribute('data-theme',dark?'light':'dark');});
+
+/* linha do tempo 07:55–10:05 */
+const t0=7*60+55,t1=10*60+5,pct=m=>((m-t0)/(t1-t0)*100).toFixed(2)+'%';
+const hm=s=>{const[a,b]=s.split(':').map(Number);return a*60+b;};
+const tl=$('#tl');
+const seg=(a,b,bg,bd)=>{const d=document.createElement('div');d.className='seg';d.style.left=pct(a);d.style.width=`calc(${pct(b)} - ${pct(a)})`;d.style.background=bg;if(bd)d.style.border=bd;tl.appendChild(d);};
+tl.innerHTML='<div class="bar"></div>';
+seg(hm('08:00'),hm('08:22'),'var(--accent)');
+seg(hm('08:23'),hm('08:27'),'var(--ok)');
+seg(hm('08:27'),hm('09:45'),'var(--warn-soft)','1px solid var(--warn)');
+[['08:00','coleta começa',0],['08:22','coleta entrega',1],['08:27','pacotes prontos',0],['09:45','prazo do top 5',1],['10:00','bolsa abre',0]].forEach(([t,l,down])=>{
+  const m=document.createElement('div');m.className='mk'+(down?' down':'');m.style.left=pct(hm(t));
+  m.innerHTML=down?'<span class="stem"></span><span class="t">'+t+'</span><span>'+l+'</span>':'<span class="t">'+t+'</span><span>'+l+'</span><span class="stem"></span>';
+  tl.appendChild(m);});
+
+/* ações */
+const ACOES=[
+ {id:'rotina',nome:'Rodar a rotina do dia',oque:'Usa o último pregão (23/10/2026), porque hoje é domingo.',seg:'Lê o banco só para consulta. Regrava os pacotes desse dia.',
+  etapas:[['Conferindo se a coleta do dia terminou',900],['Lendo preços, balanços e notícias (só leitura)',1500],['Calculando os indicadores das 85 ações',1600],['Montando as séries dos gráficos',1100],['Gerando o top 5 de teste',1200],['Validando o contrato dos pacotes',700],['Gravando 7 pacotes para a interface',600]],
+  log:['Rotina de 2026-10-23 (início 10:12:04)','10:12:04 consulta 1: daily 2026-10-23-daily-080001 (cron, concluida), entrega concluida -> gerar','Saída de 2026-10-23: status ok','- Modelo provisório: treinado de 2024-01-02 a 2026-06-19','- Top 5 gerado e registrado só como teste de funcionamento']},
+ {id:'carga',nome:'Gerar a carga completa',oque:'Todos os dados de uma vez, para a interface começar do zero.',seg:'Grava numa pasta separada. Não mexe no envio diário.',
+  etapas:[['Lendo o histórico (só leitura)',1500],['Calculando 1 ano de séries para 85 ações',1800],['Montando trimestres e proventos',1000],['Validando o contrato',700],['Gravando em saida_completa/',600]],log:['Saída de 2026-10-23 em saida_completa/2026-10-23: status ok']},
+ {id:'diag',nome:'Rodar o diagnóstico',oque:'Confere o banco da coleta contra o combinado.',seg:'Só lê o banco.',
+  etapas:[['Conferindo tabelas e colunas',900],['Medindo período e lacunas',1100],['Procurando preços e quantidades suspeitas',1100],['Escrevendo o relatório',500]],log:['Relatório: docs/diagnostico_banco.md | divergências: 0']},
+ {id:'testes',nome:'Rodar os testes',oque:'Roda as 1.809 verificações automáticas.',seg:'Não usa o banco. Pode ser interrompido.',
+  etapas:[['Regras de preços e índices',900],['Fundamentos e proventos',900],['Dataset e vazamento de futuro',1100],['Treino e avaliação',900],['Pacotes e rotina diária',900]],log:['1809 passed, 23 skipped']}
+];
+let rodando=false;
+$('#actions').innerHTML=ACOES.map(a=>'<div class="act"><h3>'+a.nome+'</h3><p class="what">'+a.oque+'</p><p class="safe muted">'+a.seg+'</p><button type="button" data-a="'+a.id+'">'+a.nome.split(' ')[0]+'</button></div>').join('');
+document.querySelectorAll('[data-a]').forEach(b=>b.addEventListener('click',()=>simular(ACOES.find(x=>x.id===b.dataset.a))));
+function simular(a){
+  if(rodando)return; rodando=true;
+  document.querySelectorAll('[data-a]').forEach(b=>b.disabled=true);
+  $('#run').hidden=false; $('#run-t').textContent=a.nome; const p=$('#run-p'); p.className='pill idle'; p.textContent='em andamento';
+  $('#steps').innerHTML=a.etapas.map(e=>'<li class="wait"><span class="ic"></span><span>'+e[0]+'</span><span class="tm"></span></li>').join('');
+  $('#log').textContent='';
+  const lis=[...document.querySelectorAll('#steps li')]; let i=0, t=0;
+  const passo=()=>{ if(i>0){lis[i-1].className='done';lis[i-1].querySelector('.ic').textContent='✓';lis[i-1].querySelector('.tm').textContent=(a.etapas[i-1][1]/1000).toFixed(1)+' s';}
+    if(i<lis.length){lis[i].className='now';setTimeout(passo,a.etapas[i][1]);i++;}
+    else{p.className='pill ok';p.textContent='concluído';$('#log').textContent=a.log.join('\n');rodando=false;document.querySelectorAll('[data-a]').forEach(b=>b.disabled=false);} };
+  passo();
+}
+
+/* gráfico do experimento */
+(function(){
+  const dados=[['Modelo com notícias',.502],['Modelo só preço',.509],['Regressão logística',.530],['Regra da volatilidade',.506]];
+  const faixa=[.464,.499], media=.481, W=520,H=200,pl=150,pr=40,pt=10,pb=26, mn=.44, mx=.55;
+  const x=v=>pl+(v-mn)/(mx-mn)*(W-pl-pr), rh=(H-pt-pb)/dados.length;
+  let g='<rect x="'+x(faixa[0])+'" y="'+pt+'" width="'+(x(faixa[1])-x(faixa[0]))+'" height="'+(H-pt-pb)+'" fill="var(--track)"/>';
+  g+='<line x1="'+x(media)+'" x2="'+x(media)+'" y1="'+pt+'" y2="'+(H-pb)+'" stroke="var(--idle)" stroke-dasharray="3 3"/>';
+  [.45,.48,.50,.52,.55].forEach(v=>{g+='<text x="'+x(v)+'" y="'+(H-8)+'" text-anchor="middle">'+Math.round(v*100)+'%</text>';});
+  g+='<text x="'+((x(faixa[0])+x(faixa[1]))/2)+'" y="'+(pt+12)+'" text-anchor="middle">acaso</text>';
+  dados.forEach(([n,v],i)=>{const cy=pt+rh*i+rh/2; const acima=v>faixa[1];
+    g+='<text class="lab" x="0" y="'+(cy+4)+'">'+n+'</text>';
+    g+='<line x1="'+x(mn)+'" x2="'+x(v)+'" y1="'+cy+'" y2="'+cy+'" stroke="var(--line)" stroke-width="2"/>';
+    g+='<circle cx="'+x(v)+'" cy="'+cy+'" r="6" fill="'+(acima?'var(--ok)':'var(--idle)')+'"/>';
+    g+='<text x="'+(x(v)+10)+'" y="'+(cy+4)+'" fill="var(--ink)">'+(v*100).toFixed(1).replace('.',',')+'%</text>';});
+  $('#chart').innerHTML='<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Acerto do top 5 por modelo comparado com a faixa do acaso">'+g+'</svg>';
+})();
+
+/* calendário de outubro/2026 (dias úteis) */
+(function(){
+  const fer={'2026-10-12':1}; const ok={'2026-10-23':1};
+  let h='<span class="h">seg</span><span class="h">ter</span><span class="h">qua</span><span class="h">qui</span><span class="h">sex</span>';
+  const d0=new Date(2026,9,1); const pad=(d0.getDay()+6)%7; for(let i=0;i<pad;i++)h+='<span></span>';
+  for(let d=1;d<=31;d++){const dt=new Date(2026,9,d),w=dt.getDay(); if(w===0||w===6)continue;
+    const k='2026-10-'+String(d).padStart(2,'0'); const c=fer[k]?'hol':ok[k]?'ok':''; h+='<span class="d '+c+'" title="'+d+'/10">'+d+'</span>';}
+  $('#cal').innerHTML=h;
+})();
+})();
+</script>

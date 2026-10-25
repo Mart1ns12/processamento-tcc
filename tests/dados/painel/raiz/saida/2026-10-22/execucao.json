@@ -1,0 +1,43 @@
+{
+  "pacote": "execucao",
+  "versao_contrato": "1.0",
+  "chave": ["data_referencia", "rodada"],
+  "gerado_em": "2026-10-22T09:45:00-03:00",
+  "dados_ate": "2026-10-22T08:00:00-03:00",
+  "removidos": [],
+  "registros": [
+    {
+      "gerado_em": "2026-10-22T09:45:00-03:00",
+      "data_referencia": "2026-10-22",
+      "rodada": 1,
+      "inicio": "2026-10-22T09:45:00-03:00",
+      "fim": "2026-10-22T09:45:00-03:00",
+      "status": "falhou",
+      "coleta_status": {
+        "consultado": true,
+        "nota": "Daily da agenda (origem cron).",
+        "motivo": "entrega_pendente",
+        "execucao_id": "2026-10-22-daily-080001",
+        "origem": "cron",
+        "status_execucao": "em_andamento",
+        "iniciada_em": "2026-10-22T08:00:01-03:00",
+        "finalizada_em": null,
+        "entrega_concluida_em": null,
+        "etapas": {
+          "precos": "concluida",
+          "macro": "concluida",
+          "noticias": "em_andamento",
+          "ipe": "pendente",
+          "enriquecimento": "pendente",
+          "juiza": "pendente",
+          "cadastro": "pendente",
+          "entrega": "pendente",
+          "analise": "pendente"
+        },
+        "consultas": 22
+      },
+      "pacotes_enviados": [],
+      "avisos": ["Coleta não ficou pronta até 09:45: dados de ontem."]
+    }
+  ]
+}

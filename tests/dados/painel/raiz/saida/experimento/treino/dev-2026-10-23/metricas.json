@@ -1,0 +1,10 @@
+{"modo":"desenvolvimento","aviso_funcionamento":true,"gerado_em":"2026-10-24T18:42:18-03:00",
+ "periodo":{"inicio":"2024-01-02","fim":"2026-06-19","n_pregoes":616,"n_linhas":45765,"n_tickers":80,"universo":"composicao_historica","teste_final_inicio":"2026-06-23","teste_final_fim":null,"teste_final_usado":false},
+ "acaso":{"5":{"media":0.4811,"p2_5":0.4638,"p97_5":0.4987}},
+ "modelos":{"modelo_1":{"auc_medio_pregao":0.5145,"topk":{"5":{"taxa_acerto":0.5088,"ic_taxa":[0.4894,0.5276]}}},
+            "modelo_3":{"auc_medio_pregao":0.5174,"topk":{"5":{"taxa_acerto":0.5023,"ic_taxa":[0.4836,0.5204]}}},
+            "logistica":{"auc_medio_pregao":0.5218,"topk":{"5":{"taxa_acerto":0.5305,"ic_taxa":[0.5117,0.5488]}}},
+            "volatilidade":{"auc_medio_pregao":0.5175,"topk":{"5":{"taxa_acerto":0.5056,"ic_taxa":[0.4847,0.5268]}}},
+            "modelo_3_principais":null},
+ "veredito_modelo_3":{"texto":"No top 5, o modelo 3 ficou acima do acaso, mas não superou a regra da volatilidade nem a logística."},
+ "calibracao":{"ece":0.0157,"aprovada":true,"chance_exibida":false}}

@@ -1,0 +1,57 @@
+{
+  "pacote": "execucao",
+  "versao_contrato": "1.0",
+  "chave": ["data_referencia", "rodada"],
+  "gerado_em": "2026-10-24T22:46:25-03:00",
+  "dados_ate": "2026-10-23T08:00:00-03:00",
+  "removidos": [],
+  "registros": [
+    {
+      "gerado_em": "2026-10-24T22:46:25-03:00",
+      "dados_ate": "2026-10-23T08:00:00-03:00",
+      "data_referencia": "2026-10-23",
+      "rodada": 6,
+      "inicio": "2026-10-24T22:46:25-03:00",
+      "fim": "2026-10-24T22:48:23-03:00",
+      "status": "ok",
+      "coleta_status": {
+        "consultado": true,
+        "nota": "Daily da agenda (origem cron).",
+        "motivo": "entrega_concluida",
+        "execucao_id": "2026-10-23-daily-080001",
+        "origem": "cron",
+        "status_execucao": "concluida",
+        "iniciada_em": "2026-10-23T08:00:01-03:00",
+        "finalizada_em": "2026-10-23T08:24:29-03:00",
+        "entrega_concluida_em": "2026-10-23T08:22:52-03:00",
+        "etapas": {
+          "precos": "concluida",
+          "macro": "concluida",
+          "noticias": "concluida",
+          "ipe": "concluida",
+          "enriquecimento": "concluida",
+          "juiza": "concluida",
+          "cadastro": "concluida",
+          "entrega": "concluida",
+          "analise": "concluida"
+        },
+        "consultas": 1,
+        "espera_segundos": 0
+      },
+      "pacotes_enviados": [
+        {"pacote": "acoes", "arquivo": "acoes.json", "registros": 0, "removidos": 0},
+        {"pacote": "series_diarias", "arquivo": "series_diarias.json", "registros": 0, "removidos": 0},
+        {"pacote": "mercado_dia", "arquivo": "mercado_dia.json", "registros": 1, "removidos": 0},
+        {"pacote": "resumo_acao", "arquivo": "resumo_acao.json", "registros": 85, "removidos": 0},
+        {"pacote": "fundamentos_trimestrais", "arquivo": "fundamentos_trimestrais.json", "registros": 8, "removidos": 0},
+        {"pacote": "proventos", "arquivo": "proventos.json", "registros": 0, "removidos": 0},
+        {"pacote": "noticias_dia", "arquivo": "noticias_dia.json", "registros": 85, "removidos": 0}
+      ],
+      "avisos": [
+        "Modelo provisório: treinado de 2024-01-02 a 2026-06-19 (cerca de 2,5 anos), só para testar a rotina.",
+        "Gerado depois das 10h: não entra no histórico do experimento.",
+        "Top 5 gerado e registrado só como teste de funcionamento (modelo não oficial): experimento_top e experimento_historico não enviados à interface (saida.publicar_top_provisorio = false)."
+      ]
+    }
+  ]
+}
