@@ -21,7 +21,13 @@ from dotenv import load_dotenv
 from sqlalchemy import URL, Engine, create_engine, event, text
 from sqlalchemy.exc import SQLAlchemyError
 
-from processamento.tickers import aplicar_mudancas, parse_other_codes, troca_acao_para_bdr
+from processamento.tickers import (
+    aplicar_cortes,
+    aplicar_mudancas,
+    cortes_acao_para_bdr,
+    parse_other_codes,
+    troca_acao_para_bdr,
+)
 
 RAIZ = Path(__file__).resolve().parent.parent
 CAMINHO_MAPA = Path(__file__).resolve().parent / "config" / "fontes.yaml"
@@ -266,6 +272,8 @@ CONTRATO = {
     },
 }
 TABELAS_COM_TICKER = {"precos", "proventos", "noticias"}
+# Coluna de data de cada tabela com ticker, usada pelo corte da série na troca de ação por BDR (Fase 9)
+COLUNA_DATA_TICKER = {"precos": "data", "proventos": "data_com", "noticias": "data_publicacao"}
 _RE_ISO_FUSO = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})")
 _COLUNAS_TICKER = ("ticker", "ticker_antigo", "ticker_novo")
 
@@ -367,6 +375,9 @@ def _tratar(
         if fora:
             raise ErroLeitura(f"{nome}.{c}: valor fora do contrato: {fora[0]!r}")
     if unir_mudancas and tabela in TABELAS_COM_TICKER:
+        cortes = ler_cortes_bdr(ler)
+        if cortes:
+            df = aplicar_cortes(df, cortes, COLUNA_DATA_TICKER[tabela])
         mudancas = ler_mudancas(ler)
         df = unir_historicos(df, mudancas, ent["chave"])
     chave = ent["chave"]
@@ -620,10 +631,25 @@ def ler_mudancas(ler: Callable[..., pd.DataFrame] | None = None) -> dict[str, st
     mudancas = ler_tabela("mudancas_ticker", ler=ler, unir_mudancas=False)
     if mudancas.empty:
         return {}
-    cadastro = ler_tabela("cadastro", ler=ler)
-    tipo_de = {t: tp for t, tp in zip(cadastro["ticker"], cadastro["tipo_acao"])
-               if isinstance(t, str) and isinstance(tp, str)}
-    return mudancas_como_dict(mudancas, tipo_de)
+    return mudancas_como_dict(mudancas, _tipo_de(ler_tabela("cadastro", ler=ler)))
+
+
+def _tipo_de(cadastro: pd.DataFrame) -> dict[str, str]:
+    """Ticker -> tipo_acao do cadastro (só valores textuais)."""
+    return {t: tp for t, tp in zip(cadastro["ticker"], cadastro["tipo_acao"])
+            if isinstance(t, str) and isinstance(tp, str)}
+
+
+def ler_cortes_bdr(ler: Callable[..., pd.DataFrame] | None = None) -> list[tuple[str, str, date]]:
+    """Cortes de série das trocas de ação por BDR com data (Fase 9): (antigo, novo, data_mudanca).
+
+    Lê o cadastro só quando há mudanças (o tipo BDR vem dele), como `ler_mudancas`. Sem recursão:
+    cadastro e mudancas_ticker não estão em `TABELAS_COM_TICKER`, então não chamam esta função.
+    """
+    mudancas = ler_tabela("mudancas_ticker", ler=ler, unir_mudancas=False)
+    if mudancas.empty:
+        return []
+    return cortes_acao_para_bdr(mudancas, _tipo_de(ler_tabela("cadastro", ler=ler)))
 
 
 def unir_historicos(df: pd.DataFrame, mudancas: dict[str, str], chave: list[str]) -> pd.DataFrame:

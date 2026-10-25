@@ -153,6 +153,8 @@ fase1:
   beta_minimo: 120
   setor_minimo: 3
   setor_excluir: "empresa"  # "empresa" = tira todas as ações do mesmo CNPJ; "acao" = tira só a própria ação
+  base_defasagem_max_pregoes: 5        # janela: a base (último valor até a data-alvo t−n) só vale se estiver no máximo N pregões antes da data-alvo; senão historico_insuficiente (seção 6, "Base velha")
+  ipca_defasagem_max_meses: 2          # IPCA: último mês conhecido no máximo N meses antes do mês de t (1 = normal; 2 = início do mês); senão indisponivel
   retorno_suspeito_min: -0.75          # retorno diário (fechamento_ajustado, contra o último preço) abaixo disto = suspeito (erro da coleta; seção 6)
   retorno_suspeito_max: 1.0            # acima disto = suspeito (ex.: AZUL3 com 30.599.848 de 09/04 a 17/04/2026)
   retorno_suspeito_pregoes_nivel: 21   # P/L, P/VP e yield: empresa fora das medianas do setor se teve retorno suspeito nos últimos N pregões até t

@@ -14,7 +14,7 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 
 from processamento import fontes
-from processamento.diagnostico import consultas, historico, temas
+from processamento.diagnostico import consultas, historico, lacunas, temas
 from processamento.diagnostico.regras import div, nova_secao
 from processamento.diagnostico.relatorio import gerar_markdown
 
@@ -71,6 +71,7 @@ def coletar(ler, mapa) -> list[dict]:
         _seguro("Tickers e CNPJs", temas.secao_tickers, ler, mapa, existentes),
         _seguro("Quantidade de ações suspeita", temas.secao_quantidade_acoes, ler, mapa, existentes),
         _seguro("Retornos diários suspeitos", temas.secao_retornos_suspeitos, ler, mapa, existentes),
+        _seguro("Lacunas nas séries de preços e índices", lacunas.secao_lacunas, ler, mapa, existentes),
         _seguro("Colunas vazias", consultas.secao_vazios, ler, mapa, existentes, df_colunas),
         _seguro("Gatilho da coleta e composição", temas.secao_painel, ler, mapa, existentes),
         _seguro("Histórico novo", historico.secao_historico, ler, mapa, existentes),

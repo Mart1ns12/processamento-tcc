@@ -413,3 +413,13 @@ def test_linguagem_dos_pacotes(cenario):
         sem_aviso = {k: v for k, v in documento.items() if k != "aviso_fixo"}
         assert "recomenda" not in json.dumps(sem_aviso, ensure_ascii=False).lower()
     assert pacote["aviso_fixo"] == "Não constitui recomendação de investimento."
+
+
+def test_aviso_provisorio_usa_o_periodo_de_treino_dos_metadados():
+    """Aviso do modelo provisório (24/10/2026): período de treino do `.meta.json`, não um texto fixo."""
+    from processamento.saida.pacotes_experimento import aviso_provisorio
+
+    assert aviso_provisorio({"periodo_treino": {"inicio": "2024-01-02", "fim": "2026-06-19"}}) == (
+        "Modelo provisório: treinado de 2024-01-02 a 2026-06-19 (cerca de 2,5 anos), só para testar a rotina."
+    )
+    assert aviso_provisorio({}) == "Modelo provisório: período de treino não informado, só para testar a rotina."

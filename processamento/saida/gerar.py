@@ -47,6 +47,34 @@ NOTA_TOP_NAO_PUBLICADO = ("Top 5 gerado e registrado só como teste de funcionam
                           "experimento_top e experimento_historico não enviados à interface "
                           "(saida.publicar_top_provisorio = false).")
 PASTA_COMPLETA_PADRAO = fontes.RAIZ / "saida_completa"
+ARQUIVOS_PACOTES = tuple(f"{nome}.json" for nome in ORDEM)   # os 9 pacotes da 8.5; o execucao.json fica (traz a rodada)
+AVISO_PACOTES_ANTERIORES = ("Pacotes de uma rodada anterior de {d} continuam na pasta (não refeitos nesta rodada): "
+                            "{lista}.")
+
+
+def _limpar_pacotes(pasta: Path, proibida: Path | None = None) -> list[str]:
+    """Apaga da pasta de D os pacotes de rodadas anteriores (só os nomes de `ARQUIVOS_PACOTES`; seção 8.5).
+
+    Nunca apaga o `execucao.json`, `*.tmp` nem outros arquivos. Não faz nada se `pasta` for a `proibida` (a pasta
+    do estado do envio, que tem arquivos com os mesmos nomes). Devolve os nomes apagados, na ordem de `ORDEM`.
+    """
+    if proibida is not None and Path(pasta).resolve() == Path(proibida).resolve():
+        return []
+    apagados = []
+    for nome in ARQUIVOS_PACOTES:
+        arquivo = Path(pasta) / nome
+        if arquivo.is_file():
+            arquivo.unlink()
+            apagados.append(nome)
+    return apagados
+
+
+def _aviso_pacotes_anteriores(pasta: Path, d: date) -> list[str]:
+    """Aviso da rodada `falhou` quando ficam na pasta pacotes de uma rodada anterior de D (lista vazia se não há)."""
+    presentes = [nome for nome in ARQUIVOS_PACOTES if (Path(pasta) / nome).is_file()]
+    if not presentes:
+        return []
+    return [AVISO_PACOTES_ANTERIORES.format(d=d.isoformat(), lista=", ".join(presentes))]
 
 
 def _data_argumento(texto: str) -> date:
@@ -99,6 +127,8 @@ def gerar(d: date, *, ler=None, pasta_saida: Path | None = None, pasta_modelos: 
     `fontes.ErroSomenteLeitura` sobe sem ser convertido (o chamador devolve código 3).
     Sem modelo oficial e sem `saida.publicar_top_provisorio`, `experimento_top` e `experimento_historico` são gerados
     (e o top registrado) mas não gravados na pasta (seção 8.5).
+    Antes de gravar, apaga da pasta os pacotes de rodadas anteriores (só os 9 nomes da 8.5); a rodada `falhou` não
+    apaga e avisa.
     """
     params_saida = carregar_parametros_saida() if params_saida is None else params_saida
     params_treino = carregar_parametros_treino() if params_treino is None else params_treino
@@ -129,10 +159,14 @@ def gerar(d: date, *, ler=None, pasta_saida: Path | None = None, pasta_modelos: 
         # Fora o ErroSaida, não mostra a mensagem original (pode conter host ou usuário do banco).
         motivo = str(erro) if isinstance(erro, ErroSaida) else f"falha ao ler a coleta ({type(erro).__name__})"
         _gravar_execucao(pasta, _execucao(d, rodada, gerado_em, contrato.data_hora_txt(datetime.now(contrato.SP)),
-                                          "falhou", gerado_em, dados_ate, coleta, [], [motivo]))
+                                          "falhou", gerado_em, dados_ate, coleta, [],
+                                          [motivo, *_aviso_pacotes_anteriores(pasta, d)]))
         if isinstance(erro, ErroSaida | fontes.ErroSomenteLeitura):
             raise
         raise ErroSaida(motivo) from erro
+
+    # 2b) pasta limpa (seção 8.5): os pacotes de rodadas anteriores saem antes de gravar os desta rodada
+    _limpar_pacotes(pasta, proibida=Path(pasta_estado) if pasta_estado is not None else params_saida.pasta_estado)
 
     aviso = aviso_composicao(ins.cal, ins.composicao)
     if aviso is not None:
@@ -321,7 +355,7 @@ def registrar_execucao(d: date, status: str, *, coleta_status: dict, avisos: lis
     dados_ate = contrato.data_hora_txt(calendario.corte_manha(d))
     rodada = _rodada_anterior(pasta) + 1
     _gravar_execucao(pasta, _execucao(d, rodada, gerado_em, gerado_em, status, gerado_em, dados_ate,
-                                      coleta_status, [], list(avisos)))
+                                      coleta_status, [], [*avisos, *_aviso_pacotes_anteriores(pasta, d)]))
     return pasta
 
 

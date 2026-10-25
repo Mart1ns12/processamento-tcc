@@ -12,6 +12,7 @@ from processamento import calendario, fontes
 from processamento.exclusoes import carregar_exclusoes
 from processamento.fatos.indices import calcular_indices, indices_no_dia
 from processamento.fatos.precos import (
+    HIST,
     OK,
     calcular_precos,
     carregar_parametros_precos,
@@ -51,8 +52,10 @@ def test_petr4_beta_e_a1_em_21_10_2026(resumos):
     assert a1["status"].iloc[0] == OK
 
 
-def test_idiv_m1_ok_em_21_10_2026(resumos):
-    """IDIV com histórico desde 2022 (carga de 24/10/2026): a janela m1 sai ok."""
+def test_idiv_m1_historico_insuficiente_e_d1_ok_em_21_10_2026(resumos):
+    """IDIV com 2022-2024 e desde 20/10/2026 (2025 falta): a base m1 cai no buraco (seção 6, Base velha)."""
     _, ri = resumos
-    linha = ri[(ri["indice"] == "IDIV") & (ri["janela"] == "m1")]
-    assert linha["status"].iloc[0] == OK
+    m1 = ri[(ri["indice"] == "IDIV") & (ri["janela"] == "m1")]
+    d1 = ri[(ri["indice"] == "IDIV") & (ri["janela"] == "d1")]
+    assert m1["status"].iloc[0] == HIST
+    assert d1["status"].iloc[0] == OK

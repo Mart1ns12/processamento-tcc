@@ -1160,7 +1160,8 @@ def secao_retornos_suspeitos(ler, mapa: dict, existentes: set) -> dict:
     tickers = sorted(precos["ticker"].dropna().unique())
     g_aj = grade_de_precos(precos, cal, "fechamento_ajustado", tickers)
     g_fech = grade_de_precos(precos, cal, "fechamento", tickers)
-    suspeitos = retornos_suspeitos(g_aj, params.retorno_suspeito_min, params.retorno_suspeito_max)
+    suspeitos = retornos_suspeitos(g_aj, params.retorno_suspeito_min, params.retorno_suspeito_max,
+                                   params.base_defasagem_max_pregoes)
     anterior = g_aj.ffill().shift(1)
     r_aj, r_fech = retornos_asof(g_aj), retornos_asof(g_fech)
     linhas = []

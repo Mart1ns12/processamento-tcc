@@ -31,6 +31,8 @@ _CHAVES_FASE1 = {
     "retorno_suspeito_min",
     "retorno_suspeito_max",
     "retorno_suspeito_pregoes_nivel",
+    "base_defasagem_max_pregoes",
+    "ipca_defasagem_max_meses",
 }
 _SETOR_EXCLUIR = ("acao", "empresa")
 
@@ -53,12 +55,21 @@ class ParametrosPrecos:
     retorno_suspeito_min: float = -0.75
     retorno_suspeito_max: float = 1.0
     retorno_suspeito_pregoes_nivel: int = 21
+    base_defasagem_max_pregoes: int = 5
+    ipca_defasagem_max_meses: int = 2
 
 
 def _inteiro_positivo(valor: object, onde: str) -> int:
     """Confere um inteiro > 0 (bool não conta); levanta `ErroParametrosPrecos` se não bater."""
     if isinstance(valor, bool) or not isinstance(valor, int) or valor <= 0:
         raise ErroParametrosPrecos(f"{onde} deve ser um inteiro maior que zero (recebeu {valor!r})")
+    return valor
+
+
+def _inteiro_nao_negativo(valor: object, onde: str) -> int:
+    """Confere um inteiro >= 0 (bool não conta); levanta `ErroParametrosPrecos` se não bater."""
+    if isinstance(valor, bool) or not isinstance(valor, int) or valor < 0:
+        raise ErroParametrosPrecos(f"{onde} deve ser um inteiro maior ou igual a zero (recebeu {valor!r})")
     return valor
 
 
@@ -109,6 +120,10 @@ def carregar_parametros_precos(caminho: str | None = None) -> ParametrosPrecos:
         retorno_suspeito_pregoes_nivel=_inteiro_positivo(
             bloco["retorno_suspeito_pregoes_nivel"], "fase1.retorno_suspeito_pregoes_nivel"
         ),
+        base_defasagem_max_pregoes=_inteiro_nao_negativo(
+            bloco["base_defasagem_max_pregoes"], "fase1.base_defasagem_max_pregoes"
+        ),
+        ipca_defasagem_max_meses=_inteiro_positivo(bloco["ipca_defasagem_max_meses"], "fase1.ipca_defasagem_max_meses"),
     )
     if params.beta_minimo > params.beta_pregoes:
         raise ErroParametrosPrecos(
@@ -159,12 +174,30 @@ def grade_de_precos(precos: pd.DataFrame, cal: list, coluna: str, tickers: list[
     return g
 
 
-def variacao(g: pd.DataFrame, n: int) -> Grade:
-    """Variação contra a última cotação até t−n (base as-of: `ffill` antes do `shift`)."""
+def defasagem_pregoes(g: pd.DataFrame) -> pd.DataFrame:
+    """Pregões desde o último valor de cada coluna, em cada linha (0 = tem valor no próprio pregão).
+
+    NaN antes do 1º valor da coluna. Só olha para trás (sem vazamento).
+    """
+    pos = np.arange(len(g), dtype=float)[:, None]
+    ultimo = pd.DataFrame(np.where(g.notna().to_numpy(), pos, np.nan), index=g.index, columns=g.columns).ffill()
+    return pd.DataFrame(pos - ultimo.to_numpy(), index=g.index, columns=g.columns)
+
+
+def variacao(g: pd.DataFrame, n: int, defasagem_max: int | None = None) -> Grade:
+    """Variação contra a última cotação até a data-alvo t−n (base as-of: `ffill` antes do `shift`).
+
+    `defasagem_max` (seção 6, "Base velha"): a base só vale se a data efetiva (último valor até a data-alvo) está
+    no máximo `defasagem_max` pregões antes da data-alvo; senão `historico_insuficiente`. None = sem limite (só
+    testes antigos; o código de produção sempre passa `fase1.base_defasagem_max_pregoes`). Valor em t é exigido.
+    """
     base = g.ffill().shift(n)
     valor = g / base - 1
-    st = _status(g, [(g.isna(), INDISPONIVEL), (base.isna(), HIST), (base <= 0, INDISPONIVEL)])
-    return montar_grade(valor, st)
+    regras = [(g.isna(), INDISPONIVEL), (base.isna(), HIST)]
+    if defasagem_max is not None:
+        regras.append((defasagem_pregoes(g).shift(n) > defasagem_max, HIST))
+    regras.append((base <= 0, INDISPONIVEL))
+    return montar_grade(valor, _status(g, regras))
 
 
 def retornos_diarios(g: pd.DataFrame) -> pd.DataFrame:
@@ -177,13 +210,20 @@ def retornos_asof(g: pd.DataFrame) -> pd.DataFrame:
     return g / g.ffill().shift(1) - 1
 
 
-def retornos_suspeitos(g_aj: pd.DataFrame, minimo: float, maximo: float) -> pd.DataFrame:
+def retornos_suspeitos(g_aj: pd.DataFrame, minimo: float, maximo: float,
+                       defasagem_max: int | None = None) -> pd.DataFrame:
     """True onde o retorno as-of do dia é < `minimo` ou > `maximo` (estrito; NaN nunca é suspeito).
 
     Erro da coleta (seção 6, "Retorno diário suspeito"): o preço não é corrigido, só isolado
     (fora das séries e das medianas do setor).
+
+    `defasagem_max` (seção 6, "Base velha"): o retorno só vale onde a base (pregão anterior) tem valor a no máximo
+    `defasagem_max` pregões de distância; acima disso é variação através de lacuna, não retorno diário: NaN (não
+    suspeito). None = sem limite (comportamento antigo).
     """
     r = retornos_asof(g_aj)
+    if defasagem_max is not None:
+        r = r.where(defasagem_pregoes(g_aj).shift(1) <= defasagem_max)
     return (r < minimo) | (r > maximo)
 
 
@@ -356,16 +396,17 @@ def pares_do_painel(cadastro: pd.DataFrame, exclusoes: Exclusoes) -> list[str]:
 
 
 def tickers_com_suspeita(precos: pd.DataFrame, cal: list, t, tickers: list[str], minimo: float,
-                         maximo: float, n: int) -> set[str]:
+                         maximo: float, n: int, defasagem_max: int | None = None) -> set[str]:
     """Tickers com retorno suspeito (fechamento_ajustado) em algum dos `n` pregões até t.
 
     `ValueError` se t não é pregão de `cal`. Só olha preços até t (sem vazamento).
+    `defasagem_max`: repassado a `retornos_suspeitos` (produção passa `fase1.base_defasagem_max_pregoes`).
     """
     ts = pd.Timestamp(t).normalize()
     g = grade_de_precos(precos, cal, "fechamento_ajustado", tickers)
     if ts not in g.index:
         raise ValueError(f"{t} não é pregão")
-    linha = suspeita_na_janela(retornos_suspeitos(g, minimo, maximo), n).loc[ts]
+    linha = suspeita_na_janela(retornos_suspeitos(g, minimo, maximo, defasagem_max), n).loc[ts]
     return {tk for tk, v in linha.items() if bool(v)}
 
 
@@ -397,17 +438,18 @@ def calcular_precos(
 
     res: dict[str, Grade] = {}
     res["cotacao.fechamento"] = montar_grade(g_fech, _status(g_fech, [(g_fech.isna(), INDISPONIVEL)]))
-    res["cotacao.variacao_dia"] = variacao(g_fech, 1)
+    n_max = params.base_defasagem_max_pregoes
+    res["cotacao.variacao_dia"] = variacao(g_fech, 1, n_max)
     # import local: fatos/series.py importa este módulo (importar no topo daria importação circular)
     from processamento.fatos.series import rentabilidade_setor_sem_empresa
-    suspeitos = retornos_suspeitos(g_aj, params.retorno_suspeito_min, params.retorno_suspeito_max)
+    suspeitos = retornos_suspeitos(g_aj, params.retorno_suspeito_min, params.retorno_suspeito_max, n_max)
     setor_rent = rentabilidade_setor_sem_empresa(g_aj, cadastro, pares, tickers, params.janelas,
-                                                 params.setor_excluir, suspeitos=suspeitos)
+                                                 params.setor_excluir, suspeitos=suspeitos, defasagem_max=n_max)
     for nome, n in params.janelas.items():
-        rent = variacao(g_aj, n)
-        res[f"variacao_preco.{nome}"] = variacao(g_fech, n)
+        rent = variacao(g_aj, n, n_max)
+        res[f"variacao_preco.{nome}"] = variacao(g_fech, n, n_max)
         res[f"rentabilidade.{nome}"] = rent
-        res[f"rentabilidade.ibov.{nome}"] = _repetir(variacao(ibov_aj, n), tickers)
+        res[f"rentabilidade.ibov.{nome}"] = _repetir(variacao(ibov_aj, n, n_max), tickers)
         res[f"rentabilidade.setor.{nome}"] = setor_rent[nome]   # DS11: razão da série SETOR_SEM:<ticker>
 
     total, relativo, mediana = volume_relativo(gv, params.volume_pregoes)

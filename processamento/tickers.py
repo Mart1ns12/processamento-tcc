@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Iterable
+from datetime import date
 
 import pandas as pd
 
@@ -73,6 +74,39 @@ def troca_acao_para_bdr(antigo: str, novo: str, tipo_de: dict[str, str]) -> bool
     if novo in tipo_de:
         return tipo_de[novo] == "BDR"
     return tipo_por_classe(classe(novo)) == "BDR"
+
+
+def cortes_acao_para_bdr(mudancas: pd.DataFrame, tipo_de: dict[str, str]) -> list[tuple[str, str, date]]:
+    """Cortes de série (Fase 9): (antigo, novo, data_mudanca) das trocas de ação por BDR com data.
+
+    Só entra a troca que `troca_acao_para_bdr` aceita e com `data_mudanca` preenchida; sem data, sem corte.
+    """
+    cortes = []
+    for antigo, novo, data in zip(
+        mudancas["ticker_antigo"], mudancas["ticker_novo"], mudancas["data_mudanca"], strict=True
+    ):
+        if not isinstance(antigo, str) or not isinstance(novo, str) or antigo == novo:
+            continue
+        if pd.isna(data):
+            continue
+        if troca_acao_para_bdr(antigo, novo, tipo_de):
+            cortes.append((antigo, novo, pd.Timestamp(data).date()))
+    return cortes
+
+
+def aplicar_cortes(
+    df: pd.DataFrame, cortes: list[tuple[str, str, date]], coluna_data: str
+) -> pd.DataFrame:
+    """Linhas do ticker novo com data anterior à mudança passam a ser do ticker antigo (Fase 9).
+
+    A linha do dia da mudança fica com o novo. Não altera `df`: devolve uma cópia.
+    """
+    resultado = df.copy()
+    datas = pd.to_datetime(resultado[coluna_data])
+    for antigo, novo, data in cortes:
+        mascara = (resultado["ticker"] == novo) & (datas < pd.Timestamp(data))
+        resultado.loc[mascara, "ticker"] = antigo
+    return resultado
 
 
 def parse_other_codes(v: object) -> list[str]:

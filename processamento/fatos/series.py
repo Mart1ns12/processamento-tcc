@@ -11,7 +11,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from processamento.fatos.indices import _k, _meses_ipca, _serie_cdi, grade_de_indices
+from processamento.fatos.indices import _atraso_meses, _k, _meses_ipca, _serie_cdi, grade_de_indices
 from processamento.fatos.precos import (
     HIST,
     INDISPONIVEL,
@@ -110,11 +110,12 @@ def _fator_ipca(meses: dict, kb, kt) -> float | None:
     return fator
 
 
-def indice_ipca(indices: pd.DataFrame, cal: list) -> Grade:
+def indice_ipca(indices: pd.DataFrame, cal: list, defasagem_max_meses: int | None = None) -> Grade:
     """IPCA em base 100: 100 × Π(1 + ipca_m) dos meses em (K(início), K(d)], sem rateio por dia.
 
     Início = 1º pregão com K definido (`indices._k`). Antes disso: `ANTES_DO_INICIO`.
     Mês faltando no intervalo: `indisponivel`.
+    Com `defasagem_max_meses`: ponto com K(d) mais de N meses antes do mês de d: `indisponivel`.
     """
     idx = indice_pregoes(cal)
     meses = _meses_ipca(indices)
@@ -127,6 +128,8 @@ def indice_ipca(indices: pd.DataFrame, cal: list) -> Grade:
             status.append(ANTES_DO_INICIO)
             continue
         fator = _fator_ipca(meses, ks[inicio], ks[i])
+        if fator is not None and defasagem_max_meses is not None and _atraso_meses(idx[i], ks[i]) > defasagem_max_meses:
+            fator = None   # IPCA parado: o ponto não fica "reto", sai indisponivel
         if fator is None:
             valor.append(np.nan)
             status.append(INDISPONIVEL)
@@ -233,11 +236,13 @@ def indice_setor_sem_empresa(g_aj: pd.DataFrame, cadastro: pd.DataFrame, pares: 
 
 def rentabilidade_setor_sem_empresa(g_aj: pd.DataFrame, cadastro: pd.DataFrame, pares: list[str], tickers: list[str],
                                     janelas: dict[str, int], modo: str,
-                                    suspeitos: pd.DataFrame | None = None) -> dict[str, Grade]:
+                                    suspeitos: pd.DataFrame | None = None,
+                                    defasagem_max: int | None = None) -> dict[str, Grade]:
     """`rentabilidade.setor` por janela (chave = nome da janela; colunas = `tickers`): razão da série (DS11).
 
     N(t)/N(base) − 1 pela `variacao` (base as-of). Sem outro membro no setor: `indisponivel`; membros sem
-    nenhum preço: `historico_insuficiente`; ponto de t vazio: `indisponivel`; base antes do início: HIST.
+    nenhum preço: `historico_insuficiente`; ponto de t vazio: `indisponivel`; base antes do início: HIST;
+    base velha (mais de `defasagem_max` pregões antes da data-alvo): HIST.
     """
     setor_de, cnpj_de = mapas_cadastro(cadastro)
     validos = [p for p in pares if p in g_aj.columns]
@@ -249,7 +254,7 @@ def rentabilidade_setor_sem_empresa(g_aj: pd.DataFrame, cadastro: pd.DataFrame, 
         for tk in tickers:
             col = f"{PREFIXO_SEM}{tk}"
             if col in serie.valor.columns:
-                v = variacao(serie.valor[[col]], n)
+                v = variacao(serie.valor[[col]], n, defasagem_max)
                 valor[tk], status[tk] = v.valor[col], v.status[col]
             else:
                 tem_outros = bool(_outros_do_setor(tk, validos, setor_de, cnpj_de, modo))

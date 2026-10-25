@@ -70,6 +70,7 @@ Ver a seção 2.1 da especificação (`processamento/`, `config/`, `tests/`, `sa
 15. **Janela única de notícias no modelo:** 08:00:01 de t até 08:00 do próximo pregão (`experimento.inicio_janela` no `parametros.yaml`, seção 7.2); colunas `noticias_dia_*`. O modelo 2 e o `noticias_pregao_tom` foram removidos.
 16. **Abertura do IBOV = fechamento anterior em ~32% dos dias** (defeito do Yahoo): só afeta o `alvo_abertura`; avaliá-lo só nos dias válidos (seção 10). Nenhuma variável usa a abertura do IBOV.
 17. **Setor sem a própria empresa e retorno suspeito:** a comparação de rentabilidade com o setor usa a série `SETOR_SEM:<ticker>` (uma por ação, sem nenhuma ação do mesmo CNPJ; a `rentabilidade.setor` é a razão dela; a `SETOR:<nome>` saiu). Retorno diário do ajustado fora de [−75%, +100%] (bloco `fase1`) é erro da coleta (AZUL3 abr/2026): não corrigir o preço; ele sai dessas séries e das medianas de P/L, P/VP e yield do setor (seção 6). O experimento ainda não trata (seção 10).
+18. **Base velha (24/10/2026):** janela com base mais de 5 pregões antes da data-alvo = `historico_insuficiente` (`fase1.base_defasagem_max_pregoes`; ex.: IDIV/SMLL/IFIX sem 2025). Vale para ações, índices, setor e `ret_*` do modelo; retorno através de lacuna > 5 pregões é ausente, nunca suspeito. IPCA com mais de 2 meses de atraso = `indisponivel`. A pasta de D é limpa antes de gravar (seção 8.5).
 
 ## Como trabalhar neste projeto
 - Responder em português, de forma simples e direta. Uma etapa por vez (seção 9 da especificação): mostrar o plano e esperar aprovação.

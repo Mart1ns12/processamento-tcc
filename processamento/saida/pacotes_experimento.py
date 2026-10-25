@@ -25,7 +25,8 @@ from processamento.saida import contrato, textos
 from processamento.saida.parametros import ParametrosSaida
 
 AVISOS = {
-    "provisorio": "Modelo provisório: treinado com cerca de 1 ano de dados, só para testar a rotina.",
+    "provisorio": "Modelo provisório: treinado de {inicio} a {fim} (cerca de {anos} anos), só para testar a rotina.",
+    "provisorio_sem_periodo": "Modelo provisório: período de treino não informado, só para testar a rotina.",
     "antes_producao": (
         "Antes da entrada em produção: este top 5 é um teste de funcionamento e não entra no histórico do experimento."
     ),
@@ -117,6 +118,16 @@ def escolher_modelo(pasta_modelos: Path, d: date) -> tuple[Path | None, Path | N
     return modelo_3, (modelo_1 if modelo_1.is_file() else None), avisos
 
 
+def aviso_provisorio(meta: dict) -> str:
+    """Aviso do modelo provisório com o período de treino dos metadados (em vez de um texto fixo)."""
+    periodo = meta.get("periodo_treino") or {}
+    inicio, fim = periodo.get("inicio"), periodo.get("fim")
+    if not inicio or not fim:
+        return AVISOS["provisorio_sem_periodo"]
+    anos = (date.fromisoformat(str(fim)[:10]) - date.fromisoformat(str(inicio)[:10])).days / 365.25
+    return AVISOS["provisorio"].format(inicio=inicio, fim=fim, anos=f"{anos:.1f}".replace(".", ","))
+
+
 def valido_para_historico(
     meta: dict, gerado_em: datetime, d: date, fim: date | None, limite: time
 ) -> tuple[bool, list[str]]:
@@ -175,7 +186,8 @@ def gerar_top(
     valido, razoes = valido_para_historico(
         meta, gerado_em, d, params_treino.teste_final_fim, params_saida.limite_valido_historico
     )
-    avisos = [AVISOS[razao] for razao in razoes] + list(avisos_modelo)
+    avisos = [aviso_provisorio(meta) if razao == "provisorio" else AVISOS[razao] for razao in razoes]
+    avisos += list(avisos_modelo)
     if n < k:
         avisos.append(AVISOS["poucas_acoes"].format(n=n, k=k))
 

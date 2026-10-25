@@ -27,6 +27,7 @@ from processamento.fatos.precos import (
     Grade,
     ParametrosPrecos,
     calcular_precos,
+    carregar_parametros_precos,
     grade_de_precos,
     resumo_precos_no_dia,
     tickers_com_suspeita,
@@ -68,7 +69,8 @@ def calcular_grades(ins: Insumos, params_precos: ParametrosPrecos, params_fund: 
     """Calcula as três grades da rodada no ponto de vista de `ins.t`."""
     fora = tickers_com_suspeita(ins.precos, ins.cal, ins.t, tickers_do_painel(ins.cadastro, ins.exclusoes),
                                 params_precos.retorno_suspeito_min, params_precos.retorno_suspeito_max,
-                                params_precos.retorno_suspeito_pregoes_nivel)
+                                params_precos.retorno_suspeito_pregoes_nivel,
+                                params_precos.base_defasagem_max_pregoes)
     return GradesDoDia(
         precos=calcular_precos(ins.precos, ins.cadastro, ins.cal, ins.exclusoes, params_precos),
         indices=calcular_indices(ins.precos, ins.indices, ins.cal, params_precos),
@@ -140,11 +142,11 @@ def montar_acoes(ins: Insumos, universo_t: pd.DataFrame, gerado_em: str, dados_a
 
 # ---------------------------------------------------------------- mercado_dia
 
-def _cotacao_de_indice(ins: Insumos, ticker: str, unidade: str) -> dict:
+def _cotacao_de_indice(ins: Insumos, ticker: str, unidade: str, defasagem_max: int | None = None) -> dict:
     """IBOV, USDBRL ou BRENT em t: fechamento, variação do dia (base as-of) e unidade."""
     ts = _ts(ins)
     g_fech = grade_de_precos(ins.precos, ins.cal, "fechamento", [ticker])
-    var = variacao(g_fech, 1)
+    var = variacao(g_fech, 1, defasagem_max)
     fech = g_fech.at[ts, ticker]
     return {
         "fechamento": contrato.folha(fech, _status_de(fech)),
@@ -153,11 +155,15 @@ def _cotacao_de_indice(ins: Insumos, ticker: str, unidade: str) -> dict:
     }
 
 
-def montar_mercado_dia(ins: Insumos, grades: GradesDoDia, gerado_em: str, dados_ate: str) -> list[dict]:
+def montar_mercado_dia(ins: Insumos, grades: GradesDoDia, gerado_em: str, dados_ate: str,
+                       params_precos: ParametrosPrecos | None = None) -> list[dict]:
     """Um registro (seção 4.2): cotações de t, CDI, IPCA e % dos índices por janela."""
+    params_precos = carregar_parametros_precos() if params_precos is None else params_precos
+    n_max = params_precos.base_defasagem_max_pregoes
+    m_max = params_precos.ipca_defasagem_max_meses
     ts = _ts(ins)
-    taxa, status_cdi, data_cdi = cdi_dia(ins.indices, ins.t)
-    ipca, status_ipca = ipca_12m(ins.indices, ins.t)
+    taxa, status_cdi, data_cdi = cdi_dia(ins.indices, ins.t, ins.cal, n_max)
+    ipca, status_ipca = ipca_12m(ins.indices, ins.t, m_max)
     ate = ipca_ate(ins.indices, ins.t)
     indices = {
         indice: {
@@ -170,9 +176,9 @@ def montar_mercado_dia(ins: Insumos, grades: GradesDoDia, gerado_em: str, dados_
     return [{
         **contrato.meta(gerado_em, dados_ate),
         "data_referencia": contrato.data_txt(ins.t),
-        "IBOV": _cotacao_de_indice(ins, "IBOV", "pontos"),
-        "USDBRL": _cotacao_de_indice(ins, "USDBRL", "BRL/USD"),
-        "BRENT": _cotacao_de_indice(ins, "BRENT", "USD/barril"),
+        "IBOV": _cotacao_de_indice(ins, "IBOV", "pontos", n_max),
+        "USDBRL": _cotacao_de_indice(ins, "USDBRL", "BRL/USD", n_max),
+        "BRENT": _cotacao_de_indice(ins, "BRENT", "USD/barril", n_max),
         "cdi_dia": contrato.folha(taxa, status_cdi),
         "cdi_data": contrato.data_txt(data_cdi),
         "ipca_12m": contrato.folha(ipca, status_ipca),

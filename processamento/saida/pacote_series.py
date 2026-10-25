@@ -73,7 +73,8 @@ def aviso_retornos_suspeitos(ins: Insumos, params_precos: ParametrosPrecos) -> s
     """
     pares = pares_do_painel(ins.cadastro, ins.exclusoes)
     g = grade_de_precos(ins.precos, ins.cal, "fechamento_ajustado", pares)
-    susp = retornos_suspeitos(g, params_precos.retorno_suspeito_min, params_precos.retorno_suspeito_max)
+    susp = retornos_suspeitos(g, params_precos.retorno_suspeito_min, params_precos.retorno_suspeito_max,
+                              params_precos.base_defasagem_max_pregoes)
     ini = inicio_janela(ins.cal, ins.t)
     dentro = (susp.index >= pd.Timestamp(ini)) & (susp.index <= pd.Timestamp(ins.t))
     janela = susp[dentro]
@@ -168,8 +169,9 @@ def series_completas(ins: Insumos, multiplos: dict[str, Grade],
     base_aj = indice_base_100(g_aj_bruto)
     pontos_base, pontos = indice_pontos(ins.indices, cal, INDICES_PONTOS)
     cdi = indice_cdi(ins.indices, cal)
-    ipca = indice_ipca(ins.indices, cal)
-    suspeitos = retornos_suspeitos(g_aj_bruto, params_precos.retorno_suspeito_min, params_precos.retorno_suspeito_max)
+    ipca = indice_ipca(ins.indices, cal, params_precos.ipca_defasagem_max_meses)
+    suspeitos = retornos_suspeitos(g_aj_bruto, params_precos.retorno_suspeito_min, params_precos.retorno_suspeito_max,
+                                   params_precos.base_defasagem_max_pregoes)
     sem, n_sem = indice_setor_sem_empresa(g_aj_bruto, ins.cadastro, pares, tickers, params_precos.setor_excluir,
                                           suspeitos=suspeitos)
     setor_de = mapas_cadastro(ins.cadastro)[0]

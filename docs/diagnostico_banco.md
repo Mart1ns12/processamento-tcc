@@ -1,6 +1,6 @@
 # Diagnóstico do banco da coleta (só leitura)
 
-- Gerado em: 2026-10-24 13:32 (America/Sao_Paulo)
+- Gerado em: 2026-10-24 21:08 (America/Sao_Paulo)
 - Banco: tcc_scraper
 - MySQL: 8.0.46-0ubuntu0.24.04.4
 - Comando: `python -m processamento.diagnostico`
@@ -594,7 +594,7 @@ Nenhuma divergência encontrada.
 
 ## 11. Retornos diários suspeitos
 
-- 6 retornos diários suspeitos em 4 tickers (fechamento_ajustado contra o último pregão com preço, abaixo de -75% ou acima de 100%): saem das séries e das medianas do setor; o preço não é corrigido (seção 6)
+- 5 retornos diários suspeitos em 3 tickers (fechamento_ajustado contra o último pregão com preço, abaixo de -75% ou acima de 100%): saem das séries e das medianas do setor; o preço não é corrigido (seção 6)
 
 ### Retornos diários suspeitos
 
@@ -603,11 +603,23 @@ Nenhuma divergência encontrada.
 | AZUL3 | 2026-02-10 | 7.42 | 341.25 | 44.9906 | 44.9906 |
 | AZUL3 | 2026-04-09 | 217 | 3.060e+07 | 141012.1244 | 141012.1244 |
 | AZUL3 | 2026-04-20 | 3.225e+07 | 30.54 | -1 | -1 |
-| JBSS32 | 2025-06-09 | 36.5741 | 73.2794 | 1.0036 | 1.0036 |
 | PCAR3 | 2021-03-01 | 10.2961 | 21.857 | 1.1228 | 1.1228 |
 | UGPA3 | 2021-06-28 | 7.0026 | 15.3592 | 1.1933 | 1.1933 |
 
-## 12. Vazios e zeros
+## 12. Lacunas nas séries de preços e índices
+
+- nenhuma lacuna de mais de 5 pregões em v1-precos (fechamento_ajustado, só dentro do período com preço de cada ticker)
+- 3 lacunas em v1-indices (IDIV, SMLL e IFIX: mais de 5 pregões, inclusive no fim; CDI: qualquer pregão sem taxa no meio e mais de 5 no fim; IPCA: meses faltando e atraso de mais de 2 meses no fim)
+
+### Lacunas em v1-indices
+
+| serie | inicio | fim | tamanho | unidade |
+|---|---|---|---|---|
+| IDIV | 2025-01-02 | 2026-10-19 | 449 | pregões |
+| IFIX | 2025-01-02 | 2026-10-19 | 449 | pregões |
+| SMLL | 2025-01-02 | 2026-10-19 | 449 | pregões |
+
+## 13. Vazios e zeros
 
 - `v1-noticias.titulo`: 1 textos vazios ('') (a leitura trata como vazio); ids (até 10): n326413
 - `v1-mudancas_ticker.data_mudanca` preenchida em 10 de 10 linhas
@@ -644,7 +656,7 @@ Nenhuma divergência encontrada.
 | v1-acoes_emitidas | qtd_pn | 1516 | 0 | 0 | cheia | 0 | 1071 |
 | v1-proventos | data_pagamento | 8392 | 8023 | 95.6 | parcial | 0 | 0 |
 
-## 13. Painel de execuções (v1-painel_execucoes e v1-painel_etapas)
+## 14. Painel de execuções (v1-painel_execucoes e v1-painel_etapas)
 
 - daily cron fora da agenda (11h/21h UTC): 0h: 1 execuções
 - etapas de execuções manuais (fora do daily): build_entrega, corrigir_horas, cvm_itr_dfp
@@ -687,11 +699,11 @@ Nenhuma divergência encontrada.
 | entrega | 8 | concluida | 4 |
 | analise | 9 | concluida | 4 |
 
-## 14. Histórico novo: composição, corrigir_horas e cobertura do experimento
+## 15. Histórico novo: composição, corrigir_horas e cobertura do experimento
 
-- Composição do Ibovespa: 49 de 136 tickers sem nenhum preço em v1-precos (8 código antigo de empresa do cadastro, 41 fora do cadastro); 29 estiveram no índice em 2024 ou depois. O preço é procurado com a união das mudanças de ticker (o código antigo vale pelo atual).
+- Composição do Ibovespa: 48 de 136 tickers sem nenhum preço em v1-precos (7 código antigo de empresa do cadastro, 41 fora do cadastro); 28 estiveram no índice em 2024 ou depois. O preço é procurado com a união das mudanças de ticker (o código antigo vale pelo atual).
 - corrigir_horas: execução mais recente 2026-10-23-coletar-135621 (status agendada), etapa pendente; iniciada em 2026-10-23 13:56, finalizada em — (horário de São Paulo)
-- Cobertura do experimento (universo com a composição, motivo ok): 116332 linhas em 1698 pregões, de 2019-12-30 a 2026-10-23.
+- Cobertura do experimento (universo com a composição, motivo ok): 117435 linhas em 1698 pregões, de 2019-12-30 a 2026-10-23.
 
 ### Composição do Ibovespa: tickers sem nenhum preço em v1-precos
 
@@ -702,7 +714,6 @@ Nenhuma divergência encontrada.
 | CPLE5 | empresa_do_cadastro | 2025-11-10 | 2025-12-21 | sim |
 | CRFB3 | empresa_do_cadastro | 2021-01-01 | 2025-06-01 | sim |
 | CYRE4 | empresa_do_cadastro | 2026-01-05 | 2026-05-03 | sim |
-| JBSS3 | empresa_do_cadastro | 2021-01-01 | 2025-06-08 | sim |
 | RENT4 | empresa_do_cadastro | 2026-01-05 | 2026-05-03 | sim |
 | STBP3 | empresa_do_cadastro | 2024-09-02 | 2025-10-05 | sim |
 | ALPA4 | fora_do_cadastro | 2021-09-01 | 2025-01-05 | sim |
@@ -753,9 +764,9 @@ Nenhuma divergência encontrada.
 |---|---|---|---|---|---|---|
 | 2019 | 1 | 70 | 70 | 70 | 70 | composicao_atual |
 | 2020 | 248 | 17678 | 70 | 71 | 74 | composicao_atual |
-| 2021 | 247 | 14495 | 57 | 59 | 60 | composicao_historica |
-| 2022 | 250 | 15919 | 63 | 64 | 64 | composicao_historica |
-| 2023 | 248 | 16445 | 65 | 66 | 68 | composicao_historica |
-| 2024 | 251 | 17754 | 69 | 70 | 74 | composicao_historica |
-| 2025 | 250 | 19082 | 74 | 76 | 77 | composicao_historica |
+| 2021 | 247 | 14742 | 58 | 60 | 61 | composicao_historica |
+| 2022 | 250 | 16169 | 64 | 65 | 65 | composicao_historica |
+| 2023 | 248 | 16693 | 66 | 67 | 69 | composicao_historica |
+| 2024 | 251 | 18005 | 70 | 71 | 75 | composicao_historica |
+| 2025 | 250 | 19189 | 75 | 77 | 77 | composicao_historica |
 | 2026 | 203 | 14889 | 70 | 73 | 77 | composicao_historica |

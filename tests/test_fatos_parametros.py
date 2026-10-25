@@ -43,6 +43,13 @@ def test_yaml_real_traz_o_bloco_fase1():
     assert params.retorno_suspeito_min == -0.75
     assert params.retorno_suspeito_max == 1.0
     assert params.retorno_suspeito_pregoes_nivel == 21
+    assert params.base_defasagem_max_pregoes == 5
+    assert params.ipca_defasagem_max_meses == 2
+
+
+def test_base_defasagem_zero_no_yaml_carrega_zero(tmp_path):
+    caminho = _parametros_em(tmp_path, lambda d: d["fase1"].__setitem__("base_defasagem_max_pregoes", 0))
+    assert carregar_parametros_precos(caminho).base_defasagem_max_pregoes == 0
 
 
 def test_calendario_continua_carregando_o_yaml_real():
@@ -70,6 +77,10 @@ def test_yaml_sem_bloco_fase1_levanta_erro(tmp_path):
         (lambda d: d["fase1"].__setitem__("retorno_suspeito_max", -1.0), "fase1.retorno_suspeito_max"),
         (lambda d: d["fase1"].__setitem__("retorno_suspeito_pregoes_nivel", 0), "fase1.retorno_suspeito_pregoes_nivel"),
         (lambda d: d["fase1"].pop("retorno_suspeito_max"), "faltam chaves"),
+        (lambda d: d["fase1"].__setitem__("base_defasagem_max_pregoes", -1), "fase1.base_defasagem_max_pregoes"),
+        (lambda d: d["fase1"].__setitem__("base_defasagem_max_pregoes", True), "fase1.base_defasagem_max_pregoes"),
+        (lambda d: d["fase1"].__setitem__("ipca_defasagem_max_meses", 0), "fase1.ipca_defasagem_max_meses"),
+        (lambda d: d["fase1"].pop("base_defasagem_max_pregoes"), "faltam chaves"),
     ],
 )
 def test_parametros_invalidos_levantam_erro(tmp_path, mudar, trecho):

@@ -81,6 +81,8 @@ def variaveis_de_preco(
     Janelas de retorno, extremos, exposição e tom vêm de `params`; volatilidade, volume e beta
     vêm do bloco fase1 (`params_precos`), como no painel. Fator de câmbio e petróleo: fechamento
     ajustado. ret_vs_setor usa o retorno de 1 pregão e o modo "empresa", só com ações da máscara.
+    Retornos com base as-of até `fase1.base_defasagem_max_pregoes` pregões antes da data-alvo
+    (seção 6, Base velha).
     """
     g_fech = fatos_precos.grade_de_precos(precos, cal, "fechamento", tickers)
     g_ab = fatos_precos.grade_de_precos(precos, cal, "abertura", tickers)
@@ -94,9 +96,9 @@ def variaveis_de_preco(
 
     res: dict[str, pd.DataFrame] = {}
     for nome, n in params.retornos.items():
-        res[nome] = fatos_precos.variacao(g_aj, n).valor
+        res[nome] = fatos_precos.variacao(g_aj, n, params_precos.base_defasagem_max_pregoes).valor
 
-    ret_dia = fatos_precos.variacao(g_aj, 1).valor
+    ret_dia = fatos_precos.variacao(g_aj, 1, params_precos.base_defasagem_max_pregoes).valor
     res["volatilidade_20d"] = fatos_precos.volatilidade(g_aj, params_precos.volatilidade_retornos).valor
     res["beta"] = fatos_precos.beta(
         g_aj, ibov, params_precos.beta_pregoes, params_precos.beta_minimo

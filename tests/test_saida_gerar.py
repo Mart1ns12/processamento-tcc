@@ -22,7 +22,8 @@ from processamento.experimento import modelos, preparacao
 from processamento.experimento import dataset as exp_dataset
 from processamento.experimento.modelos import CHAVES_METADADOS
 from processamento.saida import contrato, pacotes_experimento
-from processamento.saida.gerar import NOTA_TOP_NAO_PUBLICADO, gerar, main
+from processamento.saida.gerar import NOTA_TOP_NAO_PUBLICADO, _limpar_pacotes, gerar, main, registrar_execucao
+from processamento.saida.insumos import ErroSaida
 from processamento.saida.parametros import carregar_parametros_saida
 
 D = date(2025, 10, 22)
@@ -156,7 +157,7 @@ def test_caso_2_gabaritos_de_amostra(banco_teste, tmp_path, modelos_dir):
         assert item["chance"]["valor"] is None
         assert item["chance"]["status"] == "calibracao_nao_conferida"
         assert item["chance"]["exibir"] is False
-    assert pacotes_experimento.AVISOS["provisorio"] in top["avisos"]
+    assert any(a == pacotes_experimento.AVISOS["provisorio_sem_periodo"] for a in top["avisos"])
     assert pacotes_experimento.AVISOS["antes_producao"] in top["avisos"]
 
     hist = _registros(pasta, "experimento_historico")[0]
@@ -172,8 +173,8 @@ def test_caso_2_gabaritos_de_amostra(banco_teste, tmp_path, modelos_dir):
     assert ex["status"] == "ok"
     assert ex["fim"] is not None
     assert ex["coleta_status"] == COLETA_NAO_CONSULTADA
-    # os avisos do experimento (provisório, antes da produção) entram; falha de pacote não pode haver
-    assert pacotes_experimento.AVISOS["provisorio"] in ex["avisos"]
+    # os avisos do experimento (provisório sem período na fixture, antes da produção) entram; falha de pacote não pode haver
+    assert any(a == pacotes_experimento.AVISOS["provisorio_sem_periodo"] for a in ex["avisos"])
     assert not any(aviso.startswith("falha ao gerar") for aviso in ex["avisos"])
 
 
@@ -368,3 +369,94 @@ def test_caso_3f_retorno_suspeito_vira_aviso_e_a_rodada_segue(banco_teste, tmp_p
     assert ("Retornos diários suspeitos (abaixo de -75% ou acima de 100%) entre 2025-10-16 e 2025-10-21, "
             "fora das séries e das medianas do setor: PETR4 (2025-10-20, 2025-10-21).") in ex["avisos"]
     assert not any(a.startswith("falha ao gerar") for a in ex["avisos"])
+
+
+# ---------------------------------------------------------------- pasta limpa (Fase 5; seção 3 do plano)
+
+NOVE = ("acoes.json, series_diarias.json, mercado_dia.json, resumo_acao.json, fundamentos_trimestrais.json, "
+        "proventos.json, noticias_dia.json, experimento_historico.json, experimento_top.json")
+AVISO_ANTERIORES = ("Pacotes de uma rodada anterior de 2025-10-22 continuam na pasta (não refeitos nesta rodada): "
+                    + NOVE + ".")
+
+
+def test_p1_carga_completa_apaga_so_os_pacotes_e_mantem_o_resto(banco_teste, tmp_path, modelos_dir):
+    pasta = tmp_path / "saida_completa" / "2025-10-22"
+    pasta.mkdir(parents=True)
+    (pasta / "experimento_top.json").write_text("{}", encoding="utf-8")
+    (pasta / "experimento_historico.json").write_text("{}", encoding="utf-8")
+    (pasta / "notas.txt").write_text("minhas notas", encoding="utf-8")
+
+    gerar(D, ler=banco_teste(), pasta_saida=pasta, pasta_modelos=modelos_dir, pasta_registros=tmp_path / "registros",
+          agora=AGORA, existe_composicao=False, params_treino=PARAMS, params_saida=SAIDA_NAO, completo=True)
+
+    assert sorted(p.name for p in pasta.iterdir()) == [
+        "acoes.json", "execucao.json", "fundamentos_trimestrais.json", "mercado_dia.json", "notas.txt",
+        "noticias_dia.json", "proventos.json", "resumo_acao.json", "series_diarias.json",
+    ]
+    assert (pasta / "notas.txt").read_text(encoding="utf-8") == "minhas notas"
+    ex = _execucao(pasta)
+    assert ex["rodada"] == 1
+    assert ex["status"] == "ok"
+    assert [p["pacote"] for p in ex["pacotes_enviados"]] == SETE
+
+
+def test_p2_envio_diario_repetido_apaga_o_top_que_nao_sai(banco_teste, tmp_path, modelos_dir):
+    pasta = _gerar(tmp_path, banco_teste(), modelos=modelos_dir, params_saida=SAIDA_SIM)
+    assert (pasta / "experimento_top.json").is_file()
+
+    pasta = _gerar(tmp_path, banco_teste(), modelos=modelos_dir, params_saida=SAIDA_NAO)
+
+    assert sorted(p.name for p in pasta.iterdir()) == [
+        "acoes.json", "execucao.json", "fundamentos_trimestrais.json", "mercado_dia.json",
+        "noticias_dia.json", "proventos.json", "resumo_acao.json", "series_diarias.json",
+    ]
+    ex = _execucao(pasta)
+    assert ex["rodada"] == 2
+    assert ex["status"] == "ok"
+
+
+def test_p3_falhou_depois_de_ok_mantem_os_pacotes_e_avisa(banco_teste, tmp_path, modelos_dir):
+    pasta = _gerar(tmp_path, banco_teste(), modelos=modelos_dir, params_saida=SAIDA_SIM)
+    (pasta / "notas.txt").write_text("x", encoding="utf-8")
+
+    registrar_execucao(D, "falhou", coleta_status={"consultado": False, "nota": "teste"},
+                       avisos=["aviso da coleta"], agora=AGORA, pasta_saida=pasta, params_saida=SAIDA_SIM)
+
+    assert {p.name for p in pasta.iterdir()} == {f"{n}.json" for n in ARQUIVOS} | {"notas.txt"}
+    ex = _execucao(pasta)
+    assert ex["rodada"] == 2
+    assert ex["status"] == "falhou"
+    assert ex["pacotes_enviados"] == []
+    assert ex["avisos"] == ["aviso da coleta", AVISO_ANTERIORES]
+
+
+def test_p4_erro_de_leitura_depois_de_ok_mantem_os_pacotes(banco_teste, tmp_path, modelos_dir):
+    pasta = _gerar(tmp_path, banco_teste(), modelos=modelos_dir, params_saida=SAIDA_SIM)
+
+    def ler_quebrado(*args, **kwargs):
+        raise RuntimeError("host=10.0.0.1 user=segredo")
+
+    with pytest.raises(ErroSaida):
+        _gerar(tmp_path, ler_quebrado, modelos=modelos_dir, params_saida=SAIDA_SIM)
+
+    assert {p.name for p in pasta.iterdir()} == {f"{n}.json" for n in ARQUIVOS}
+    ex = _execucao(pasta)
+    assert ex["rodada"] == 2
+    assert ex["status"] == "falhou"
+    assert ex["avisos"] == ["falha ao ler a coleta (RuntimeError)", AVISO_ANTERIORES]
+
+
+def test_p5_limpar_pacotes_so_os_nomes_da_8_5(tmp_path):
+    pasta = tmp_path / "d"
+    pasta.mkdir()
+    for nome in ("acoes.json", "experimento_top.json", "execucao.json", "notas.txt", "acoes.json.tmp"):
+        (pasta / nome).write_text("{}", encoding="utf-8")
+
+    assert _limpar_pacotes(pasta) == ["acoes.json", "experimento_top.json"]
+    assert {p.name for p in pasta.iterdir()} == {"execucao.json", "notas.txt", "acoes.json.tmp"}
+
+    estado = tmp_path / "estado"
+    estado.mkdir()
+    (estado / "acoes.json").write_text("{}", encoding="utf-8")
+    assert _limpar_pacotes(estado, proibida=estado) == []
+    assert (estado / "acoes.json").is_file()

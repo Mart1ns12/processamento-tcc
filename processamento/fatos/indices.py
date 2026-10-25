@@ -57,6 +57,11 @@ def _k(meses: dict[pd.Period, float], d) -> pd.Period | None:
     return max(anteriores) if anteriores else None
 
 
+def _atraso_meses(d, k: pd.Period) -> int:
+    """Meses entre o mês de d e K(d) (1 = mês anterior já conhecido, o normal)."""
+    return (pd.Timestamp(d).to_period("M") - k).n
+
+
 def rentabilidade_cdi(indices: pd.DataFrame, cal: list, n: int) -> Grade:
     """CDI acumulado nos n pregões anteriores a t: taxas com data em [base, t)."""
     idx = indice_pregoes(cal)
@@ -84,8 +89,12 @@ def rentabilidade_cdi(indices: pd.DataFrame, cal: list, n: int) -> Grade:
                         pd.DataFrame({"CDI": status}, index=idx))
 
 
-def rentabilidade_ipca(indices: pd.DataFrame, cal: list, n: int) -> Grade:
-    """IPCA acumulado entre K(base) e K(t): meses fechados, sem rateio por dia."""
+def rentabilidade_ipca(indices: pd.DataFrame, cal: list, n: int, defasagem_max_meses: int | None = None) -> Grade:
+    """IPCA acumulado entre K(base) e K(t): meses fechados, sem rateio por dia.
+
+    `defasagem_max_meses` (seção 6, "Base velha"): K(t) mais de N meses antes do mês de t → indisponivel.
+    None = sem limite (testes antigos; a produção passa `fase1.ipca_defasagem_max_meses`).
+    """
     idx = indice_pregoes(cal)
     meses = _meses_ipca(indices)
     valores, status = [], []
@@ -99,6 +108,10 @@ def rentabilidade_ipca(indices: pd.DataFrame, cal: list, n: int) -> Grade:
         if kb is None or kt is None:
             valores.append(np.nan)
             status.append(HIST)
+            continue
+        if defasagem_max_meses is not None and _atraso_meses(t, kt) > defasagem_max_meses:
+            valores.append(np.nan)
+            status.append(INDISPONIVEL)
             continue
         fator = 1.0
         m = kb + 1
@@ -117,21 +130,35 @@ def rentabilidade_ipca(indices: pd.DataFrame, cal: list, n: int) -> Grade:
                         pd.DataFrame({"IPCA": status}, index=idx))
 
 
-def cdi_dia(indices: pd.DataFrame, t) -> tuple[float, str, pd.Timestamp | None]:
-    """Taxa do CDI da última data ≤ t (decimal), com status e a data usada."""
+def cdi_dia(indices: pd.DataFrame, t, cal: list | None = None,
+            defasagem_max: int | None = None) -> tuple[float, str, pd.Timestamp | None]:
+    """Taxa do CDI da última data ≤ t (decimal), com status e a data usada.
+
+    Com `cal` e `defasagem_max`: mais de `defasagem_max` pregões entre a última taxa e t → indisponivel.
+    """
     taxa = _serie_cdi(indices)
     ate = taxa[taxa.index <= pd.Timestamp(t).normalize()]
     if ate.empty:
         return (np.nan, INDISPONIVEL, None)
+    if cal is not None and defasagem_max is not None:
+        idx = indice_pregoes(cal)
+        atraso = int(((idx > ate.index[-1]) & (idx <= pd.Timestamp(t).normalize())).sum())
+        if atraso > defasagem_max:   # última taxa velha demais (seção 6, "Base velha")
+            return (np.nan, INDISPONIVEL, None)
     return (float(ate.iloc[-1]), OK, ate.index[-1])
 
 
-def ipca_12m(indices: pd.DataFrame, t) -> tuple[float, str]:
-    """IPCA acumulado nos 12 meses até K(t), inclusive (decimal)."""
+def ipca_12m(indices: pd.DataFrame, t, defasagem_max_meses: int | None = None) -> tuple[float, str]:
+    """IPCA acumulado nos 12 meses até K(t), inclusive (decimal).
+
+    Com `defasagem_max_meses`: K(t) mais de N meses antes do mês de t → indisponivel.
+    """
     meses = _meses_ipca(indices)
     kt = _k(meses, t)
     if kt is None or not meses:
         return (np.nan, HIST)
+    if defasagem_max_meses is not None and _atraso_meses(t, kt) > defasagem_max_meses:
+        return (np.nan, INDISPONIVEL)
     inicio = kt - 11
     if inicio < min(meses):
         return (np.nan, HIST)
@@ -159,9 +186,9 @@ def calcular_indices(precos: pd.DataFrame, indices: pd.DataFrame, cal: list, par
     for nome, n in params.janelas.items():
         partes = [
             rentabilidade_cdi(indices, cal, n),
-            rentabilidade_ipca(indices, cal, n),
-            variacao(grade_pontos, n),
-            variacao(grade_ivvb, n),
+            rentabilidade_ipca(indices, cal, n, params.ipca_defasagem_max_meses),
+            variacao(grade_pontos, n, params.base_defasagem_max_pregoes),
+            variacao(grade_ivvb, n, params.base_defasagem_max_pregoes),
         ]
         valor = pd.concat([p.valor for p in partes], axis=1)
         status = pd.concat([p.status for p in partes], axis=1)
