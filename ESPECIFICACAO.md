@@ -176,8 +176,8 @@ Fonte dos dados: tabelas da seção 3. `fech` = `fechamento`; `aj` = `fechamento
 | Comparação com índices | Ação × CDI, IPCA, IDIV, SMLL, IFIX, IVVB11. **CDI e IPCA acumulados** (juros sobre juros) | IPCA é mensal |
 | Volume total | `volume` do dia | — |
 | Volume em relação ao normal | `volume(t) / mediana(volume das 20 sessões anteriores, sem t)` | `historico_insuficiente` com menos de 20 |
-| Volatilidade | Desvio-padrão dos 20 últimos retornos diários de `aj` | `posicao_pct` = fração das ações do dia mais calmas que ela |
-| Beta | Inclinação da regressão dos retornos diários da ação sobre os do IBOV, 252 pregões | Usa até 252 pregões; calcula a partir de **120**. Abaixo de 120: `historico_insuficiente` |
+| Volatilidade | Desvio-padrão dos 20 últimos retornos diários de `aj` | `posicao_pct` = fração das ações do dia mais calmas que ela. Retorno suspeito (seção 6) não entra: a janela fica incompleta → `historico_insuficiente` (24/10/2026) |
+| Beta | Inclinação da regressão dos retornos diários da ação sobre os do IBOV, 252 pregões | Usa até 252 pregões; calcula a partir de **120**. Abaixo de 120: `historico_insuficiente`. Retorno suspeito da ação (seção 6) não entra nos pares (24/10/2026) |
 | Tom das notícias do dia | Contagem por rótulo (maior das 3 probabilidades) e tom médio `prob_positivo − prob_negativo` | Manchetes ordenadas por `destaque` (seção 8) |
 | P/L | Valor de mercado ÷ lucro líquido 12m. Valor de mercado = Σ (preço de cada classe × quantidade) ou preço × (ON+PN) quando só uma classe é negociada | Lucro 12m ≤ 0: mostrar **o número e o aviso** (ex.: "P/L −5,2 · Empresa com prejuízo nos últimos 12 meses"), com `status = lucro_negativo`. Essa empresa **não entra na média do setor** |
 | P/VP | Valor de mercado ÷ patrimônio líquido do balanço mais recente | — |
@@ -202,7 +202,7 @@ Fonte dos dados: tabelas da seção 3. `fech` = `fechamento`; `aj` = `fechamento
 | 12 meses | Soma dos 4 últimos trimestres isolados |
 | Point-in-time | Em cada data, usar só balanços com `data_entrega ≤ data` |
 | Balanço velho | Em t, o balanço de referência (D11) vale até o **fim do mês** de `data_fim_periodo` + `fundamentos.balanco_idade_max_meses` (15) meses de calendário (decidido em 24/10/2026: o limite é o fim do mês, não o dia exato; ex.: fim 31/12/2023 vale até 31/03/2025; fim 30/09/2024 vale até 31/12/2025; fim 29/02/2024 vale até 31/05/2025). Depois disso, P/L, P/VP, ROE, margens bruta e líquida, EBITDA (valor e margem), endividamento (DL, DL/PL, DL/EBITDA, caixa líquido) e payout 12m saem `indisponivel`, também nos pontos diários de P/L e P/VP do `series_diarias`; a empresa sai das medianas do setor desses indicadores. Não mudam: yield, `payout_por_ano`, `proventos_por_ano`, `fundamentos_trimestrais` e `balanco_referencia` (continua mostrando o balanço usado). Bancos e seguradoras seguem `nao_se_aplica` onde já eram (decidido em 24/10/2026) |
-| Bancos e seguradoras | Identificar pelo setor do cadastro |
+| Bancos, seguradoras e holdings | Identificar pelo subsetor do cadastro (D5; "Holdings Diversificadas" desde 24/10/2026) |
 | Calendário | Pregões = datas com preço do `IBOV` em `v1-precos` |
 | Mudança de ticker | Unir os históricos pela `v1-mudancas_ticker` antes de qualquer cálculo. **Exceção (24/10/2026): troca de ação (classe 3, 4, 5, 6 ou 11) por BDR** (`tipo_acao` BDR no cadastro; fora dele, classe 32 a 35) não une: o código antigo fica com as suas linhas e a BDR começa na troca (ex.: JBSS3 → JBSS32 em 09/06/2025, que gerava um retorno suspeito). A empresa é a mesma (raiz/CNPJ): notícias e proventos do código antigo valem para ela |
 | Setor herdado (24/10/2026) | Ticker fora do `v1-cadastro` ligado a uma empresa do cadastro (mudança de ticker pela `v1-mudancas_ticker` ou raiz de 4 letras com um único CNPJ) herda o CNPJ e o setor dessa empresa **no dataset do experimento** (ex.: JBSS3 até 06/06/2025 → setor do JBSS32). Vale para `empresa`, `setor`, `ret_vs_setor` e `tom_setor`; os tickers que herdaram ficam em `setor_herdado` no JSON do dataset |
@@ -478,7 +478,7 @@ Decidido em 24/10/2026.
 - **Duas classes PN (D2):** média das classes PN que pagaram no evento × `qtd_pn` (limitação na seção 10).
 - **Ações da época (D3):** cada provento usa a linha de `v1-acoes_emitidas` com a maior `data_referencia` ≤ `data_com`; sem ela, a mais antiga disponível.
 - **Point-in-time das ações (D4):** uma linha de `v1-acoes_emitidas` só vale em t se o balanço do mesmo CNPJ com `data_fim_periodo` = `data_referencia` já foi entregue (`data_entrega` ≤ t).
-- **Bancos e seguradoras (D5):** pelo **subsetor** do cadastro ("Intermediários Financeiros" e "Previdência e Seguros"), não pelo setor. Margens, EBITDA e endividamento: `nao_se_aplica`.
+- **Bancos e seguradoras (D5):** pelo **subsetor** do cadastro ("Intermediários Financeiros", "Previdência e Seguros" e, desde 24/10/2026, "Holdings Diversificadas": ITSA4, cuja receita de holding dava margem líquida de 215%), não pelo setor. Margens, EBITDA e endividamento: `nao_se_aplica`.
 - **Patrimônio ≤ 0 (D6):** P/VP, ROE e DL/PL saem `nao_se_aplica`.
 - **Lucro 12m = 0 e payout com prejuízo (D7):** P/L com lucro zero: sem valor, `lucro_negativo`. Payout com lucro ≤ 0: sem valor, `lucro_negativo`.
 - **Sem provento na janela (D8):** yield e payout = 0,0 com `ok` (não pagar é um fato, não ausência de dado).
@@ -546,7 +546,7 @@ Com ~1 ano de histórico, a etapa 6 é **só teste de funcionamento** (3.4): o r
 - **S11 Registro do top 5** em `registros/experimento/` (versionável). Com `treino.teste_final.fim` preenchido (produção), é de uso único: gravado na 1ª geração e nunca sobrescrito, e a rodada repetida do mesmo dia reconstrói o pacote do registro. Com `fim` vazio (testes de funcionamento), cada rodada gera de novo e sobrescreve o registro do dia.
 - **S12 Histórico vazio até a produção;** nenhum dia do teste final é fechado.
 - **S13 Validador próprio** (`saida/contrato.py`), sem dependência nova.
-- **S14 Textos prontos** (`saida/textos.py`), com `tom_neutro = 0,05` e as faixas do beta.
+- **S14 Textos prontos** (`saida/textos.py`), com `tom_neutro = 0,05` e as faixas do beta (desde 24/10/2026, |beta| < 0,2 = "quase não acompanha o Ibovespa").
 - **S15 Acréscimos no `resumo_acao`:** `proventos_por_ano`, `ebitda.rotulo`, `endividamento.aviso`; sem status de grupo.
 - **S16 `ativo_no_universo`** = candidata do experimento em t (tipo aceito, não excluída, na composição), mesmo sem preço no dia.
 - **S17 Ponto de entrada** `python -m processamento.saida --data D`; a etapa 8 chama `gerar(...)` como função.

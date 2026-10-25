@@ -46,9 +46,13 @@ def amplitude(g_max: pd.DataFrame, g_min: pd.DataFrame, g_fech: pd.DataFrame) ->
     return ((g_max - g_min) / g_fech).where(valido)
 
 
-def exposicao(g_aj: pd.DataFrame, fator: pd.Series, janela: int, minimo: int) -> pd.DataFrame:
-    """Beta da ação sobre o fator (ex.: dólar) vezes o retorno do fator no dia."""
-    b = fatos_precos.beta(g_aj, fator, janela, minimo).valor
+def exposicao(g_aj: pd.DataFrame, fator: pd.Series, janela: int, minimo: int,
+              excluir: pd.DataFrame | None = None) -> pd.DataFrame:
+    """Beta da ação sobre o fator (ex.: dólar) vezes o retorno do fator no dia.
+
+    `excluir` (seção 6, "Retorno diário suspeito"): retornos suspeitos da ação, que saem do beta.
+    """
+    b = fatos_precos.beta(g_aj, fator, janela, minimo, excluir=excluir).valor
     return b.mul(fator / fator.shift(1) - 1, axis=0)
 
 
@@ -93,21 +97,30 @@ def variaveis_de_preco(
     ibov = fatos_precos.grade_de_precos(precos, cal, "fechamento_ajustado", ["IBOV"])["IBOV"]
     usd = fatos_precos.grade_de_precos(precos, cal, "fechamento_ajustado", ["USDBRL"])["USDBRL"]
     brent = fatos_precos.grade_de_precos(precos, cal, "fechamento_ajustado", ["BRENT"])["BRENT"]
+    # retornos suspeitos da ação saem da volatilidade, do beta e das exposições (seção 6, "Retorno diário suspeito")
+    suspeitos = fatos_precos.retornos_suspeitos(
+        g_aj, params_precos.retorno_suspeito_min, params_precos.retorno_suspeito_max,
+        params_precos.base_defasagem_max_pregoes,
+    )
 
     res: dict[str, pd.DataFrame] = {}
     for nome, n in params.retornos.items():
         res[nome] = fatos_precos.variacao(g_aj, n, params_precos.base_defasagem_max_pregoes).valor
 
     ret_dia = fatos_precos.variacao(g_aj, 1, params_precos.base_defasagem_max_pregoes).valor
-    res["volatilidade_20d"] = fatos_precos.volatilidade(g_aj, params_precos.volatilidade_retornos).valor
+    res["volatilidade_20d"] = fatos_precos.volatilidade(
+        g_aj, params_precos.volatilidade_retornos, excluir=suspeitos
+    ).valor
     res["beta"] = fatos_precos.beta(
-        g_aj, ibov, params_precos.beta_pregoes, params_precos.beta_minimo
+        g_aj, ibov, params_precos.beta_pregoes, params_precos.beta_minimo, excluir=suspeitos
     ).valor
     res["volume_relativo"] = fatos_precos.volume_relativo(gv, params_precos.volume_pregoes)[1].valor
     res["salto_abertura"] = salto_abertura(g_ab, g_aj, g_fech)
     res["dist_max_52s"], res["dist_min_52s"] = extremos(g_aj, params.extremos_pregoes, params.extremos_minimo)
     res["amplitude"] = amplitude(g_max, g_min, g_fech)
     res["ret_vs_setor"] = ret_vs_setor(ret_dia, mascara, setor_de, cnpj_de, "empresa")
-    res["exposicao_dolar"] = exposicao(g_aj, usd, params.exposicao_pregoes, params.exposicao_minimo)
-    res["exposicao_petroleo"] = exposicao(g_aj, brent, params.exposicao_pregoes, params.exposicao_minimo)
+    res["exposicao_dolar"] = exposicao(g_aj, usd, params.exposicao_pregoes, params.exposicao_minimo,
+                                       excluir=suspeitos)
+    res["exposicao_petroleo"] = exposicao(g_aj, brent, params.exposicao_pregoes, params.exposicao_minimo,
+                                          excluir=suspeitos)
     return res

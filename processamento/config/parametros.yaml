@@ -160,7 +160,9 @@ fase1:
   retorno_suspeito_pregoes_nivel: 21   # P/L, P/VP e yield: empresa fora das medianas do setor se teve retorno suspeito nos últimos N pregões até t
 # Fase 1: fundamentos e proventos (seções 5 e 6 da especificação; plano da etapa 4).
 fundamentos:
-  subsetores_financeiros: ["Intermediários Financeiros", "Previdência e Seguros"]  # bancos e seguradoras (subsetor do v1-cadastro)
+  # bancos, seguradoras e holdings (subsetor do v1-cadastro): margens, EBITDA e endividamento = nao_se_aplica.
+  # "Holdings Diversificadas" desde 24/10/2026 (ITSA4: receita de holding deu margem líquida de 215%).
+  subsetores_financeiros: ["Intermediários Financeiros", "Previdência e Seguros", "Holdings Diversificadas"]
   meses_janela: 12              # yield e payout: data_com em (t − 12 meses, t]
   anos_payout: 5                # payout_por_ano: últimos N exercícios (DFP) entregues até t
   anos_historico_proventos: 5   # soma por ano: ano de t e os N − 1 anteriores

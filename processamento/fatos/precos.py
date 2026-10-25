@@ -247,9 +247,24 @@ def volume_relativo(gv: pd.DataFrame, n: int) -> tuple[Grade, Grade, Grade]:
     return total, rel, med
 
 
-def volatilidade(g_aj: pd.DataFrame, n: int) -> Grade:
-    """Desvio-padrão amostral (ddof = 1) dos n últimos retornos diários de `aj`, sem anualizar."""
-    v = retornos_diarios(g_aj).rolling(n, min_periods=n).std(ddof=1)
+def _sem_excluidos(ret: pd.DataFrame, excluir: pd.DataFrame | None) -> pd.DataFrame:
+    """Retornos com NaN onde `excluir` é True (células ausentes = False); `None` devolve `ret` como está.
+
+    Retorno diário suspeito (seção 6, "Retorno diário suspeito"): sai do cálculo; o preço não muda.
+    """
+    if excluir is None:
+        return ret
+    mascara = excluir.reindex(index=ret.index, columns=ret.columns, fill_value=False).astype(bool)
+    return ret.mask(mascara)
+
+
+def volatilidade(g_aj: pd.DataFrame, n: int, excluir: pd.DataFrame | None = None) -> Grade:
+    """Desvio-padrão amostral (ddof = 1) dos n últimos retornos diários de `aj`, sem anualizar.
+
+    `excluir` (seção 6, "Retorno diário suspeito"): máscara bool dos retornos da ação que não contam. Janela
+    com algum deles fica incompleta → `historico_insuficiente`.
+    """
+    v = _sem_excluidos(retornos_diarios(g_aj), excluir).rolling(n, min_periods=n).std(ddof=1)
     return montar_grade(v, _status(g_aj, [(g_aj.isna(), INDISPONIVEL), (v.isna(), HIST)]))
 
 
@@ -271,12 +286,15 @@ def posicao_pct(gr: Grade, pares: list[str]) -> Grade:
     return montar_grade(pos, st)
 
 
-def beta(g_aj: pd.DataFrame, ibov_aj: pd.Series, janela: int, minimo: int) -> Grade:
+def beta(g_aj: pd.DataFrame, ibov_aj: pd.Series, janela: int, minimo: int,
+         excluir: pd.DataFrame | None = None) -> Grade:
     """Beta MQO dos retornos diários da ação sobre os do IBOV, só nos pares de retornos válidos.
 
     Janela de `janela` pregões até t; calcula a partir de `minimo` pares válidos.
+    `excluir` (seção 6, "Retorno diário suspeito"): máscara bool dos retornos da ação que não contam; o par sai
+    e, com menos de `minimo` pares, `historico_insuficiente`.
     """
-    ra = retornos_diarios(g_aj)
+    ra = _sem_excluidos(retornos_diarios(g_aj), excluir)
     ri = (ibov_aj / ibov_aj.shift(1) - 1).reindex(ra.index)
     ri_m = pd.DataFrame(np.repeat(ri.to_numpy()[:, None], ra.shape[1], axis=1), index=ra.index, columns=ra.columns)
     valido = ra.notna() & ri_m.notna()
@@ -459,11 +477,11 @@ def calcular_precos(
     res["volume.posicao_pct"] = posicao_pct(relativo, pares)
 
     k = params.volatilidade_retornos
-    vol = volatilidade(g_aj, k)
+    vol = volatilidade(g_aj, k, excluir=suspeitos)
     res[f"volatilidade_{k}d.valor"] = vol
     res[f"volatilidade_{k}d.posicao_pct"] = posicao_pct(vol, pares)
 
-    res["beta.valor"] = beta(g_aj, ibov_aj["IBOV"], params.beta_pregoes, params.beta_minimo)
+    res["beta.valor"] = beta(g_aj, ibov_aj["IBOV"], params.beta_pregoes, params.beta_minimo, excluir=suspeitos)
 
     fraca = comparacao_fraca(tickers, pares, setor_de, cnpj_de, params.setor_excluir, params.setor_minimo)
     fraca_valor = np.repeat(fraca.reindex(tickers).astype(float).to_numpy()[None, :], len(idx), axis=0)

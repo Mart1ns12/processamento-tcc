@@ -58,6 +58,16 @@ def test_texto_beta_faixas():
     assert texto_beta(None) is None
 
 
+def test_texto_beta_quase_zero():
+    """|beta| < 0,2 (24/10/2026): quase não acompanha; as bordas 0,2 e −0,2 seguem as faixas antigas."""
+    assert texto_beta(-0.010806382467914228) == "−0,01: quase não acompanha o Ibovespa"
+    assert texto_beta(0.0) == "0,00: quase não acompanha o Ibovespa"
+    assert texto_beta(0.19) == "0,19: quase não acompanha o Ibovespa"
+    assert texto_beta(-0.19) == "−0,19: quase não acompanha o Ibovespa"
+    assert texto_beta(0.2) == "0,20: move-se bem menos que o Ibovespa"
+    assert texto_beta(-0.2) == "−0,20: costuma andar na direção contrária do Ibovespa"
+
+
 def test_texto_pl():
     assert texto_pl(-5.0, "lucro_negativo") == "P/L −5,0 · Empresa com prejuízo nos últimos 12 meses"
     assert texto_pl(None, "lucro_negativo") == "Empresa sem lucro nos últimos 12 meses"

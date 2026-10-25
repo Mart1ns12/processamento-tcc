@@ -33,7 +33,7 @@ def _parametros_em(tmp_path, mudar) -> str:
 def test_yaml_real_traz_o_bloco_fundamentos():
     params = carregar_parametros_fundamentos()
     assert params == ParametrosFundamentos(
-        subsetores_financeiros=("Intermediários Financeiros", "Previdência e Seguros"),
+        subsetores_financeiros=("Intermediários Financeiros", "Previdência e Seguros", "Holdings Diversificadas"),
         meses_janela=12,
         anos_payout=5,
         anos_historico_proventos=5,
@@ -86,7 +86,8 @@ def test_parametros_fundamentos_invalidos_levantam_erro(tmp_path, mudar, trecho)
 
 @pytest.mark.parametrize(
     "subsetor",
-    ["Intermediários Financeiros", " intermediarios financeiros", "Previdência e Seguros", "PREVIDENCIA E SEGUROS"],
+    ["Intermediários Financeiros", " intermediarios financeiros", "Previdência e Seguros", "PREVIDENCIA E SEGUROS",
+     "Holdings Diversificadas", "holdings diversificadas"],
 )
 def test_eh_financeiro_ignora_acento_caixa_e_espacos(subsetor):
     assert eh_financeiro(subsetor, carregar_parametros_fundamentos()) is True

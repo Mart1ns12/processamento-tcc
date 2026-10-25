@@ -54,6 +54,8 @@ def texto_volatilidade(posicao_pct) -> str | None:
 
 
 def _faixa_beta(b: float) -> str:
+    if abs(b) < 0.2:  # quase zero (24/10/2026): ex.: AZUL3 −0,01 não "anda na direção contrária"
+        return "quase não acompanha o Ibovespa"
     if b < 0:
         return "costuma andar na direção contrária do Ibovespa"
     if b < 0.8:
