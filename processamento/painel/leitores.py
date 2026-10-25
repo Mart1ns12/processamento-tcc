@@ -134,6 +134,61 @@ def ler_prazo_rotina(raiz: Path) -> str | None:
     return None
 
 
+CHAVES_AJUDA = ("prazo", "prazo_tardio", "inicio_consulta", "intervalo", "limite_historico", "corte_noite",
+                "retorno_min", "retorno_max", "defasagem", "pvp_min", "sorteios", "teste_final_inicio")
+
+
+def _inteiro(v: object) -> bool:
+    return isinstance(v, int) and not isinstance(v, bool)
+
+
+def _numero(v: object) -> bool:
+    return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+
+def _hhmm_valido(v: object) -> str | None:
+    return v if isinstance(v, str) and RE_HHMM.match(v) else None
+
+
+def ler_valores_ajuda(raiz: Path) -> dict[str, str | None]:
+    """Valores do parametros.yaml citados nos textos de ajuda, já formatados; None se faltar ou for inválido."""
+    vazio: dict[str, str | None] = dict.fromkeys(CHAVES_AJUDA)
+    caminho = Path(raiz) / "processamento" / "config" / "parametros.yaml"
+    try:
+        dados = yaml.safe_load(caminho.read_text(encoding="utf-8"))
+    except (OSError, ValueError, yaml.YAMLError):
+        return vazio
+    if not isinstance(dados, dict):
+        return vazio
+    rotina, saida, fase1 = _secao(dados, "rotina"), _secao(dados, "saida"), _secao(dados, "fase1")
+    fund, treino = _secao(dados, "fundamentos"), _secao(dados, "treino")
+    teste = _secao(treino, "teste_final")
+    rmin, rmax = fase1.get("retorno_suspeito_min"), fase1.get("retorno_suspeito_max")
+    intervalo, defas = rotina.get("intervalo_minutos"), fase1.get("base_defasagem_max_pregoes")
+    pvp, sorteios = fund.get("pvp_minimo_plausivel"), treino.get("acaso_sorteios")
+    inicio = teste.get("inicio")
+    if isinstance(inicio, date):
+        inicio = inicio.isoformat()
+    try:
+        tf = date.fromisoformat(inicio).strftime("%d/%m/%Y") if isinstance(inicio, str) else None
+    except ValueError:
+        tf = None
+    return {
+        "prazo": _hhmm_valido(rotina.get("prazo")),
+        "prazo_tardio": _hhmm_valido(rotina.get("prazo_tardio")),
+        "inicio_consulta": _hhmm_valido(rotina.get("inicio_consulta")),
+        "intervalo": str(intervalo) if _inteiro(intervalo) else None,
+        "limite_historico": _hhmm_valido(saida.get("limite_valido_historico")),
+        "corte_noite": _hhmm_valido(dados.get("corte_noite")),
+        "retorno_min": f"{round(rmin * 100):+d}%" if _numero(rmin) else None,
+        "retorno_max": f"{round(rmax * 100):+d}%" if _numero(rmax) else None,
+        "defasagem": str(defas) if _inteiro(defas) else None,
+        "pvp_min": f"{pvp:g}".replace(".", ",") if _numero(pvp) else None,
+        "sorteios": f"{sorteios:,}".replace(",", ".") if _inteiro(sorteios) else None,
+        "teste_final_inicio": tf,
+    }
+
+
 def _secao(dados: dict, chave: str) -> dict:
     """dados[chave] se for mapeamento; senão {}."""
     valor = dados.get(chave)

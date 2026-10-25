@@ -18,8 +18,14 @@ import pytest
 
 from fabrica_painel import montar_raiz
 from processamento.calendario import SP
-from processamento.painel import acoes
-from processamento.painel.servidor import criar_servidor, estado_com_marcos, host_permitido, origem_permitida
+from processamento.painel import acoes, ajuda, leitores
+from processamento.painel.servidor import (
+    CSP_PAGINA,
+    criar_servidor,
+    estado_com_marcos,
+    host_permitido,
+    origem_permitida,
+)
 
 REPO = Path(__file__).resolve().parents[1]
 RELOGIO = lambda: datetime(2026, 10, 23, 10, 0, tzinfo=SP)  # noqa: E731
@@ -115,6 +121,9 @@ def test_get_raiz_serve_pagina_com_token_e_csp(srv):
     assert srv.token in texto
     assert "__TOKEN_PAINEL__" not in texto
     assert "content-security-policy" in cab
+    assert cab["content-security-policy"] == CSP_PAGINA
+    assert "img-src data:" in CSP_PAGINA
+    assert "http" not in CSP_PAGINA
     assert cab["cache-control"] == "no-store"
     assert cab["x-content-type-options"] == "nosniff"
 
@@ -187,7 +196,8 @@ def test_domingo_usa_o_ultimo_pregao(subir):
 def test_api_painel_visao_com_as_fixtures(srv):
     _, _, corpo = pedir(srv, "GET", "/api/painel")
     dados = _json(corpo)
-    assert set(dados["visao"]) == {"fluxo", "linha_tempo", "saude", "calendario"}
+    assert set(dados["visao"]) == {"fluxo", "linha_tempo", "saude", "calendario", "resumo", "tempos", "ajuda",
+                                   "dia", "glossario"}
     fluxo = dados["visao"]["fluxo"]
     assert fluxo["coleta"]["estado"] == "ok"
     assert fluxo["coleta"]["etapas_concluidas"] == 9
@@ -215,6 +225,55 @@ def test_api_painel_visao_com_as_fixtures(srv):
     assert dia_23["status"] == "ok"
     assert dia_23["completa"] is True
     assert dados["acao"]["marcos"] == []
+
+
+def test_api_painel_resumo_tempos_e_ajuda(srv):
+    _, _, corpo = pedir(srv, "GET", "/api/painel")
+    dados = _json(corpo)
+    r = dados["visao"]["resumo"]
+    assert r["nivel"] == "bad"
+    assert r["frase"] == "Falhou: Contrato com a coleta (2 divergências) · e 5 pontos de atenção"
+    assert [p["alvo"] for p in r["pontos"]] == ["saude-c-contrato", "saude-c-quantidade_acoes", "saude-c-retornos",
+                                                "saude-c-lacunas", "saude-c-horario_noticias", "saude-c-cobertura"]
+    assert r["pontos"][0]["o_que_fazer"] == ajuda.O_QUE_FAZER["saude_contrato"]
+    assert r["pontos"][1]["texto"] == "Quantidade de ações (sem dados)"
+    assert r["pontos"][1]["o_que_fazer"] == ajuda.O_QUE_FAZER["saude_sem_dados"]
+    assert dados["visao"]["tempos"] == {
+        "rotina": {"segundos": 118, "curto": "~2 min", "texto": "A última rotina diária levou 1 min 58 s.",
+                   "origem": "execucao"},
+        "carga": {"segundos": 180, "curto": "~3 min", "texto": "A última carga completa levou 3 min 0 s.",
+                  "origem": "execucao"},
+        "diagnostico": {"segundos": None, "curto": None, "texto": "Ainda sem medição: pode levar alguns minutos.",
+                        "origem": None},
+        "testes": {"segundos": 96, "curto": "~2 min", "texto": "Da última vez, pelo painel, levou 1 min 36 s.",
+                   "origem": "painel"},
+    }
+    a = dados["visao"]["ajuda"]
+    assert set(a) == set(ajuda.AJUDA)
+    assert a["prazo"]["texto"] == ajuda.AJUDA["prazo"][1].format(prazo="09:45", prazo_tardio="12:00",
+                                                                 limite_historico="10:00")
+    assert "(09:45)" in a["linha_tempo"]["texto"]
+    assert "(10:00)" in a["linha_tempo"]["texto"]
+    # "sem dados" é texto legítimo de saude_lacunas: o que importa é nenhum campo cair no fallback.
+    assert all("{" not in v["texto"] and v["texto"].count("sem dados") == ajuda.AJUDA[id_][1].count("sem dados")
+               for id_, v in a.items())
+
+
+def test_api_painel_dia_e_glossario(srv):
+    _, _, corpo = pedir(srv, "GET", "/api/painel")
+    dados = _json(corpo)
+    assert dados["visao"]["dia"] == ("Hoje é sexta, 23/10/2026 (dia de pregão). "
+                                     "A última rotina diária é a de hoje.")
+    assert len(dados["visao"]["glossario"]) == 15
+    assert dados["visao"]["glossario"][0][0] == "Pregão"
+    assert all(isinstance(par, list) and len(par) == 2 for par in dados["visao"]["glossario"])
+
+
+def test_dia_sem_pregao_nao_quebra_a_frase(subir):
+    s = subir(relogio=RELOGIO_DOMINGO)
+    _, _, corpo = pedir(s, "GET", "/api/painel")
+    dados = _json(corpo)
+    assert dados["visao"]["dia"].startswith("Hoje é domingo, 25/10/2026 (sem pregão).")
 
 
 # ---------------------------------------------------------------- arquivos sensíveis
@@ -366,6 +425,10 @@ def test_trava_abandonada_nao_bloqueia(srv):
     dados = _json(corpo)
     assert dados["trava"]["abandonada"] is True
     assert dados["botoes"]["rotina"]["habilitado"] is True
+    r = dados["visao"]["resumo"]
+    assert r["pontos"][-1] == {"nivel": "warn", "texto": "Trava da rotina esquecida (420 min)", "alvo": "comandos",
+                               "o_que_fazer": ajuda.O_QUE_FAZER["trava_abandonada"]}
+    assert r["frase"].endswith("· e 6 pontos de atenção")
 
 
 # ---------------------------------------------------------------- produção
@@ -405,6 +468,10 @@ def test_host_e_origem_permitidos():
     assert origem_permitida("null", 8765) is False
 
 
+def test_campos_da_ajuda_batem_com_o_yaml(tmp_path):
+    assert set(leitores.ler_valores_ajuda(montar_raiz(tmp_path))) | {"abertura"} == ajuda.CAMPOS
+
+
 def test_modulo_do_painel_nao_importa_banco_nem_env():
     codigo = ("import sys, processamento.painel.servidor; "
               "print('processamento.fontes' in sys.modules, 'sqlalchemy' in sys.modules, 'dotenv' in sys.modules)")
@@ -420,3 +487,13 @@ def test_codigo_do_painel_nao_tem_sql_nem_shell():
         texto = arquivo.read_text(encoding="utf-8")
         for termo in proibidos:
             assert termo not in texto, f"{arquivo.name} contém {termo!r}"
+
+
+def test_aviso_da_rotina_explica_o_registro_do_top5():
+    from processamento.painel.servidor import _aviso_rotina
+    frase = ("Fora de produção, o top 5 regravado fica marcado como fora do histórico; em produção, "
+             "o registro do dia é gravado uma vez só e nunca é refeito.")
+    hoje = {"motivo": "domingo"}
+    assert frase in _aviso_rotina({"data": "2026-10-23", "origem": "ultimo_pregao"}, hoje)
+    assert frase in _aviso_rotina({"data": "2026-10-23", "origem": "hoje"}, hoje)
+    assert _aviso_rotina({"data": None}, hoje) is None

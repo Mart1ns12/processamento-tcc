@@ -1,0 +1,112 @@
+"""Textos de ajuda ("?") e de "O que fazer" do painel, num lugar só, para revisar fácil.
+
+Nenhum número escrito à mão: valores como o prazo vêm do parametros.yaml ou dos arquivos do projeto
+e entram nos campos {entre chaves}. Campo sem valor vira "sem dados".
+"""
+
+from __future__ import annotations
+
+import string
+
+SEM_DADOS = "sem dados"
+
+CAMPOS = frozenset({
+    "prazo", "prazo_tardio", "inicio_consulta", "intervalo", "limite_historico", "corte_noite",
+    "retorno_min", "retorno_max", "defasagem", "pvp_min", "sorteios", "teste_final_inicio", "abertura",
+})
+
+# id -> (título, texto). Strings entre aspas simples: os textos usam aspas duplas e nunca apóstrofo.
+AJUDA: dict[str, tuple[str, str]] = {
+    "resumo": ('Resumo', 'Uma frase que junta tudo o que está amarelo ou vermelho no painel. "Tudo certo": nada pede atenção. "Atenção": há pontos para acompanhar, mas nada quebrou (em geral, defeitos conhecidos da coleta que o processamento já contorna, ou um dado que não pôde ser lido). "Falhou": algo quebrou de verdade, como a rotina do dia, os testes automáticos, o calendário ou o formato combinado com a coleta. Clique num item da lista para ir direto a ele.'),
+    "fluxo": ('Última atualização', 'Mostra o caminho dos dados no último pregão processado, em três passos: a coleta (outro módulo) busca os dados e grava num banco; o processamento (este módulo) lê esse banco, calcula e confere; a interface (o site) recebe os pacotes prontos. A data no título é a do pregão, que pode não ser hoje: fim de semana e feriado não têm pregão.'),
+    "coleta": ('Coleta', 'É o outro módulo do TCC. Em todo dia de pregão ele baixa preços, balanços e notícias e grava tudo num banco de dados. Quando termina a parte que interessa, marca a etapa "entrega" como concluída. O processamento começa a perguntar se a entrega ficou pronta às {inicio_consulta} e repete a pergunta a cada {intervalo} minutos. O processamento só lê esse banco; nunca escreve nele.'),
+    "processamento": ('Processamento', 'É este módulo. Quando a coleta entrega, ele lê o banco (só leitura), calcula os indicadores de cada ação, confere se os números fazem sentido e monta os pacotes para o site. Se a entrega não chegar até {prazo}, a rodada fica como "falhou" e nenhum pacote novo sai: o site continua com os dados do pregão anterior. Mesmo assim, ele continua tentando até {prazo_tardio}.'),
+    "interface": ('Interface', 'É o site que as pessoas vão usar. Ele não lê o banco da coleta: recebe do processamento os pacotes já prontos. Enquanto o site não existe, os pacotes ficam guardados como arquivos na pasta saida/, uma pasta por dia.'),
+    "pacotes": ('Pacotes', 'Um pacote é um arquivo com um tipo de informação para o site: o resumo de cada ação, as séries dos gráficos, os balanços, os dividendos, as notícias do dia e o registro da rodada. Os registros são as linhas dentro dos pacotes (uma por ação, por dia ou por série). Alguns pacotes só levam o que mudou desde o último envio; por isso, um pacote com zero registros não é erro.'),
+    "contrato": ('Versão do contrato', 'O contrato é o combinado entre o processamento e o site sobre o formato dos pacotes: o nome de cada campo, o formato das datas e como mostrar um valor que não existe (vazio e com o motivo, nunca zero). Se um campo mudar, a versão sobe e o site sabe que precisa se adaptar.'),
+    "rodada": ('Rodada e avisos', 'Cada vez que a rotina roda de novo para o mesmo dia, o número da rodada aumenta. A pasta do dia guarda só a última rodada; as anteriores ficam no log da rotina (seção Histórico). Avisos são observações que não impedem os pacotes de sair, por exemplo uma etapa da coleta que não terminou ou um preço que mudou muito num dia.'),
+    "carga_vs_rotina": ('Carga completa e rotina diária', 'A rotina diária manda só o que é novo ou mudou desde o último envio, para não repetir tudo todo dia. A carga completa manda tudo de uma vez (todas as ações, um ano de séries, os balanços e os dividendos), para quando o site começar do zero ou perder o próprio banco. Ela grava numa pasta separada (saida_completa/) e não mexe no envio diário nem nos registros do experimento.'),
+    "linha_tempo": ('A manhã do pregão', 'Uma régua com os horários da manhã: quando a coleta começou e entregou, quando a rotina rodou, o prazo da rotina ({prazo}) e a abertura da bolsa ({abertura}). A rotina precisa terminar antes da abertura para o top 5 valer como previsão de verdade. Se a rotina rodou em outro dia (por exemplo, à mão, à noite), ela não aparece na régua e a folga fica sem medida.'),
+    "prazo": ('Prazo da rotina', 'É o horário-limite para a coleta entregar os dados: {prazo}, lido do arquivo de configuração (parametros.yaml). Sem entrega até lá, a rodada é registrada como "falhou" e só o arquivo da rodada é gravado, para o site avisar que os dados são do pregão anterior. A rotina continua tentando até {prazo_tardio}, mas um top 5 feito depois de {limite_historico} não conta para o histórico do experimento.'),
+    "folga": ('Folga', 'É o tempo que sobrou entre o fim da rotina e o prazo. Folga grande quer dizer margem de segurança se a coleta atrasar. Se a rotina terminar depois do prazo, aparece "atraso" no lugar da folga.'),
+    "saude": ('Saúde dos dados', 'Antes de usar os dados, o processamento passa um "termômetro" no banco da coleta (o diagnóstico) e confere se tudo está no formato combinado. Verde: sem problema. Amarelo: um defeito conhecido da coleta, que o processamento já contorna (mostra "indisponível" em vez de um número errado). Vermelho: algo mudou e precisa ser olhado. Cinza: o painel não conseguiu ler esse cartão no relatório. Os números vêm do arquivo docs/diagnostico_banco.md, na data mostrada acima dos cartões.'),
+    "saude_contrato": ('Contrato com a coleta', 'O que é: confere se as tabelas e colunas que o processamento lê existem e têm o formato combinado. Aqui não há amarelo: ou bate (verde) ou há divergência (vermelho). Vermelho quer dizer que a coleta mudou alguma coisa e algum cálculo pode sair errado. Quando a coleta corrigir: o próximo diagnóstico volta a mostrar nenhuma divergência.'),
+    "saude_quantidade_acoes": ('Quantidade de ações', 'O que é: para saber quanto a empresa vale na bolsa (valor de mercado), o processamento multiplica o preço pela quantidade de ações. Por que está amarelo: em algumas empresas a coleta gravou essa quantidade em milhares, ou seja, mil vezes menor. O processamento percebe quando o preço dividido pelo patrimônio (P/VP) fica abaixo de {pvp_min}. Nessas empresas saem como "indisponível", sem chute: o P/L e o P/VP (o valor do dia e os pontos diários dos gráficos) e o payout (o dos últimos doze meses, o de cada ano e o dos balanços trimestrais), porque o payout soma os dividendos pagos multiplicando pelo número de ações. Essas empresas também saem das medianas do setor desses indicadores. O dividend yield, o ROE, as margens, o EBITDA e o endividamento não mudam, porque não dependem da quantidade de ações. Quando a coleta corrigir: esses indicadores voltam sozinhos no próximo cálculo.'),
+    "saude_retornos": ('Preços suspeitos', 'O que é: procura preços que mudaram de um dia para o outro de um jeito muito estranho (variação abaixo de {retorno_min} ou acima de {retorno_max} num só dia). Por que está amarelo: alguns desses casos são erro da coleta; outros são eventos reais, como a cisão de uma empresa. As ações e a quantidade de casos estão no cartão. O processamento não mexe no preço da própria ação: só tira esses dias da série e da rentabilidade do setor, das medianas do setor (P/L, P/VP e dividend yield), do beta e da volatilidade, para um caso desses não contaminar as outras ações. No experimento, a volatilidade, o beta e as exposições ao dólar e ao petróleo também já deixam esses dias de fora, mas os retornos da ação, a comparação com o setor e o alvo do modelo ainda usam o preço como veio: essa decisão fica pendente para antes do treino definitivo. Quando a coleta corrigir os casos que são erro: esses dias voltam a entrar sozinhos.'),
+    "saude_lacunas": ('Lacunas nas séries', 'O que é: procura buracos nas séries de preços e de índices, ou seja, muitos dias seguidos sem dado. Por que está amarelo: alguns índices (listados no cartão) estão sem dados num trecho longo. Quando a comparação precisaria de um dia que cai no buraco, e o dado mais próximo está a mais de {defasagem} pregões, o resultado sai "histórico insuficiente" em vez de um número enganoso. Quando a coleta preencher o buraco: as comparações com esses índices voltam a ter número.'),
+    "saude_horario_noticias": ('Horário das notícias', 'O que é: mostra quantas notícias têm a hora exata em que foram publicadas. Por que está amarelo: a maioria das notícias chega sem um horário confiável (vem um horário fixo da madrugada, que não é o real), então é tratada como "só a data". Sem a hora, não dá para saber se a notícia saiu antes ou depois do fechamento da bolsa. Por isso o modelo usa uma janela larga, das {corte_noite} de um pregão até as {corte_noite} do pregão seguinte, e nunca usa notícia que ainda não tinha saído. Quando a coleta trouxer a hora real: dá para separar as notícias da noite das do dia.'),
+    "saude_cobertura": ('Histórico disponível', 'O que é: quantas linhas existem para treinar e testar o modelo do experimento (uma linha por ação por pregão) e de que data a que data. Verde: há histórico. Mesmo assim, enquanto o modelo não for declarado oficial no arquivo de configuração, tudo o que é treinado com ele é teste de funcionamento.'),
+    "experimento": ('Experimento', 'É a parte de pesquisa do TCC. Um modelo de computador (XGBoost) olha os números de cada ação e o tom das notícias (lido por outro modelo, o FinBERT) e estima quais ações têm mais chance de render mais que o Ibovespa no pregão seguinte. Tudo o que aparece aqui é teste de funcionamento: prova que o caminho todo roda, mas não é o resultado do TCC.'),
+    "teste_funcionamento": ('Teste de funcionamento', 'Quer dizer que o modelo foi treinado só para conferir se a máquina funciona do começo ao fim. Os números podem mudar bastante quando o modelo oficial for treinado. O resultado do TCC sai do teste final (o cadeado) e do acompanhamento ao vivo, depois que a rotina entrar em produção.'),
+    "cadeado": ('Cadeado do teste final', 'Um pedaço do histórico, a partir de {teste_final_inicio}, foi separado e trancado. Ninguém olha esse período enquanto o modelo é ajustado, para não "colar na prova". Ele será aberto uma única vez, na avaliação final, e não pode ser reaproveitado depois. Este painel não tem nenhum botão que destranque o cadeado.'),
+    "modelo": ('Modelo em uso', 'Nome do arquivo do modelo (xgb, seguido do ano e do mês do treino), o período de dados usado para treinar e se ele é provisório ou oficial. Provisório quer dizer treinado só para teste de funcionamento.'),
+    "top5_retido": ('Top 5 retido', 'Todo dia o processamento calcula as cinco ações que o modelo vê com mais chance de superar o Ibovespa no pregão seguinte e guarda esse registro (pasta registros/experimento/). Enquanto o modelo for só de teste, esse top 5 não é enviado ao site: fica retido. Ele só vai para o site quando houver modelo oficial ou quando a publicação for ligada no arquivo de configuração.'),
+    "chance": ('Chance escondida e calibração', 'O modelo calcula uma probabilidade para cada ação. Antes de mostrar esse número, é preciso conferir a calibração: se o modelo diz "chance alta" num grupo de dias, a fração de acertos nesses dias tem que ser parecida com a chance dita. Até essa conferência passar, e até a exibição ser ligada no arquivo de configuração, a chance fica escondida, para ninguém ler um número ainda não validado.'),
+    "modelo_sombra": ('Modelo sombra', 'É o modelo sem notícias (chamado de modelo um no TCC): igual ao principal, mas sem as colunas de notícias. Todo dia ele escolhe o próprio top 5, junto com o top 5 da regra simples (as ações mais calmas primeiro). Os dois ficam só no registro interno (pasta registros/experimento/), sem ir para o site, para comparar com dados de verdade se o modelo com notícias acerta mais.'),
+    "grafico": ('Acerto do top 5 no desenvolvimento', 'Para cada pregão do período de desenvolvimento, conta se as ações escolhidas renderam mais que o Ibovespa no pregão seguinte. A bolinha é o acerto médio; o tracinho é o intervalo de confiança (onde o acerto verdadeiro provavelmente está). Aparecem quatro jeitos de escolher: o modelo com notícias, o mesmo modelo sem notícias, um modelo mais simples (regressão logística) e uma regra simples (as ações mais calmas, de menor volatilidade, primeiro). O modelo com notícias só "ganha" se o acerto dele ficar à direita da faixa do acaso e acima da regra simples e da regressão logística. A comparação com o modelo sem notícias responde outra pergunta: se as notícias ajudam.'),
+    "faixa_acaso": ('Faixa do acaso', 'Imagine escolher ações por sorteio todo dia e repetir isso {sorteios} vezes. A faixa cinza mostra onde caem 95% desses sorteios. Ficar dentro da faixa quer dizer "ainda não mostrou vantagem sobre sortear". Só a bolinha verde, à direita da faixa, indica acerto acima do acaso, e mesmo assim, aqui, é teste de funcionamento.'),
+    "historico": ('Histórico de execuções', 'Cada quadradinho do calendário é um dia útil. Verde: a rotina rodou bem. Amarelo: rodou com pendências. Vermelho: falhou. Azul: rodando agora. Cinza: não rodou. Tracejado: feriado (sem pregão). Um traço azul embaixo do dia indica que houve carga completa. Clique num dia ou numa linha da tabela para ver os detalhes. Cada dia guarda só a última rodada; as anteriores aparecem no log da rotina.'),
+    "testes": ('Testes automáticos', 'São verificações automáticas do código (pytest) que rodam sem o banco e sem internet, com dados pequenos de exemplo. Entre outras coisas, conferem que nenhum cálculo olha o futuro e que dado ausente vira "indisponível", nunca zero. Aqui aparece o resultado da última vez em que os testes foram rodados pelo painel.'),
+    "acao_rotina": ('Rodar a rotina do dia', 'O que faz: lê o banco da coleta (só leitura), calcula os indicadores do pregão, grava os pacotes em saida/ e o top 5 do dia em registros/experimento/. Pelo painel ela roda sem esperar a coleta terminar (--sem-esperar). Muda algo: sim, regrava a pasta do dia e o estado do envio. Enquanto a rotina não está em produção, o registro do top 5 daquele dia também é refeito a cada rodada: o registro novo guarda a hora em que foi gerado e, se foi depois de {limite_historico}, sai marcado como "não vale para o histórico" (hoje, antes da produção, nenhum top 5 vale). Em produção, o registro do dia é gravado uma única vez e nunca é refeito. Nunca escreve no banco. Em produção, quem roda a rotina é o Agendador de Tarefas do Windows, não o painel.'),
+    "acao_carga": ('Gerar a carga completa', 'O que faz: gera todos os pacotes inteiros do último dia processado, para o site começar do zero. Muda algo: só grava na pasta saida_completa/; não mexe no envio diário nem nos registros do experimento. Lê o banco da coleta (só leitura).'),
+    "acao_diagnostico": ('Rodar o diagnóstico do banco', 'O que faz: passa o termômetro no banco da coleta e reescreve o relatório docs/diagnostico_banco.md, que alimenta os cartões de Saúde dos dados. Muda algo: só reescreve esse relatório; no banco, só lê.'),
+    "acao_testes": ('Rodar os testes', 'O que faz: roda os testes automáticos (pytest). Não usa o banco nem a internet. Muda algo: não muda nenhum dado; só grava o registro da execução na pasta logs/painel/. É a única ação que pode ser parada no meio.'),
+}
+
+# chave -> texto curto de "O que fazer".
+O_QUE_FAZER: dict[str, str] = {
+    "saude_contrato": 'Ver no diagnóstico completo qual tabela ou coluna mudou e avisar a coleta. Depois da correção, rodar o diagnóstico de novo.',
+    "saude_quantidade_acoes": 'Nada: aguardando a coleta gravar a quantidade de ações em unidades. P/L, P/VP e payout dessas empresas já saem "indisponível".',
+    "saude_retornos": 'Nada: aguardando a coleta corrigir os casos que são erro. Esses dias já ficam fora das comparações com o setor, do beta e da volatilidade.',
+    "saude_lacunas": 'Nada: aguardando a coleta preencher o histórico desses índices. As comparações afetadas já saem "histórico insuficiente".',
+    "saude_horario_noticias": 'Nada: aguardando a coleta trazer o horário real das notícias. O modelo já usa a janela larga.',
+    "saude_cobertura": 'Conferir o dataset do experimento: sem linhas, o modelo não tem com o que treinar.',
+    "saude_sem_dados": 'Rodar o diagnóstico do banco de novo (seção Ações). Se o cartão continuar sem dados, o formato do relatório mudou e o painel precisa ser ajustado.',
+    "saude_sem_diagnostico": 'Rodar o diagnóstico do banco (seção Ações). Ele só lê o banco e grava o relatório que alimenta estes cartões.',
+    "coleta_warn": 'Abrir o dia no Histórico para ver o motivo. Se a coleta terminar depois, rodar a rotina de novo.',
+    "coleta_bad": 'Avisar a coleta. Até lá, o site continua com os dados do pregão anterior.',
+    "rotina_falhou": 'Abrir o dia no Histórico para ver o motivo. Se a coleta já entregou, rodar a rotina de novo (seção Ações).',
+    "rotina_parcial": 'Abrir o dia no Histórico e ler os avisos. Os pacotes que passaram na conferência já foram gravados.',
+    "rotina_interrompida": 'Ver se o computador desligou ou a janela foi fechada no meio. Depois, rodar a rotina de novo.',
+    "sem_rotina": 'Rodar a rotina do dia (seção Ações) ou esperar a rotina agendada.',
+    "atraso_prazo": 'Ver no log da rotina se a demora foi da coleta ou do cálculo.',
+    "calendario_erro": 'Conferir o calendário de feriados no parametros.yaml. Enquanto isso, a rotina não sabe se hoje tem pregão.',
+    "testes_falhas": 'Abrir o log dos testes, ver qual falhou e corrigir o código antes de confiar nos números.',
+    "testes_interrompidos": 'Rodar os testes de novo até o fim.',
+    "trava_abandonada": 'Nada, se nenhuma rotina estiver rodando: a próxima rotina apaga a trava velha sozinha.',
+}
+
+# Palavras do painel (E2): termo -> texto, na ordem do glossário.
+GLOSSARIO: list[tuple[str, str]] = [
+    ("Pregão", 'Um dia de negociação na bolsa brasileira (B3). Fim de semana e feriado não têm pregão.'),
+    ("Ibovespa", 'O principal índice da bolsa brasileira, uma "cesta" das ações mais negociadas. Serve de régua: o experimento pergunta se uma ação vai render mais que ele no pregão seguinte.'),
+    ("Indicador", 'Um número calculado sobre a ação ou a empresa, como a cotação, a rentabilidade, o P/L ou o dividend yield.'),
+    ("Indisponível", 'O dado necessário não veio da coleta, ou veio com um defeito conhecido. O painel mostra "indisponível" em vez de zero ou de um chute.'),
+    ("Histórico insuficiente", 'Existe dado, mas não o bastante para a conta, por exemplo poucos pregões para calcular o beta, ou um buraco longo na série.'),
+    ("Pacote", 'Um arquivo com um tipo de informação pronta para o site (resumo das ações, séries dos gráficos, balanços, dividendos, notícias, registro da rodada).'),
+    ("Rodada", 'Cada vez que a rotina roda para um mesmo dia. A pasta do dia guarda só a última.'),
+    ("Diagnóstico", 'O "termômetro" que confere o banco da coleta contra o que foi combinado na especificação e gera o relatório da seção Saúde dos dados.'),
+    ("Walk-forward", 'Um jeito de testar o modelo como na vida real: treina só com o passado, testa no mês seguinte e avança, mês a mês, sem nunca olhar o futuro.'),
+    ("Faixa do acaso", 'Onde cai a taxa de acerto de quem escolhe ações por sorteio, em quase todos os sorteios. Ficar dentro dela quer dizer que o modelo ainda não mostrou vantagem sobre sortear.'),
+    ("Calibração", 'Conferir se a chance que o modelo diz bate com o que acontece: se ele diz "seis em cada dez" para um grupo de casos, cerca de seis em cada dez devem acontecer.'),
+    ("P/L", 'O preço da ação dividido pelo lucro por ação dos últimos doze meses. Diz quantos anos de lucro "cabem" no preço.'),
+    ("P/VP", 'O preço da ação dividido pelo valor patrimonial por ação, ou seja, o patrimônio da empresa no balanço dividido pelo número de ações.'),
+    ("Payout", 'A parte do lucro dos últimos doze meses que a empresa pagou aos acionistas como dividendos e juros sobre capital próprio.'),
+    ("Dividend yield", 'Os dividendos pagos nos últimos doze meses divididos pelo preço atual da ação.'),
+]
+
+
+def campos_do_texto(texto: str) -> set[str]:
+    """Nomes dos campos {assim} usados num texto."""
+    return {nome for _, nome, _, _ in string.Formatter().parse(texto) if nome}
+
+
+class _Valores(dict):
+    def __missing__(self, chave: str) -> str:
+        return SEM_DADOS
+
+
+def montar_ajuda(valores: dict | None) -> dict[str, dict[str, str]]:
+    """Textos de ajuda com os campos preenchidos; campo sem valor (ou não-texto) vira "sem dados"."""
+    limpos = _Valores({k: v for k, v in (valores or {}).items() if isinstance(v, str) and v})
+    return {id_: {"titulo": titulo, "texto": texto.format_map(limpos)} for id_, (titulo, texto) in AJUDA.items()}

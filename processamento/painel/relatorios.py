@@ -10,6 +10,8 @@ import json
 import re
 from pathlib import Path
 
+from processamento.painel.leitores import duracao_segundos
+
 RE_INICIO = re.compile(r"^Rotina de (\d{4}-\d{2}-\d{2}) \(início (\d{2}:\d{2}:\d{2})(, --sem-esperar)?\)$")
 RE_CONSULTA = re.compile(r"^(\d{2}:\d{2}:\d{2}) consulta (\d+): (.*)$")
 RE_SAIDA = re.compile(r"^Saída de \S+ em .+: status (\w+)$")
@@ -426,3 +428,40 @@ def ler_ultimo_pytest(pasta_logs_painel: Path) -> dict:
         "tempo": tempo,
         "falhas": falhas,
     }
+
+
+# ---------------------------------------------------------------- duração das ações
+
+CODIGOS_COMPLETOS = {"testes": {0, 1}}   # pytest com falhas também rodou até o fim
+
+
+def duracao_ultima_acao(pasta_logs_painel: Path, acao_id: str, max_arquivos: int = 20) -> int | None:
+    """Segundos da execução mais recente da ação, pelos logs do painel (cabeçalho inicio= e rodapé fim=).
+
+    Ignora execução sem rodapé (em andamento ou interrompida), parada pelo painel (parado=sim)
+    ou com código de saída de erro. None se nenhuma servir.
+    """
+    arquivos = [p for p in _listar(pasta_logs_painel)
+                if p.name.startswith(acao_id + "-") and p.name.endswith(".log") and p.is_file()]
+    for arquivo in sorted(arquivos, key=lambda p: p.name, reverse=True)[:max_arquivos]:
+        inicio = fim = codigo = None
+        parado = False
+        for linha in _ler_texto(arquivo).splitlines():
+            m = RE_PYTEST_INICIO.match(linha)
+            if m and inicio is None:
+                inicio = m.group(1)
+                continue
+            m = RE_PYTEST_FIM.match(linha)
+            if m:
+                fim, codigo, parado = m.group(1), int(m.group(2)), "parado=sim" in linha
+        if inicio is None or fim is None or parado or codigo not in CODIGOS_COMPLETOS.get(acao_id, {0}):
+            continue
+        segundos = duracao_segundos(inicio, fim)
+        if segundos is not None:
+            return segundos
+    return None
+
+
+def duracoes_painel(pasta_logs_painel: Path, ids: list[str]) -> dict[str, int | None]:
+    """{id da ação: segundos da última execução completa pelo painel, ou None}."""
+    return {acao_id: duracao_ultima_acao(pasta_logs_painel, acao_id) for acao_id in ids}

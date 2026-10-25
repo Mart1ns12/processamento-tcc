@@ -28,7 +28,23 @@
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-sans);font-size:15px;line-height:1.5}
 [hidden]{display:none!important}
-.wrap{max-width:1180px;margin:0 auto;padding-block:22px 56px;padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));display:grid;gap:18px}
+.wrap{margin:0;padding-block:18px 48px;padding-left:max(clamp(16px,2.2vw,40px), env(safe-area-inset-left, 0px));padding-right:max(clamp(16px,2.2vw,40px), env(safe-area-inset-right, 0px));display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:22px 20px;align-items:start}
+.wrap > *{grid-column:1 / -1;min-width:0}
+.secao{display:grid;gap:10px;align-content:start;min-width:0}
+.secao-tit{font-size:1.15rem;font-weight:700;display:flex;align-items:center;gap:10px}
+.secao-tit .num{display:inline-grid;place-items:center;width:28px;height:28px;border-radius:50%;background:var(--accent);color:#fff;font-size:.9rem;font-family:var(--f-mono)}
+.card-tit{font-size:1.02rem;font-weight:600}
+.tit-linha{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:0}
+.faixa{display:grid;gap:18px;grid-template-columns:minmax(0,1fr);align-items:stretch}
+.card{container-type:inline-size}
+[tabindex="-1"]:focus{outline:2px solid var(--accent);outline-offset:3px}
+@media (min-width:1280px){
+  .wrap > #sec-experimento{grid-column:span 7}
+  .wrap > #sec-historico{grid-column:span 5}
+  .faixa-fluxo{grid-template-columns:minmax(0,7fr) minmax(0,5fr)}
+  .faixa-acoes{grid-template-columns:minmax(0,8fr) minmax(0,4fr)}
+}
+@media (max-width:599px){.tl{margin:6px 24px 0}.card{padding:14px}}
 h1,h2,h3{margin:0;line-height:1.2;text-wrap:balance}
 h1{font-size:1.55rem;font-weight:700}
 h2{font-size:1.08rem;font-weight:600}
@@ -38,7 +54,7 @@ p{margin:0}
 .mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
 .muted{color:var(--muted)}
 .lbl{font-size:.72rem;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:600}
-.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px;display:grid;gap:14px;min-width:0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px;display:grid;gap:14px;min-width:0;align-content:start}
 .cardhead{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline;justify-content:space-between}
 .why{font-size:.84rem;color:var(--muted);max-width:68ch}
 .pill{display:inline-flex;align-items:center;gap:6px;font-size:.78rem;font-weight:600;padding:3px 10px;border-radius:999px;white-space:nowrap;width:fit-content}
@@ -47,9 +63,13 @@ p{margin:0}
 .dot{width:8px;height:8px;border-radius:50%;background:currentColor;display:inline-block}
 
 /* topo */
-.top{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:end;justify-content:space-between}
+.top{display:grid;gap:14px}
+.barra{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:center;justify-content:space-between}
+.logo{display:flex;align-items:center;gap:10px;color:var(--accent);font-weight:700;font-size:1rem}
+.logo-ic{width:32px;height:32px;flex:none}
+.logo-txt{color:var(--ink)}
 .cabeca{display:grid;gap:6px}
-.top .sub{color:var(--muted);font-size:.9rem;max-width:62ch}
+.top .sub{color:var(--muted);font-size:.9rem;max-width:120ch}
 .state{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .toggle{font:inherit;font-size:.82rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:8px;padding:6px 10px;cursor:pointer}
 .toggle:disabled{opacity:.45;cursor:not-allowed}
@@ -68,8 +88,8 @@ p{margin:0}
 .stage .big{font-size:1.25rem;font-weight:600}
 .stage .meta{font-size:.82rem;color:var(--muted)}
 .arrow{align-self:center;color:var(--idle);font-size:1.4rem}
-@media (max-width:820px){.flow{grid-template-columns:1fr}.arrow{transform:rotate(90deg);justify-self:center}}
-#carga-linha{font-size:.8rem;color:var(--muted)}
+@container (max-width:640px){.flow{grid-template-columns:1fr}.arrow{transform:rotate(90deg);justify-self:center}}
+.linha-ajuda{font-size:.8rem;color:var(--muted);display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 
 /* linha do tempo */
 .tl{position:relative;height:118px;margin:6px 40px 0}
@@ -95,9 +115,9 @@ p{margin:0}
 .lg-comp{background:var(--track);box-shadow:inset 0 -3px 0 var(--accent)}
 
 /* ações */
-.actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr));gap:12px}
 .act{border:1px solid var(--line);border-radius:10px;padding:14px;display:grid;gap:8px;align-content:start}
-.act button{font:inherit;font-weight:600;font-size:.9rem;border:0;border-radius:8px;padding:9px 12px;background:var(--accent);color:#fff;cursor:pointer;justify-self:start}
+.act button:not(.ajuda-btn){font:inherit;font-weight:600;font-size:.9rem;border:0;border-radius:8px;padding:9px 12px;background:var(--accent);color:#fff;cursor:pointer;justify-self:start}
 .act button:disabled{opacity:.45;cursor:not-allowed}
 .act button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .act .what{font-size:.84rem;color:var(--muted)}
@@ -123,7 +143,10 @@ summary{cursor:pointer;font-size:.84rem;color:var(--muted)}
 pre{margin:8px 0 0;background:var(--track);border-radius:8px;padding:10px;font-family:var(--f-mono);font-size:.76rem;white-space:pre-wrap;word-break:break-word;max-height:220px;overflow:auto}
 
 /* saúde */
-.health{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:10px}
+.health{display:grid;grid-template-columns:minmax(0,1fr);gap:10px}
+@media (min-width:600px){.health{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (min-width:900px){.health{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (min-width:1700px){.health{grid-template-columns:repeat(6,minmax(0,1fr))}}
 .hc{border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:grid;gap:6px;align-content:start;border-left-width:4px}
 .hc.ok{border-left-color:var(--ok)} .hc.warn{border-left-color:var(--warn)} .hc.bad{border-left-color:var(--bad)} .hc.idle{border-left-color:var(--idle)}
 .hc .n{font-family:var(--f-mono);font-size:1.3rem;font-weight:500}
@@ -134,7 +157,7 @@ pre{margin:8px 0 0;background:var(--track);border-radius:8px;padding:10px;font-f
 
 /* experimento */
 .exp{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:16px}
-@media (max-width:820px){.exp{grid-template-columns:1fr}}
+@container (max-width:720px){.exp{grid-template-columns:1fr}}
 .coluna{display:grid;gap:12px;align-content:start;min-width:0}
 .lock{border:1px solid var(--line);border-radius:10px;padding:14px;display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:center}
 .cadeado{width:40px;height:40px}
@@ -156,8 +179,6 @@ pre{margin:8px 0 0;background:var(--track);border-radius:8px;padding:10px;font-f
 .kv dt{color:var(--muted)} .kv dd{margin:0}
 
 /* histórico e testes */
-.two{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:18px;align-items:start}
-@media (max-width:820px){.two{grid-template-columns:1fr}}
 .navmes{display:flex;align-items:center;gap:8px}
 .cal{display:grid;grid-template-columns:repeat(5,minmax(0,44px));gap:6px}
 .cal .h{font-size:.72rem;color:var(--muted);text-align:center}
@@ -167,6 +188,7 @@ pre{margin:8px 0 0;background:var(--track);border-radius:8px;padding:10px;font-f
 .cal .d.bad{background:var(--bad);color:#fff}
 .cal .d.run{background:var(--accent);color:#fff}
 .cal .d.hol{background:transparent;border:1px dashed var(--line)}
+.cal .d.fut{background:transparent;opacity:.45}
 .cal .d.comp{box-shadow:inset 0 -3px 0 var(--accent)}
 .cal .d[data-clicavel]{cursor:pointer}
 .cal > .motivo{grid-column:1 / -1}
@@ -200,129 +222,167 @@ ul{margin:4px 0;padding-left:20px}
 .note{font-size:.8rem;color:var(--muted)}
 .rodape{font-size:.8rem;color:var(--muted)}
 .tbl a,a{color:var(--accent)}
+
+/* ajuda ("?"), resumo e "O que fazer" */
+.ajuda-btn{font:inherit;font-size:.7rem;font-weight:700;line-height:1;width:20px;height:20px;padding:0;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--muted);cursor:pointer;display:inline-grid;place-items:center;flex:none;vertical-align:middle}
+.ajuda-btn:hover,.ajuda-btn[aria-expanded="true"]{color:var(--accent);border-color:var(--accent)}
+.ajuda-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media (pointer:coarse){.ajuda-btn{width:28px;height:28px}}
+.ajuda-caixa{position:absolute;z-index:50;max-width:min(360px, calc(100vw - 24px));background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:12px 14px;box-shadow:0 8px 24px rgba(0,0,0,.18);font-size:.85rem;line-height:1.45;display:grid;gap:6px}
+.ajuda-tit{font-weight:600}
+.hc .tit-linha{justify-content:space-between;flex-wrap:nowrap}
+.resumo{border-left:6px solid var(--idle)}
+.resumo.ok{border-left-color:var(--ok)} .resumo.warn{border-left-color:var(--warn)} .resumo.bad{border-left-color:var(--bad)}
+.resumo-frase{font:inherit;font-size:1.3rem;font-weight:700;text-align:left;background:none;border:0;padding:0;color:var(--ink);cursor:pointer;justify-self:start}
+.resumo.ok .resumo-frase{color:var(--ok)} .resumo.warn .resumo-frase{color:var(--warn)} .resumo.bad .resumo-frase{color:var(--bad)}
+.resumo-frase:disabled{cursor:default;opacity:1}
+.resumo-frase:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.resumo-lista{list-style:none;margin:0;padding:0;display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(min(320px,100%),1fr))}
+.ponto{border:1px solid var(--line);border-left:4px solid var(--idle);border-radius:8px;padding:8px 10px;font-size:.86rem;display:grid;gap:2px}
+.ponto.warn{border-left-color:var(--warn)} .ponto.bad{border-left-color:var(--bad)}
+.fazer,.fazer-curto{font-size:.8rem;color:var(--muted)}
+.fazer{border-top:1px dashed var(--line);padding-top:6px}
+.fazer strong,.fazer-curto strong{color:var(--ink)}
+.tempo{font-size:.8rem}
+
+/* impressão (E3): sem botões, "?" nem log; uma coluna; blocos recolhidos abertos */
+@media print{
+  .ajuda-btn,.toggle,#comandos .actions,#run,#erro-rede,#ajuda-caixa{display:none!important}
+  .faixa,.faixa-fluxo,.faixa-acoes,.exp,.health{grid-template-columns:minmax(0,1fr)}
+  .flow{grid-template-columns:minmax(0,1fr)}
+  .arrow{transform:rotate(90deg);justify-self:center}
+  .wrap > #sec-experimento,.wrap > #sec-historico{grid-column:1 / -1}
+  .card{break-inside:avoid}
+}
 </style>
 </head>
 <body>
 
-<div class="wrap">
+<div class="wrap" id="topo">
 
   <header class="top">
+    <div class="barra">
+      <div class="logo">
+        <svg id="logo-ic" class="logo-ic" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+          <rect x="8" y="8" width="16" height="16" rx="3" fill="none" stroke="currentColor" stroke-width="2"/>
+          <rect x="12.5" y="12.5" width="7" height="7" rx="1.5" fill="currentColor"/>
+          <path d="M12 3v4M16 3v4M20 3v4M12 25v4M16 25v4M20 25v4M3 12h4M3 16h4M3 20h4M25 12h4M25 16h4M25 20h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <span class="logo-txt">Painel do Processamento</span>
+      </div>
+      <div class="state">
+        <span class="pill idle" id="pill-geral">carregando…</span>
+        <span class="pill idle" id="pill-hoje">carregando…</span>
+        <button class="toggle" id="tema" type="button">Tema</button>
+        <button class="toggle" id="btn-atualizar" type="button">Atualizar</button>
+      </div>
+    </div>
     <div class="cabeca">
-      <span class="lbl">TCC · Módulo de processamento</span>
       <h1>Sala de Operação</h1>
+      <p class="dia" id="frase-dia" hidden></p>
       <p class="sub">Acompanha o que o processamento faz todo dia: espera a coleta, calcula os indicadores, monta os pacotes para a interface e confere a qualidade dos dados.</p>
       <p class="note" id="atualizado"></p>
-    </div>
-    <div class="state">
-      <span class="pill idle" id="pill-geral">carregando…</span>
-      <span class="pill idle" id="pill-hoje">carregando…</span>
-      <button class="toggle" id="tema" type="button">Tema</button>
-      <button class="toggle" id="btn-atualizar" type="button">Atualizar</button>
     </div>
   </header>
   <div id="erro-rede" class="erro-rede" hidden>Painel sem resposta</div>
 
-  <!-- Fluxo -->
-  <section class="card" id="agora" aria-labelledby="h-fluxo">
-    <div class="cardhead">
-      <h2 id="h-fluxo">Última atualização</h2>
-      <span class="pill idle" id="pill-fluxo">carregando…</span>
-    </div>
-    <div class="flow" id="fluxo"></div>
-    <p class="note" id="fluxo-vazio" hidden></p>
-    <p class="note" id="carga-linha">última carga completa: sem dados</p>
-  </section>
-
-  <!-- Linha do tempo -->
-  <section class="card" id="linha-tempo" aria-labelledby="h-tl">
-    <div class="cardhead">
-      <h2 id="h-tl">A manhã do pregão</h2>
-      <p class="why" id="tl-why"></p>
-    </div>
-    <div class="tl" id="tl" aria-label="Linha do tempo da manhã do pregão"></div>
-    <div class="legend">
-      <span><i class="lg-accent"></i>Coleta trabalhando</span>
-      <span><i class="lg-ok"></i>Processamento</span>
-      <span><i class="lg-folga"></i>Folga até o prazo</span>
-    </div>
-    <p class="note" id="tl-avisos" hidden></p>
-  </section>
-
-  <!-- Ações -->
-  <section class="card" id="comandos" aria-labelledby="h-acoes">
-    <div class="cardhead">
-      <h2 id="h-acoes">Ações</h2>
-      <p class="why">Cada botão chama um comando do projeto. Nenhum escreve no banco da coleta.</p>
-    </div>
-    <div class="actions" id="botoes"></div>
-    <div class="run" id="run" hidden>
-      <div class="cardhead"><h3 id="run-t"></h3><span class="pill idle" id="run-p"></span></div>
-      <p class="note" id="log-status" aria-live="polite"></p>
-      <ol class="steps" id="steps"></ol>
-      <div class="linha"><button class="toggle perigo" id="btn-parar" type="button" hidden>Parar</button></div>
-      <details><summary>Ver o log completo</summary><pre id="log"></pre></details>
+  <section class="secao" id="sec-resumo" aria-labelledby="h-sec-resumo">
+    <div class="tit-linha"><h2 class="secao-tit" id="h-sec-resumo"><span class="num">1</span> Resumo</h2><button class="ajuda-btn" type="button" data-ajuda="resumo" aria-label="Ajuda" aria-expanded="false" aria-controls="ajuda-caixa" hidden>?</button></div>
+    <div class="card resumo idle" id="resumo">
+      <button type="button" class="resumo-frase" id="resumo-frase" disabled>carregando…</button>
+      <ul class="resumo-lista" id="resumo-lista"></ul>
     </div>
   </section>
 
-  <!-- Saúde -->
-  <section class="card" id="saude" aria-labelledby="h-saude">
-    <div class="cardhead">
-      <h2 id="h-saude">Saúde dos dados</h2>
-      <p class="why">O processamento confere os dados da coleta antes de usar. Quando algo vem errado, ele marca "indisponível" em vez de mostrar um número falso.</p>
-    </div>
-    <p class="note" id="saude-gerado"></p>
-    <div class="health" id="saude-cartoes"></div>
-    <details><summary>Ver o diagnóstico completo</summary><div id="saude-completa"></div></details>
-  </section>
-
-  <!-- Experimento -->
-  <section class="card" id="experimento" aria-labelledby="h-exp">
-    <div class="cardhead">
-      <h2 id="h-exp">Experimento: top 5 com maior chance de superar o Ibovespa</h2>
-      <span class="banner" id="faixa-teste">TESTE DE FUNCIONAMENTO, NÃO É RESULTADO</span>
-    </div>
-    <p class="why">Modelo que estima quais 5 ações têm maior chance de superar o Ibovespa no próximo pregão. Com o histórico atual, serve só para testar o funcionamento.</p>
-    <div class="exp">
-      <div class="coluna">
-        <div class="lock">
-          <svg id="cadeado-fechado" class="cadeado" viewBox="0 0 40 40" aria-hidden="true" hidden>
-            <rect class="corpo" x="7" y="17" width="26" height="19" rx="4"/>
-            <path class="corpo" d="M13 17v-5a7 7 0 0 1 14 0v5"/>
-            <circle class="furo" cx="20" cy="26" r="2.6"/>
-          </svg>
-          <svg id="cadeado-aberto" class="cadeado" viewBox="0 0 40 40" aria-hidden="true" hidden>
-            <rect class="corpo" x="7" y="17" width="26" height="19" rx="4"/>
-            <path class="corpo" d="M13 17v-8a7 7 0 0 1 14 0"/>
-            <circle class="furo" cx="20" cy="26" r="2.6"/>
-          </svg>
-          <div><h3 id="lock-t">Teste final</h3><p class="note" id="lock-p"></p></div>
+  <section class="secao" id="sec-fluxo" aria-labelledby="h-sec-fluxo">
+    <h2 class="secao-tit" id="h-sec-fluxo"><span class="num">2</span> Fluxo do dia</h2>
+    <div class="faixa faixa-fluxo">
+      <section class="card" id="agora" aria-labelledby="h-fluxo">
+        <div class="cardhead">
+          <div class="tit-linha"><h3 class="card-tit" id="h-fluxo">Última atualização</h3><button class="ajuda-btn" type="button" data-ajuda="fluxo" aria-label="Ajuda" aria-expanded="false" aria-controls="ajuda-caixa" hidden>?</button></div>
+          <span class="pill idle" id="pill-fluxo">carregando…</span>
         </div>
-        <dl class="kv" id="exp-kv"></dl>
-      </div>
-      <div class="coluna">
-        <h3>Acerto do top 5 no desenvolvimento</h3>
-        <p class="note">Em quantos % dos pregões a ação escolhida superou o Ibovespa no pregão seguinte. A faixa cinza é o que se consegue escolhendo ao acaso; o traço é o intervalo de confiança.</p>
-        <div class="cabeca-grafico">
-          <p class="grafico-tit" id="grafico-tit"></p>
-          <span class="pill idle">em avaliação</span>
-        </div>
-        <div class="chart" id="grafico"></div>
+        <div class="flow" id="fluxo"></div>
+        <p class="note" id="fluxo-vazio" hidden></p>
+        <p class="linha-ajuda"><span id="carga-linha">última carga completa: sem dados</span><button class="ajuda-btn" type="button" data-ajuda="carga_vs_rotina" aria-label="Ajuda" aria-expanded="false" aria-controls="ajuda-caixa" hidden>?</button></p>
+        <p class="fazer" data-fazer="agora" hidden></p>
+      </section>
+      <section class="card" id="linha-tempo" aria-labelledby="h-tl">
+        <div class="cardhead"><div class="tit-linha"><h3 class="card-tit" id="h-tl">A manhã do pregão</h3><button class="ajuda-btn" type="button" data-ajuda="linha_tempo" aria-label="Ajuda" aria-expanded="false" aria-controls="ajuda-caixa" hidden>?</button></div></div>
+        <div class="tit-linha"><p class="why" id="tl-why"></p><button class="ajuda-btn" type="button" data-ajuda="prazo" aria-label="Ajuda" aria-expanded="false" aria-controls="ajuda-caixa" hidden>?</button></div>
+        <div class="tl" id="tl" aria-label="Linha do tempo da manhã do pregão"></div>
         <div class="legend">
-          <span><i class="lg-track"></i>faixa cinza = acaso (95% dos sorteios)</span>
-          <span><i class="lg-ok"></i>acima do acaso</span>
+          <span><i class="lg-accent"></i>Coleta trabalhando</span>
+          <span><i class="lg-ok"></i>Processamento</span>
+          <span><i class="lg-folga"></i>Folga até o prazo <button class="ajuda-btn" type="button" data-ajuda="folga" aria-label="Ajuda" aria-expanded="false" aria-controls="ajuda-caixa" hidden>?</button></span>
         </div>
-        <p class="note" id="exp-veredito"></p>
-        <a id="link-relatorio" href="/api/relatorio" target="_blank" rel="noopener" hidden>Ver relatório completo</a>
-        <p class="note">Não constitui recomendação de investimento.</p>
-      </div>
+        <p class="note" id="tl-avisos" hidden></p>
+        <p class="fazer" data-fazer="linha-tempo" hidden></p>
+      </section>
     </div>
   </section>
 
-  <!-- Histórico + testes -->
-  <div class="two">
+  <section class="secao" id="sec-saude" aria-labelledby="h-saude">
+    <div class="tit-linha"><h2 class="secao-tit" id="h-saude"><span class="num">3</span> Saúde dos dados</h2><button class="ajuda-btn" type="button" data-ajuda="saude" aria-label="Ajuda" aria-expanded="false" aria-controls="ajuda-caixa" hidden>?</button></div>
+    <section class="card" id="saude" aria-labelledby="h-saude">
+      <p class="why">O processamento confere os dados da coleta antes de usar. Quando algo vem errado, ele marca "indisponível" em vez de mostrar um número falso.</p>
+      <p class="note" id="saude-gerado"></p>
+      <div class="health" id="saude-cartoes"></div>
+      <p class="fazer" data-fazer="saude" hidden></p>
+      <details><summary>Ver o diagnóstico completo</summary><div id="saude-completa"></div></details>
+    </section>
+  </section>
+
+  <section class="secao" id="sec-experimento" aria-labelledby="h-sec-experimento">
+    <h2 class="secao-tit" id="h-sec-experimento"><span class="num">4</span> Experimento</h2>
+    <section class="card" id="experimento" aria-labelledby="h-exp">
+      <div class="cardhead">
+        <div class="tit-linha"><h3 class="card-tit" id="h-exp">Experimento: top 5 com maior chance de superar o Ibovespa</h3><button class="ajuda-btn" type="button" data-ajuda="experimento" aria-label="Ajuda" aria-expanded="false" aria-controls="ajuda-caixa" hidden>?</button></div>
+        <div class="tit-linha"><span class="banner" id="faixa-teste">TESTE DE FUNCIONAMENTO, NÃO É RESULTADO</span><button class="ajuda-btn" type="button" data-ajuda="teste_funcionamento" aria-label="Ajuda" aria-expanded="false" aria-controls="ajuda-caixa" hidden>?</button></div>
+      </div>
+      <p class="why">Modelo que estima quais 5 ações têm maior chance de superar o Ibovespa no próximo pregão. Com o histórico atual, serve só para testar o funcionamento.</p>
+      <div class="exp">
+        <div class="coluna">
+          <div class="lock">
+            <svg id="cadeado-fechado" class="cadeado" viewBox="0 0 40 40" aria-hidden="true" hidden>
+              <rect class="corpo" x="7" y="17" width="26" height="19" rx="4"/>
+              <path class="corpo" d="M13 17v-5a7 7 0 0 1 14 0v5"/>
+              <circle class="furo" cx="20" cy="26" r="2.6"/>
+            </svg>
+            <svg id="cadeado-aberto" class="cadeado" viewBox="0 0 40 40" aria-hidden="true" hidden>
+              <rect class="corpo" x="7" y="17" width="26" height="19" rx="4"/>
+              <path class="corpo" d="M13 17v-8a7 7 0 0 1 14 0"/>
+              <circle class="furo" cx="20" cy="26" r="2.6"/>
+            </svg>
+            <div><div class="tit-linha"><h3 id="lock-t">Teste final</h3><button class="ajuda-btn" type="button" data-ajuda="cadeado" aria-label="Ajuda" aria-expanded="false" aria-controls="ajuda-caixa" hidden>?</button></div><p class="note" id="lock-p"></p></div>
+          </div>
+          <dl class="kv" id="exp-kv"></dl>
+        </div>
+        <div class="coluna">
+          <div class="tit-linha"><h3>Acerto do top 5 no desenvolvimento</h3><button class="ajuda-btn" type="button" data-ajuda="grafico" aria-label="Ajuda" aria-expanded="false" aria-controls="ajuda-caixa" hidden>?</button></div>
+          <p class="note">Em quantos % dos pregões a ação escolhida superou o Ibovespa no pregão seguinte. A faixa cinza é o que se consegue escolhendo ao acaso; o traço é o intervalo de confiança.</p>
+          <div class="cabeca-grafico">
+            <p class="grafico-tit" id="grafico-tit"></p>
+            <span class="pill idle">em avaliação</span>
+          </div>
+          <div class="chart" id="grafico"></div>
+          <div class="legend">
+            <span><i class="lg-track"></i>faixa cinza = acaso (95% dos sorteios) <button class="ajuda-btn" type="button" data-ajuda="faixa_acaso" aria-label="Ajuda" aria-expanded="false" aria-controls="ajuda-caixa" hidden>?</button></span>
+            <span><i class="lg-ok"></i>acima do acaso</span>
+          </div>
+          <p class="note" id="exp-veredito"></p>
+          <a id="link-relatorio" href="/api/relatorio" target="_blank" rel="noopener" hidden>Ver relatório completo</a>
+          <p class="note">Não constitui recomendação de investimento.</p>
+        </div>
+      </div>
+    </section>
+  </section>
+
+  <section class="secao" id="sec-historico" aria-labelledby="h-sec-historico">
+    <h2 class="secao-tit" id="h-sec-historico"><span class="num">5</span> Histórico</h2>
     <section class="card" id="historico" aria-labelledby="h-hist">
       <div class="cardhead">
-        <h2 id="h-hist">Histórico de execuções</h2>
+        <div class="tit-linha"><h3 class="card-tit" id="h-hist">Histórico de execuções</h3><button class="ajuda-btn" type="button" data-ajuda="historico" aria-label="Ajuda" aria-expanded="false" aria-controls="ajuda-caixa" hidden>?</button></div>
         <div class="navmes">
           <button class="toggle" id="mes-ant" type="button" aria-label="Mês anterior">‹</button>
           <span class="note" id="mes-titulo"></span>
@@ -342,19 +402,47 @@ ul{margin:4px 0;padding-left:20px}
       <div class="tbl" id="hist-tabela"></div>
       <div id="detalhe" class="detalhe"></div>
       <p class="note">Cada dia guarda só a última rodada; as anteriores aparecem no log da rotina, abaixo.</p>
+      <p class="fazer" data-fazer="historico" hidden></p>
       <details id="etapas"><summary>Rodadas registradas no log da rotina</summary><div id="etapas-corpo"></div></details>
     </section>
-    <section class="card" id="testes" aria-labelledby="h-test">
-      <div class="cardhead"><h2 id="h-test">Testes automáticos</h2><span class="pill idle" id="pill-testes">carregando…</span></div>
-      <div class="tests" id="testes-corpo"></div>
-    </section>
-  </div>
+  </section>
 
+  <section class="secao" id="sec-acoes" aria-labelledby="h-sec-acoes">
+    <h2 class="secao-tit" id="h-sec-acoes"><span class="num">6</span> Ações</h2>
+    <div class="faixa faixa-acoes">
+      <section class="card" id="comandos" aria-labelledby="h-sec-acoes">
+        <p class="why">Cada botão chama um comando do projeto. Nenhum escreve no banco da coleta.</p>
+        <p class="fazer" data-fazer="comandos" hidden></p>
+        <div class="actions" id="botoes"></div>
+        <div class="run" id="run" hidden>
+          <div class="cardhead"><h3 id="run-t"></h3><span class="pill idle" id="run-p"></span></div>
+          <p class="note" id="log-status" aria-live="polite"></p>
+          <ol class="steps" id="steps"></ol>
+          <div class="linha"><button class="toggle perigo" id="btn-parar" type="button" hidden>Parar</button></div>
+          <details><summary>Ver o log completo</summary><pre id="log"></pre></details>
+        </div>
+      </section>
+      <section class="card" id="testes" aria-labelledby="h-test">
+        <div class="cardhead"><div class="tit-linha"><h3 class="card-tit" id="h-test">Testes automáticos</h3><button class="ajuda-btn" type="button" data-ajuda="testes" aria-label="Ajuda" aria-expanded="false" aria-controls="ajuda-caixa" hidden>?</button></div><span class="pill idle" id="pill-testes">carregando…</span></div>
+        <div class="tests" id="testes-corpo"></div>
+        <p class="fazer" data-fazer="testes" hidden></p>
+      </section>
+    </div>
+  </section>
 </div>
 
 <footer class="wrap" style="padding-top:0">
   <p class="rodape">Só neste computador (127.0.0.1). O painel não acessa o banco e não lê o .env; os botões chamam os comandos do projeto.</p>
+  <details id="glossario" hidden>
+    <summary>Palavras do painel</summary>
+    <dl class="kv" id="glossario-lista"></dl>
+  </details>
 </footer>
+
+<div id="ajuda-caixa" class="ajuda-caixa" role="tooltip" hidden>
+  <p class="ajuda-tit" id="ajuda-titulo"></p>
+  <p class="ajuda-txt" id="ajuda-texto" aria-live="polite"></p>
+</div>
 
 <script>
 "use strict";
@@ -375,6 +463,9 @@ const ESTADO = {
   arquivoDetalhe: null,
   abertos: new Set(),
   mesIdx: 0,
+  ajuda: null,
+  timerAjuda: null,
+  pontos: new Map(),
 };
 
 const DESCRICAO = new Map([
@@ -485,6 +576,187 @@ function campo(rotulo, valor) {
 
 function motivo(texto) {
   return criar("p", txt(texto), "motivo");
+}
+
+// ---- ajuda ("?"): textos vêm prontos do servidor em visao.ajuda ----
+function botaoAjuda(id) {
+  const b = criar("button", "?", "ajuda-btn");
+  b.type = "button";
+  b.setAttribute("data-ajuda", id);
+  b.setAttribute("aria-label", "Ajuda");
+  b.setAttribute("aria-expanded", "false");
+  b.setAttribute("aria-controls", "ajuda-caixa");
+  return b;
+}
+
+function textoAjuda(id) {
+  const a = (((ESTADO.painel || {}).visao || {}).ajuda || {})[id];
+  return a && typeof a.titulo === "string" && typeof a.texto === "string" ? a : null;
+}
+
+function rotularAjudas() {
+  document.querySelectorAll(".ajuda-btn").forEach((b) => {
+    const a = textoAjuda(b.getAttribute("data-ajuda"));
+    b.hidden = !a;
+    b.setAttribute("aria-label", a ? "Ajuda: " + a.titulo : "Ajuda");
+  });
+}
+
+function posicionarAjuda(botao) {
+  const caixa = $("ajuda-caixa");
+  const r = botao.getBoundingClientRect();
+  const margem = 12;
+  const maxEsq = window.scrollX + document.documentElement.clientWidth - caixa.offsetWidth - margem;
+  const esq = Math.max(window.scrollX + margem, Math.min(r.left + window.scrollX, maxEsq));
+  caixa.style.left = esq + "px";
+  caixa.style.top = (r.bottom + window.scrollY + 6) + "px";
+}
+
+function desmarcarAjuda(b) {
+  b.setAttribute("aria-expanded", "false");
+  b.removeAttribute("aria-describedby");
+}
+
+function abrirAjuda(botao, fixa) {
+  const a = textoAjuda(botao.getAttribute("data-ajuda"));
+  if (!a) return;
+  clearTimeout(ESTADO.timerAjuda);
+  if (ESTADO.ajuda && ESTADO.ajuda.botao !== botao) desmarcarAjuda(ESTADO.ajuda.botao);
+  $("ajuda-titulo").textContent = a.titulo;
+  $("ajuda-texto").textContent = a.texto;
+  $("ajuda-caixa").hidden = false;
+  botao.setAttribute("aria-expanded", "true");
+  botao.setAttribute("aria-describedby", "ajuda-caixa");
+  ESTADO.ajuda = { botao: botao, id: botao.getAttribute("data-ajuda"), fixa: Boolean(fixa) };
+  posicionarAjuda(botao);
+}
+
+function fecharAjuda(devolverFoco) {
+  clearTimeout(ESTADO.timerAjuda);
+  if (!ESTADO.ajuda) return;
+  const b = ESTADO.ajuda.botao;
+  desmarcarAjuda(b);
+  $("ajuda-caixa").hidden = true;
+  ESTADO.ajuda = null;
+  if (devolverFoco && b.isConnected) b.focus();
+}
+
+function alternarAjuda(botao) {
+  if (ESTADO.ajuda && ESTADO.ajuda.botao === botao && ESTADO.ajuda.fixa) fecharAjuda(false);
+  else abrirAjuda(botao, true);
+}
+
+// Depois de redesenhar: os "?" dinâmicos foram recriados; a caixa aberta passa para o botão novo.
+function reancorarAjuda() {
+  rotularAjudas();
+  if (!ESTADO.ajuda) return;
+  const atual = ESTADO.ajuda;
+  const botao = atual.botao.isConnected ? atual.botao
+    : Array.from(document.querySelectorAll(".ajuda-btn")).find((b) => b.getAttribute("data-ajuda") === atual.id);
+  if (!botao || botao.hidden) {
+    $("ajuda-caixa").hidden = true;
+    ESTADO.ajuda = null;
+    return;
+  }
+  abrirAjuda(botao, atual.fixa);
+}
+
+// ---- resumo e "O que fazer" ----
+function irPara(alvo) {
+  const el = $(alvo);
+  if (!el) return;
+  if (!el.hasAttribute("tabindex")) el.setAttribute("tabindex", "-1");
+  const reduzir = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  el.scrollIntoView({ behavior: reduzir ? "auto" : "smooth", block: "center" });
+  el.focus({ preventScroll: true });
+}
+
+function linhaFazer(alvo) {
+  const p = ESTADO.pontos.get(alvo);
+  if (!p || !p.o_que_fazer) return null;
+  const el = criar("p", null, "fazer");
+  el.appendChild(criar("strong", "O que fazer: "));
+  el.appendChild(document.createTextNode(String(p.o_que_fazer)));
+  return el;
+}
+
+function renderFazerCartoes() {
+  document.querySelectorAll("[data-fazer]").forEach((slot) => {
+    const p = ESTADO.pontos.get(slot.getAttribute("data-fazer"));
+    if (!p || !p.o_que_fazer) {
+      slot.replaceChildren();
+      slot.hidden = true;
+      return;
+    }
+    slot.replaceChildren(criar("strong", "O que fazer: "), document.createTextNode(String(p.o_que_fazer)));
+    slot.hidden = false;
+  });
+}
+
+function renderResumo(d) {
+  const r = (d.visao || {}).resumo || {};
+  const pontos = listaSegura(r.pontos).filter((p) => p && typeof p.alvo === "string");
+  ESTADO.pontos = new Map(pontos.map((p) => [p.alvo, p]));
+  $("resumo").className = "card resumo " + farol(r.nivel);
+  const frase = $("resumo-frase");
+  frase.textContent = txt(r.frase);
+  frase.disabled = pontos.length === 0;
+  frase.onclick = pontos.length ? () => irPara(pontos[0].alvo) : null;
+  $("resumo-lista").replaceChildren(...pontos.map((p) => {
+    const li = criar("li", null, "ponto " + farol(p.nivel));
+    const a = criar("a", txt(p.texto));
+    a.href = "#" + p.alvo;
+    a.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      irPara(p.alvo);
+    });
+    li.appendChild(a);
+    if (p.o_que_fazer) {
+      const f = criar("span", null, "fazer-curto");
+      f.appendChild(criar("strong", "O que fazer: "));
+      f.appendChild(document.createTextNode(String(p.o_que_fazer)));
+      li.appendChild(f);
+    }
+    return li;
+  }));
+}
+
+// E1: frase "hoje × dados de" (visao.dia, calculada no servidor).
+function renderFraseDia(d) {
+  const v = (d.visao || {}).dia;
+  const p = $("frase-dia");
+  p.textContent = typeof v === "string" ? v : "";
+  p.hidden = typeof v !== "string" || v === "";
+}
+
+// E2: glossário (visao.glossario = lista de pares [termo, texto]); montado com createElement.
+function renderGlossario(d) {
+  const pares = listaSegura((d.visao || {}).glossario)
+    .filter((par) => Array.isArray(par) && typeof par[0] === "string" && typeof par[1] === "string");
+  const nos = [];
+  pares.forEach(([termo, texto]) => {
+    nos.push(criar("dt", termo));
+    nos.push(criar("dd", texto));
+  });
+  $("glossario-lista").replaceChildren(...nos);
+  $("glossario").hidden = pares.length === 0;
+}
+
+function metaComAjuda(texto, botao) {
+  const s = criar("span", texto, "meta");
+  s.appendChild(botao);
+  return s;
+}
+
+function linhaTempoAcao(id, d) {
+  const t = (((d.visao || {}).tempos) || {})[id] || {};
+  const p = criar("p", null, "tempo");
+  p.appendChild(criar("strong", "Tempo: "));
+  const partes = [];
+  if (typeof t.curto === "string") partes.push("leva " + t.curto + ".");
+  partes.push(txt(t.texto));
+  p.appendChild(document.createTextNode(partes.join(" ")));
+  return p;
 }
 
 function ul(itens) {
@@ -607,12 +879,21 @@ function seloFluxo(fx) {
   return ["idle", SEM];
 }
 
-function estagio(bloco, rotulo, linhas) {
+function estagio(bloco, rotulo, linhas, alvo, ajudaRotulo, ajudaTitulo) {
   const b = bloco || {};
   const e = criar("div", null, "stage " + farol(b.estado));
-  e.appendChild(criar("span", rotulo, "lbl"));
-  e.appendChild(criar("span", txt(b.titulo), "big"));
-  linhas.forEach((l) => e.appendChild(criar("span", l, "meta")));
+  e.id = alvo;
+  const cab = criar("div", null, "tit-linha");
+  cab.appendChild(criar("span", rotulo, "lbl"));
+  if (ajudaRotulo) cab.appendChild(ajudaRotulo);
+  e.appendChild(cab);
+  const tit = criar("div", null, "tit-linha");
+  tit.appendChild(criar("span", txt(b.titulo), "big"));
+  if (ajudaTitulo) tit.appendChild(ajudaTitulo);
+  e.appendChild(tit);
+  linhas.forEach((l) => e.appendChild(l instanceof Node ? l : criar("span", l, "meta")));
+  const fazer = linhaFazer(alvo);
+  if (fazer) e.appendChild(fazer);
   return e;
 }
 
@@ -652,18 +933,21 @@ function renderFluxo(d) {
   const etapas = typeof c.etapas_concluidas === "number" && typeof c.etapas_total === "number"
     ? c.etapas_concluidas + " de " + c.etapas_total + " etapas concluídas"
     : txt(c.nota);
-  const coleta = estagio(c, "1 · Coleta (outro módulo)", [txt(c.resumo), etapas]);
+  const coleta = estagio(c, "1 · Coleta (outro módulo)", [txt(c.resumo), etapas], "fluxo-coleta", botaoAjuda("coleta"));
 
   const duracao = "Duração " + txt(p.duracao_texto) + (typeof p.n_acoes === "number" ? " · " + p.n_acoes + " ações" : "");
   const rodada = "Rodada " + txt(p.rodada) + (typeof p.n_avisos === "number" ? " · " + p.n_avisos + " avisos" : "");
-  const processamento = estagio(p, "2 · Processamento (este módulo)", [txt(p.quando), txt(p.rotulo), duracao, rodada]);
+  const processamento = estagio(p, "2 · Processamento (este módulo)",
+    [txt(p.quando), txt(p.rotulo), duracao, metaComAjuda(rodada, botaoAjuda("rodada"))],
+    "fluxo-processamento", botaoAjuda("processamento"));
 
   const contrato = "Contrato " + txt(i.versao_contrato) + " · "
     + (typeof i.registros_total === "number" ? i.registros_total.toLocaleString("pt-BR") + " registros" : SEM);
   let publicado = "Top 5: " + SEM;
   if (exp.top_publicado === true) publicado = "Top 5 publicado na interface";
   else if (exp.top_publicado === false) publicado = "Top 5 retido (não enviado à interface)";
-  const interfaceNo = estagio(i, "3 · Interface", [contrato, publicado]);
+  const interfaceNo = estagio(i, "3 · Interface", [metaComAjuda(contrato, botaoAjuda("contrato")), publicado],
+    "fluxo-interface", botaoAjuda("interface"), botaoAjuda("pacotes"));
 
   fluxo.replaceChildren(coleta, seta(), processamento, seta(), interfaceNo);
 }
@@ -728,8 +1012,12 @@ function origemData(id, d) {
 
 function cartaoBotao(id, b, d) {
   const cartao = criar("div", null, "act");
-  cartao.appendChild(criar("h3", b.titulo || id));
+  const tit = criar("div", null, "tit-linha");
+  tit.appendChild(criar("h3", b.titulo || id));
+  tit.appendChild(botaoAjuda("acao_" + id));
+  cartao.appendChild(tit);
   cartao.appendChild(criar("p", DESCRICAO.get(id) || SEM, "what"));
+  cartao.appendChild(linhaTempoAcao(id, d));
   cartao.appendChild(criar("p", b.aviso || SEM, "safe muted"));
   if (b.data) cartao.appendChild(criar("p", "Data usada: " + dataBr(b.data) + origemData(id, d), "note"));
   cartao.appendChild(criar("code", b.comando || SEM, "comando"));
@@ -859,13 +1147,15 @@ function renderHistorico(d) {
 }
 
 // Calendário: mês em ESTADO.mesIdx (0 = mês mais novo de visao.calendario).
-function celulaDia(dia) {
+function celulaDia(dia, hojeIso) {
   const classes = ["d"];
   if (dia.status === "ok") classes.push("ok");
   else if (dia.status === "parcial") classes.push("warn");
   else if (dia.status === "falhou" || dia.status === "ilegivel") classes.push("bad");
   else if (dia.status === "em_andamento") classes.push("run");
   else if (dia.pregao === false) classes.push("hol");
+  // Dia que ainda não chegou: só o número, apagado (não é "sem execução").
+  if (!dia.status && typeof hojeIso === "string" && typeof dia.data === "string" && dia.data > hojeIso) classes.push("fut");
   if (dia.completa === true) classes.push("comp");
   const celula = criar("span", txt(dia.dia), classes.join(" "));
   celula.title = dataBr(dia.data).slice(0, 5) + (dia.motivo ? " · " + dia.motivo : "");
@@ -908,7 +1198,8 @@ function renderCalendario(d) {
   // dias começa no primeiro dia útil do mês: os vazios antes dele são o dia da semana dele.
   const vazios = dias.length && typeof dias[0].dia_semana === "number" ? dias[0].dia_semana : 0;
   for (let i = 0; i < vazios; i++) nos.push(criar("span"));
-  dias.forEach((dia) => nos.push(celulaDia(dia)));
+  const hojeIso = (d.hoje || {}).data;
+  dias.forEach((dia) => nos.push(celulaDia(dia, hojeIso)));
   cal.replaceChildren(...nos);
 }
 
@@ -966,10 +1257,19 @@ function renderEtapas(d) {
 
 function cartaoSaude(c) {
   const cartao = criar("div", null, "hc " + farol(c.farol));
-  cartao.appendChild(criar("span", txt(c.titulo), "lbl"));
+  const id = typeof c.id === "string" ? c.id : "";
+  const cab = criar("div", null, "tit-linha");
+  cab.appendChild(criar("span", txt(c.titulo), "lbl"));
+  if (id) {
+    cartao.id = "saude-c-" + id;
+    cab.appendChild(botaoAjuda("saude_" + id));
+  }
+  cartao.appendChild(cab);
   cartao.appendChild(criar("span", txt(c.numero), "n"));
   cartao.appendChild(criar("p", txt(c.texto)));
   if (c.fonte) cartao.appendChild(criar("span", c.fonte, "so"));
+  const fazer = id ? linhaFazer("saude-c-" + id) : null;
+  if (fazer) cartao.appendChild(fazer);
   return cartao;
 }
 
@@ -1036,13 +1336,17 @@ function renderTrava(tf) {
 }
 
 function preencherKv(id, pares) {
-  const dl = $(id);
   const nos = [];
-  pares.forEach(([termo, valor]) => {
-    nos.push(criar("dt", termo));
+  pares.forEach(([termo, valor, ajudaBotao]) => {
+    const dt = criar("dt", termo);
+    if (ajudaBotao) {
+      dt.appendChild(document.createTextNode(" "));
+      dt.appendChild(ajudaBotao);
+    }
+    nos.push(dt);
     nos.push(criar("dd", valor));
   });
-  dl.replaceChildren(...nos);
+  $(id).replaceChildren(...nos);
 }
 
 function treinoTexto(m) {
@@ -1130,12 +1434,12 @@ function renderExperimento(d) {
   let modeloSombra = SEM;
   if (sombra.arquivo) modeloSombra = String(sombra.arquivo).replace(".meta.json", "") + " · acerto top 5 " + pct(sombra.acerto_top5);
   preencherKv("exp-kv", [
-    ["Modelo", modelo],
+    ["Modelo", modelo, botaoAjuda("modelo")],
     ["Treinado com", treinoTexto(m)],
     ["Último treino de desenvolvimento", devTexto(dv)],
-    ["Top 5 na interface", publicado],
-    ["Chance exibida", chance],
-    ["Modelo sombra", modeloSombra],
+    ["Top 5 na interface", publicado, botaoAjuda("top5_retido")],
+    ["Chance exibida", chance, botaoAjuda("chance")],
+    ["Modelo sombra", modeloSombra, botaoAjuda("modelo_sombra")],
     ["Registros", txt(r.tops) + (r.tops === 1 ? " top" : " tops") + " · " + txt(r.resultados) + (r.resultados === 1 ? " resultado" : " resultados")],
   ]);
 
@@ -1210,19 +1514,24 @@ function renderTestes(d) {
 function renderizarPainel(d) {
   ESTADO.painel = d;
   $("atualizado").textContent = d.gerado_em ? "Dados de " + dataBr(d.gerado_em) : "";
+  renderFraseDia(d);
+  renderResumo(d);
   pillGeral(d);
   pillHoje(d);
   renderFluxo(d);
   renderLinhaTempo(d);
-  renderBotoes(d);
-  renderRun(d.acao || {});
-  renderHistorico(d);
-  renderCalendario(d);
-  renderEtapas(d);
   renderSaudeCartoes(d);
   renderSaude(d);
   renderExperimento(d);
+  renderHistorico(d);
+  renderCalendario(d);
+  renderEtapas(d);
+  renderBotoes(d);
+  renderRun(d.acao || {});
   renderTestes(d);
+  renderFazerCartoes();
+  renderGlossario(d);
+  reancorarAjuda();
 }
 
 // ---- tema (escolha guardada só neste navegador) ----
@@ -1231,6 +1540,23 @@ function aplicarTema(t) {
   if (t === "dark" || t === "light") document.documentElement.setAttribute("data-theme", t);
 }
 try { aplicarTema(localStorage.getItem(CHAVE_TEMA)); } catch (e) {}
+
+// Ícone da aba: o mesmo SVG da logo, serializado (o XMLSerializer põe o xmlns sozinho).
+function instalarFavicon() {
+  const icone = $("logo-ic");
+  if (!icone || typeof XMLSerializer === "undefined") return;
+  const copia = icone.cloneNode(true);
+  copia.removeAttribute("id");
+  copia.removeAttribute("class");
+  copia.setAttribute("width", "64");
+  copia.setAttribute("height", "64");
+  copia.setAttribute("color", "#1f5fd1");
+  const link = document.createElement("link");
+  link.rel = "icon";
+  link.type = "image/svg+xml";
+  link.href = "data:image/svg+xml," + encodeURIComponent(new XMLSerializer().serializeToString(copia));
+  document.head.appendChild(link);
+}
 
 // ---- rede ----
 
@@ -1387,6 +1713,59 @@ $("mes-prox").addEventListener("click", () => {
 });
 $("btn-atualizar").addEventListener("click", () => carregarPainel());
 $("btn-parar").addEventListener("click", () => pararAcao());
+
+// "?": clique ou toque abre e prende; passar o mouse abre sem prender; Esc fecha e devolve o foco.
+document.addEventListener("click", (ev) => {
+  const b = ev.target.closest ? ev.target.closest(".ajuda-btn") : null;
+  if (b) {
+    alternarAjuda(b);
+    return;
+  }
+  if (ESTADO.ajuda && !$("ajuda-caixa").contains(ev.target)) fecharAjuda(false);
+});
+document.addEventListener("keydown", (ev) => {
+  if (ev.key === "Escape" && ESTADO.ajuda) {
+    ev.preventDefault();
+    fecharAjuda(true);
+  }
+});
+document.addEventListener("pointerover", (ev) => {
+  if (ev.pointerType !== "mouse" || !ev.target.closest) return;
+  const b = ev.target.closest(".ajuda-btn");
+  if (b) {
+    if (!ESTADO.ajuda || !ESTADO.ajuda.fixa) abrirAjuda(b, false);
+    return;
+  }
+  if (ev.target.closest("#ajuda-caixa")) clearTimeout(ESTADO.timerAjuda);
+});
+document.addEventListener("pointerout", (ev) => {
+  if (ev.pointerType !== "mouse" || !ESTADO.ajuda || ESTADO.ajuda.fixa || !ev.target.closest) return;
+  if (!ev.target.closest(".ajuda-btn, #ajuda-caixa")) return;
+  const para = ev.relatedTarget && ev.relatedTarget.closest ? ev.relatedTarget.closest(".ajuda-btn, #ajuda-caixa") : null;
+  if (para) return;
+  clearTimeout(ESTADO.timerAjuda);
+  ESTADO.timerAjuda = setTimeout(() => fecharAjuda(false), 250);
+});
+window.addEventListener("resize", () => {
+  if (ESTADO.ajuda) posicionarAjuda(ESTADO.ajuda.botao);
+});
+
+// Impressão (E3): abre os blocos recolhidos e, depois, devolve cada um ao estado de antes.
+let abertosAntesDeImprimir = null;
+window.addEventListener("beforeprint", () => {
+  abertosAntesDeImprimir = Array.from(document.querySelectorAll("details")).map((d) => [d, d.open]);
+  abertosAntesDeImprimir.forEach(([d]) => {
+    d.open = true;
+  });
+});
+window.addEventListener("afterprint", () => {
+  (abertosAntesDeImprimir || []).forEach(([d, aberto]) => {
+    d.open = aberto;
+  });
+  abertosAntesDeImprimir = null;
+});
+
+instalarFavicon();
 carregarPainel();
 </script>
 </body>

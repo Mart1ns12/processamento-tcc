@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
+
+from processamento.painel.acoes import ACOES
+from processamento.painel.ajuda import AJUDA
+from processamento.painel.saude import _CARTOES
 
 RAIZ = Path(__file__).resolve().parents[1]
 PAGINA = RAIZ / "processamento" / "painel" / "pagina.html"
@@ -217,3 +222,125 @@ def test_acoes_fixas_no_painel():
         assert trecho in texto, trecho
     assert "/api/acao/iniciar" in texto
     assert "/api/acao/parar" in texto
+
+
+def test_secoes_numeradas_na_ordem_de_leitura():
+    texto = _pagina()
+    posicoes = [texto.index(f'id="{s}"') for s in ["sec-resumo", "sec-fluxo", "sec-saude", "sec-experimento", "sec-historico", "sec-acoes"]]
+    assert posicoes == sorted(posicoes)
+    for n, nome in [(1, "Resumo"), (2, "Fluxo do dia"), (3, "Saúde dos dados"), (4, "Experimento"), (5, "Histórico"), (6, "Ações")]:
+        assert f'<span class="num">{n}</span> {nome}</h2>' in texto, nome
+
+
+def test_cartoes_dentro_das_secoes():
+    texto = _pagina()
+    ordem = ['id="sec-fluxo"', 'id="agora"', 'id="linha-tempo"', 'id="sec-saude"', 'id="saude"', 'id="sec-experimento"', 'id="experimento"', 'id="sec-historico"', 'id="historico"', 'id="sec-acoes"', 'id="comandos"', 'id="testes"']
+    posicoes = [texto.index(trecho) for trecho in ordem]
+    assert posicoes == sorted(posicoes)
+
+
+def test_tela_inteira_e_breakpoints():
+    texto = _pagina()
+    assert "max-width:1180px" not in texto
+    assert 'class="two"' not in texto
+    for trecho in [
+        "grid-template-columns:repeat(12,minmax(0,1fr))",
+        "@media (min-width:600px)",
+        "@media (min-width:900px)",
+        "@media (min-width:1280px)",
+        "@media (min-width:1700px)",
+        "container-type:inline-size",
+        "@container (max-width:640px)",
+        "@container (max-width:720px)",
+    ]:
+        assert trecho in texto, trecho
+
+
+def test_logo_e_favicon_sem_link_literal():
+    texto = _pagina()
+    for trecho in [
+        "Painel do Processamento",
+        'id="logo-ic"',
+        'createElement("link")',
+        '"data:image/svg+xml,"',
+        "XMLSerializer",
+        'link.rel = "icon"',
+    ]:
+        assert trecho in texto, trecho
+    assert "<link" not in texto
+
+
+# ---------------------------------------------------------------- Fase 5b: ajuda ("?"), resumo, "O que fazer", tempos
+
+
+def test_ids_de_ajuda_batem_com_o_dicionario():
+    texto = _pagina()
+    estaticos = set(re.findall(r'data-ajuda="([a-z0-9_]+)"', texto))
+    literais = set(re.findall(r'botaoAjuda\("([a-z0-9_]+)"\)', texto))
+    dinamicos = {"saude_" + c[0] for c in _CARTOES} | {"acao_" + a for a in ACOES}
+    assert estaticos | literais | dinamicos == set(AJUDA)
+    assert len(estaticos) == 14
+    assert 'botaoAjuda("saude_" + id)' in texto
+    assert 'botaoAjuda("acao_" + id)' in texto
+
+
+def test_botoes_de_ajuda_estaticos_acessiveis():
+    texto = _pagina()
+    tags = re.findall(r'<button class="ajuda-btn"[^>]*>', texto)
+    assert len(tags) == 14
+    for tag in tags:
+        for trecho in ['type="button"', 'aria-label="Ajuda"', 'aria-expanded="false"', 'aria-controls="ajuda-caixa"', " hidden"]:
+            assert trecho in tag, (trecho, tag)
+
+
+def test_caixa_de_ajuda_teclado_e_resumo():
+    texto = _pagina()
+    for trecho in [
+        'id="ajuda-caixa"',
+        'role="tooltip"',
+        '"aria-describedby"',
+        '"Escape"',
+        "pointerover",
+        "pointerout",
+        "isConnected",
+        '"O que fazer: "',
+        "data-fazer",
+        'id="resumo-frase"',
+        'id="resumo-lista"',
+        "irPara(",
+        "scrollIntoView",
+        "preventScroll",
+        ".resumo",
+        ".tempos",
+        ".ajuda",
+        '"Tempo: "',
+        '"leva "',
+    ]:
+        assert trecho in texto, trecho
+
+
+def test_frase_do_dia_e_glossario_pelo_servidor():
+    texto = _pagina()
+    assert '<p class="dia" id="frase-dia" hidden></p>' in texto
+    assert "(d.visao || {}).dia" in texto
+    assert '<details id="glossario" hidden>' in texto
+    assert "Palavras do painel" in texto
+    assert 'id="glossario-lista"' in texto
+    assert "(d.visao || {}).glossario" in texto
+
+
+def test_impressao_esconde_ajuda_e_abre_blocos():
+    texto = _pagina()
+    assert "@media print" in texto
+    for trecho in [".ajuda-btn", "#comandos .actions", "#run", "#erro-rede"]:
+        assert trecho in texto, trecho
+    assert 'addEventListener("beforeprint"' in texto
+    assert 'addEventListener("afterprint"' in texto
+
+
+def test_calendario_apaga_dias_futuros_e_cartao_alinhado_no_topo():
+    texto = (Path(__file__).resolve().parents[1] / "processamento" / "painel" / "pagina.html").read_text(encoding="utf-8")
+    assert ".cal .d.fut{" in texto
+    assert 'classes.push("fut")' in texto
+    assert "celulaDia(dia, hojeIso)" in texto
+    assert "align-content:start}" in texto

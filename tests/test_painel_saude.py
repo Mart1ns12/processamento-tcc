@@ -51,8 +51,8 @@ def test_fixture_seis_cartoes_com_valores_esperados():
          "fonte": "Divergências × especificação"},
         {"id": "quantidade_acoes", "titulo": "Quantidade de ações", "farol": "warn",
          "numero": "19 empresas",
-         "texto": ("Provavelmente em milhares (ex.: AXIA3, ENEV3, ABEV3). Valor de mercado, P/L, P/VP "
-                   "e payout delas saem indisponível em 23/10/2026."),
+         "texto": ("Provavelmente em milhares (ex.: AXIA3, ENEV3, ABEV3). P/L, P/VP e payout delas saem "
+                   "indisponível em 23/10/2026; yield, ROE, margens, EBITDA e endividamento não mudam."),
          "fonte": "Seção 10: Quantidade de ações suspeita"},
         {"id": "retornos", "titulo": "Preços suspeitos", "farol": "warn",
          "numero": "5 retornos",

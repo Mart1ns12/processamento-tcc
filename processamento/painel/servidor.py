@@ -18,14 +18,14 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 from processamento.calendario import SP
-from processamento.painel import acoes, leitores, marcos, relatorios, saude, visao
+from processamento.painel import acoes, ajuda, leitores, marcos, relatorios, saude, visao
 
 PORTA_PADRAO = 8765
 LIMITE_CORPO = 1024
 LIMITE_DESCARTE = 65536
 PLACEHOLDER_TOKEN = "__TOKEN_PAINEL__"
 CSP_PAGINA = (
-    "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; "
+    "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'self'; "
     "base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
 )
 MOTIVO_PRODUCAO = "Em produção a rotina roda pelo Agendador de Tarefas; não rodar pelo painel."
@@ -50,6 +50,12 @@ def _seguro(func: Callable[..., object], *args: object) -> object:
         return {"disponivel": False, "motivo": f"erro ao ler ({type(e).__name__})"}
 
 
+AVISO_REGISTRO_TOP = (
+    " Fora de produção, o top 5 regravado fica marcado como fora do histórico; em produção, "
+    "o registro do dia é gravado uma vez só e nunca é refeito."
+)
+
+
 def _aviso_rotina(rotina_data: dict, hoje: dict) -> str | None:
     """Aviso do botão da rotina, conforme a data usada é hoje ou o último pregão."""
     data = rotina_data.get("data")
@@ -60,12 +66,14 @@ def _aviso_rotina(rotina_data: dict, hoje: dict) -> str | None:
             f"Data usada: {data} (hoje). Com --sem-esperar, se a coleta de hoje ainda não terminou "
             "(antes das 08:00 ela nem começou), a rotina gera mesmo assim, com aviso. "
             f"Regrava saida/{data}/, saida/estado/ e registros/experimento/{data}.top.json."
+            + AVISO_REGISTRO_TOP
         )
     motivo = hoje.get("motivo") or "não é pregão"
     return (
         f"Hoje ({motivo}) não é pregão: será usada a data {data}, o último pregão. "
         "A rotina confere a coleta desse dia no banco e regrava "
         f"saida/{data}/, saida/estado/ e registros/experimento/{data}.top.json."
+        + AVISO_REGISTRO_TOP
     )
 
 
@@ -146,6 +154,16 @@ def montar_painel(raiz: Path, executor: acoes.Executor, agora: datetime, caminho
     if agora_item is not None:
         agora_item = {**agora_item, "possivelmente_interrompida": (
             agora_item.get("status") == "em_andamento" and not trava.get("ativa") and not executor.rodando())}
+    completa_item = leitores.ultima_execucao(itens_completas)
+    pasta_painel = raiz / params["pasta_logs"] / "painel"
+    testes = _seguro(relatorios.ler_ultimo_pytest, pasta_painel)
+    fluxo_v = _seguro(visao.fluxo, agora_item, completa_item)
+    linha_v = _seguro(visao.linha_do_tempo, agora_item, leitores.ler_prazo_rotina(raiz), caminho_calendario)
+    saude_v = _seguro(saude.cartoes_saude, raiz / "docs" / "diagnostico_banco.md")
+    duracoes = _seguro(relatorios.duracoes_painel, pasta_painel, list(acoes.ACOES))
+    valores_ajuda = {**_seguro(leitores.ler_valores_ajuda, raiz), "abertura": visao.hora_marco(linha_v, "abertura")}
+    hoje_iso = agora.astimezone(SP).date().isoformat()
+    data_ultima = fluxo_v.get("data") if isinstance(fluxo_v, dict) and fluxo_v.get("disponivel") else None
     return {
         "gerado_em": agora.isoformat(timespec="seconds"),
         "hoje": hoje,
@@ -155,17 +173,21 @@ def montar_painel(raiz: Path, executor: acoes.Executor, agora: datetime, caminho
         "etapas": _seguro(relatorios.ler_logs_rotina, raiz / params["pasta_logs"]),
         "saude": _seguro(relatorios.ler_diagnostico, raiz / "docs" / "diagnostico_banco.md"),
         "experimento": _seguro(relatorios.ler_experimento, raiz, params),
-        "testes": _seguro(relatorios.ler_ultimo_pytest, raiz / params["pasta_logs"] / "painel"),
+        "testes": testes,
         "acao": _seguro(estado_com_marcos, executor, None),
         "botoes": _seguro(estado_botoes, params, trava, hoje, rotina_data, d_carga, executor, agora),
         "data_rotina": rotina_data,
         "visao": {
-            "fluxo": _seguro(visao.fluxo, agora_item, leitores.ultima_execucao(itens_completas)),
-            "linha_tempo": _seguro(visao.linha_do_tempo, agora_item, leitores.ler_prazo_rotina(raiz),
-                                   caminho_calendario),
-            "saude": _seguro(saude.cartoes_saude, raiz / "docs" / "diagnostico_banco.md"),
+            "fluxo": fluxo_v,
+            "linha_tempo": linha_v,
+            "saude": saude_v,
             "calendario": _seguro(visao.calendario_meses, itens_diarias, itens_completas,
                                   agora.astimezone(SP).date().isoformat(), caminho_calendario),
+            "resumo": _seguro(visao.resumo, hoje, trava, fluxo_v, linha_v, saude_v, testes),
+            "tempos": _seguro(visao.tempos_acoes, duracoes, agora_item, completa_item),
+            "ajuda": _seguro(ajuda.montar_ajuda, valores_ajuda),
+            "dia": _seguro(visao.frase_dia, hoje_iso, data_ultima, caminho_calendario),
+            "glossario": [list(par) for par in ajuda.GLOSSARIO],
         },
     }
 

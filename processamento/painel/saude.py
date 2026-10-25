@@ -133,8 +133,8 @@ def _cartao_quantidade(diag: dict, linhas: list[str]) -> dict:
             tab = tabela_md(corpo, "Empresas com quantidade de ações suspeita") or []
             exemplos = [r["tickers"] for r in tab[:3] if r.get("tickers")]
             trecho = f" (ex.: {', '.join(exemplos)})" if exemplos else ""
-            texto = (f"Provavelmente em milhares{trecho}. Valor de mercado, P/L, P/VP e payout delas "
-                     f"saem indisponível em {data}.")
+            texto = (f"Provavelmente em milhares{trecho}. P/L, P/VP e payout delas saem indisponível "
+                     f"em {data}; yield, ROE, margens, EBITDA e endividamento não mudam.")
             return _cartao(id_, titulo, "warn", _plural(n, "empresa", "empresas"), texto, fonte)
         m = RE_QTD_ACOES_ZERO.match(nota)
         if m:

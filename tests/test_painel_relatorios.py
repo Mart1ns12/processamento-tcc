@@ -9,6 +9,7 @@ import shutil
 
 from fabrica_painel import montar_raiz
 
+from processamento.painel import relatorios
 from processamento.painel.relatorios import (
     analisar_log_rotina,
     caminho_ultimo_relatorio,
@@ -369,3 +370,42 @@ def test_resultado_terminal_sem_banco():
 def test_resultado_terminal_linhas_comuns_nao_terminam():
     assert resultado_terminal("Saída de D em P: status ok") is None
     assert resultado_terminal("- aviso") is None
+
+
+def test_duracao_ultima_acao_e_duracoes_painel(tmp_path):
+    raiz = montar_raiz(tmp_path)
+    pasta = raiz / "logs" / "painel"
+    # log mais novo da fixture: 10:15:00 a 10:16:36, código 0
+    assert relatorios.duracao_ultima_acao(pasta, "testes") == 96
+    # execução parada pelo painel (parado=sim) é ignorada
+    (pasta / "testes-2026-10-25_080000.log").write_text(
+        "# painel: acao=testes inicio=2026-10-25T08:00:00-03:00 comando=python -m pytest -q\n"
+        "# painel: fim=2026-10-25T08:00:10-03:00 codigo=1 parado=sim\n",
+        encoding="utf-8",
+    )
+    assert relatorios.duracao_ultima_acao(pasta, "testes") == 96
+    # código de erro (3) é ignorado; vale a execução anterior com código 0
+    (pasta / "diagnostico-2026-10-24_120000.log").write_text(
+        "# painel: acao=diagnostico inicio=2026-10-24T12:00:00-03:00 comando=python -m processamento.diagnostico\n"
+        "ok\n"
+        "# painel: fim=2026-10-24T12:02:05-03:00 codigo=0\n",
+        encoding="utf-8",
+    )
+    (pasta / "diagnostico-2026-10-25_090000.log").write_text(
+        "# painel: acao=diagnostico inicio=2026-10-25T09:00:00-03:00 comando=python -m processamento.diagnostico\n"
+        "# painel: fim=2026-10-25T09:00:03-03:00 codigo=3\n",
+        encoding="utf-8",
+    )
+    assert relatorios.duracao_ultima_acao(pasta, "diagnostico") == 125
+    # execução sem rodapé (em andamento) não conta
+    (pasta / "carga-2026-10-25_100000.log").write_text(
+        "# painel: acao=carga inicio=2026-10-25T10:00:00-03:00 comando=python -m processamento.saida --data 2026-10-23 --completo\n"
+        "rodando\n",
+        encoding="utf-8",
+    )
+    assert relatorios.duracao_ultima_acao(pasta, "carga") is None
+    assert relatorios.duracao_ultima_acao(pasta, "rotina") is None
+    assert relatorios.duracao_ultima_acao(tmp_path / "nao_existe", "testes") is None
+    assert relatorios.duracoes_painel(pasta, ["rotina", "carga", "diagnostico", "testes"]) == {
+        "rotina": None, "carga": None, "diagnostico": 125, "testes": 96,
+    }

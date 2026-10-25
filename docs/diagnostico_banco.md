@@ -1,6 +1,6 @@
 # Diagnóstico do banco da coleta (só leitura)
 
-- Gerado em: 2026-10-24 21:08 (America/Sao_Paulo)
+- Gerado em: 2026-10-25 12:48 (America/Sao_Paulo)
 - Banco: tcc_scraper
 - MySQL: 8.0.46-0ubuntu0.24.04.4
 - Comando: `python -m processamento.diagnostico`
@@ -667,8 +667,8 @@ Nenhuma divergência encontrada.
 
 | tipo | status | n | primeira | ultima |
 |---|---|---|---|---|
-| coletar | agendada | 1 | 2026-10-23 16:56:21.200957 | 2026-10-23 16:56:21.200957 |
-| coletar | concluida | 1 | 2026-10-22 21:56:25.015448 | 2026-10-22 21:56:25.015448 |
+| coletar | concluida | 2 | 2026-10-22 21:56:25.015448 | 2026-10-25 09:47:36.095094 |
+| daily | agendada | 1 | 2026-10-25 11:00:00.910802 | 2026-10-25 11:00:00.910802 |
 | daily | concluida | 3 | 2026-10-21 21:30:04.283650 | 2026-10-23 11:00:01.489947 |
 | daily | parcial | 1 | 2026-10-21 00:46:43.367434 | 2026-10-21 00:46:43.367434 |
 | etapa | concluida | 1 | 2026-10-20 14:45:13.211003 | 2026-10-20 14:45:13.211003 |
@@ -678,31 +678,40 @@ Nenhuma divergência encontrada.
 | origem | hora | n |
 |---|---|---|
 | cron | 0 | 1 |
-| cron | 11 | 2 |
+| cron | 11 | 3 |
 | cron | 21 | 1 |
 
 ### Etapas do painel
 
 | etapa_id | ordem | status | n |
 |---|---|---|---|
-| precos | 1 | concluida | 5 |
+| corrigir_horas | 1 | concluida | 1 |
 | cvm_itr_dfp | 1 | concluida | 1 |
-| corrigir_horas | 1 | pendente | 1 |
+| precos | 1 | concluida | 5 |
+| precos | 1 | pendente | 1 |
 | macro | 2 | concluida | 4 |
 | build_entrega | 2 | concluida | 1 |
+| macro | 2 | pendente | 1 |
 | noticias | 3 | concluida | 4 |
+| noticias | 3 | pendente | 1 |
 | ipe | 4 | concluida | 4 |
+| ipe | 4 | pendente | 1 |
 | enriquecimento | 5 | concluida | 3 |
 | enriquecimento | 5 | falhou | 1 |
+| enriquecimento | 5 | pendente | 1 |
 | juiza | 6 | concluida | 4 |
+| juiza | 6 | pendente | 1 |
 | cadastro | 7 | concluida | 4 |
+| cadastro | 7 | pendente | 1 |
 | entrega | 8 | concluida | 4 |
+| entrega | 8 | pendente | 1 |
 | analise | 9 | concluida | 4 |
+| analise | 9 | pendente | 1 |
 
 ## 15. Histórico novo: composição, corrigir_horas e cobertura do experimento
 
 - Composição do Ibovespa: 48 de 136 tickers sem nenhum preço em v1-precos (7 código antigo de empresa do cadastro, 41 fora do cadastro); 28 estiveram no índice em 2024 ou depois. O preço é procurado com a união das mudanças de ticker (o código antigo vale pelo atual).
-- corrigir_horas: execução mais recente 2026-10-23-coletar-135621 (status agendada), etapa pendente; iniciada em 2026-10-23 13:56, finalizada em — (horário de São Paulo)
+- corrigir_horas: execução mais recente 2026-10-23-coletar-135621 (status concluida), etapa concluida; iniciada em 2026-10-25 06:47, finalizada em 2026-10-25 06:48 (horário de São Paulo)
 - Cobertura do experimento (universo com a composição, motivo ok): 117435 linhas em 1698 pregões, de 2019-12-30 a 2026-10-23.
 
 ### Composição do Ibovespa: tickers sem nenhum preço em v1-precos

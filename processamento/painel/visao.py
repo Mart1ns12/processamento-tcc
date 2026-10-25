@@ -14,6 +14,8 @@ import yaml
 
 from processamento import calendario
 from processamento.calendario import SP
+from processamento.painel.acoes import ACOES
+from processamento.painel.ajuda import O_QUE_FAZER
 from processamento.painel.leitores import _instante, formatar_duracao
 
 MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro",
@@ -286,3 +288,178 @@ def calendario_meses(diarias: list[dict], completas: list[dict], hoje_iso: str,
                          "motivo": motivo, "status": status, "completa": d in completa_datas})
         saida.append({"ano": ano, "mes": mes, "titulo": f"{MESES[mes - 1]} de {ano}", "dias": dias})
     return saida
+
+
+TEXTO_SEM_MEDICAO = "Ainda sem medição: pode levar alguns minutos."
+ROTULO_EXECUCAO = {"rotina": "A última rotina diária", "carga": "A última carga completa"}
+DIAS_LONGOS = ["segunda", "terça", "quarta", "quinta", "sexta", "sábado", "domingo"]
+
+
+def _dic(valor: object) -> dict:
+    return valor if isinstance(valor, dict) else {}
+
+
+def _inteiro(valor: object) -> bool:
+    return isinstance(valor, int) and not isinstance(valor, bool)
+
+
+def _plural(n: int, singular: str, plural: str) -> str:
+    return f"{n} {singular if n == 1 else plural}"
+
+
+def _ponto(nivel: str, texto: str, alvo: str, chave: str) -> dict:
+    return {"nivel": nivel, "texto": texto, "alvo": alvo, "o_que_fazer": O_QUE_FAZER.get(chave)}
+
+
+def pontos_de_atencao(hoje: object, trava: object, fluxo_dia: object, linha_tempo: object,
+                      saude_visao: object, testes: object) -> list[dict]:
+    """Faróis amarelos (warn) e vermelhos (bad) da tela, na ordem em que aparecem na página."""
+    hoje, trava, fluxo_dia, linha_tempo, saude_visao, testes = (
+        _dic(v) for v in (hoje, trava, fluxo_dia, linha_tempo, saude_visao, testes))
+    pontos: list[dict] = []
+    if fluxo_dia.get("disponivel") is True:
+        coleta = _dic(fluxo_dia.get("coleta"))
+        if coleta.get("estado") in ("warn", "bad"):
+            titulo = str(coleta.get("titulo") or "sem dados").lower()
+            pontos.append(_ponto(coleta["estado"], f"Coleta ({titulo})", "fluxo-coleta", "coleta_" + coleta["estado"]))
+        d = _data(fluxo_dia.get("data"))
+        dia = d.strftime("%d/%m/%Y") if d else "sem data"
+        status = fluxo_dia.get("status")
+        if status == "falhou":
+            pontos.append(_ponto("bad", f"Última rotina diária ({dia}) falhou", "fluxo-processamento", "rotina_falhou"))
+        elif status == "parcial":
+            pontos.append(_ponto("warn", f"Última rotina diária ({dia}) com pendências", "fluxo-processamento",
+                                 "rotina_parcial"))
+        elif status == "em_andamento" and fluxo_dia.get("possivelmente_interrompida"):
+            pontos.append(_ponto("warn", f"Última rotina diária ({dia}) pode ter sido interrompida",
+                                 "fluxo-processamento", "rotina_interrompida"))
+    else:
+        pontos.append(_ponto("warn", "Fluxo do dia: sem dados", "agora", "sem_rotina"))
+    folga = linha_tempo.get("folga_s")
+    if _inteiro(folga) and folga < 0:
+        pontos.append(_ponto("warn", f"Rotina terminou depois do prazo ({linha_tempo.get('folga_texto')})",
+                             "linha-tempo", "atraso_prazo"))
+    if saude_visao.get("disponivel") is True:
+        for c in saude_visao.get("cartoes") or []:
+            c = _dic(c)
+            farol, id_ = c.get("farol"), c.get("id")
+            if not isinstance(id_, str):
+                continue
+            texto = f"{c.get('titulo')} ({c.get('numero')})"
+            if farol in ("warn", "bad"):
+                pontos.append(_ponto(farol, texto, f"saude-c-{id_}", f"saude_{id_}"))
+            elif farol == "idle":
+                pontos.append(_ponto("warn", texto, f"saude-c-{id_}", "saude_sem_dados"))
+    else:
+        pontos.append(_ponto("warn", "Saúde dos dados: sem diagnóstico", "saude", "saude_sem_diagnostico"))
+    if hoje.get("erro") or hoje.get("disponivel") is False:
+        pontos.append(_ponto("bad", "Calendário da B3 com erro", "historico", "calendario_erro"))
+    if testes.get("disponivel") is True:
+        contagens = _dic(testes.get("contagens"))
+        falhas = sum(v for k, v in contagens.items() if k in ("failed", "errors") and _inteiro(v))
+        if testes.get("interrompido"):
+            pontos.append(_ponto("warn", "Testes automáticos interrompidos", "testes", "testes_interrompidos"))
+        elif testes.get("aprovado") is False and falhas > 0:
+            pontos.append(_ponto("bad", f"Testes automáticos com falhas ({_plural(falhas, 'falha', 'falhas')})",
+                                 "testes", "testes_falhas"))
+        elif testes.get("aprovado") is False:
+            pontos.append(_ponto("warn", "Testes automáticos sem resultado completo", "testes", "testes_interrompidos"))
+    if trava.get("abandonada") is True:
+        idade = trava.get("idade_min")
+        texto = f"Trava da rotina esquecida ({idade} min)" if _inteiro(idade) else "Trava da rotina esquecida"
+        pontos.append(_ponto("warn", texto, "comandos", "trava_abandonada"))
+    return pontos
+
+
+def resumo(hoje: object, trava: object, fluxo_dia: object, linha_tempo: object,
+           saude_visao: object, testes: object) -> dict:
+    """Frase única do topo ("Tudo certo", "Atenção: N pontos" ou "Falhou: ...") e a lista de pontos."""
+    pontos = pontos_de_atencao(hoje, trava, fluxo_dia, linha_tempo, saude_visao, testes)
+    ruins = [p for p in pontos if p["nivel"] == "bad"]
+    atencao = [p for p in pontos if p["nivel"] == "warn"]
+    if ruins:
+        frase = "Falhou: " + "; ".join(p["texto"] for p in ruins)
+        if atencao:
+            frase += " · e " + _plural(len(atencao), "ponto de atenção", "pontos de atenção")
+        nivel = "bad"
+    elif atencao:
+        frase, nivel = "Atenção: " + _plural(len(atencao), "ponto", "pontos"), "warn"
+    else:
+        frase, nivel = "Tudo certo", "ok"
+    return {"nivel": nivel, "frase": frase, "pontos": pontos}
+
+
+def tempo_curto(segundos: object) -> str | None:
+    """Tempo arredondado para o botão: "menos de um minuto", "~2 min", "~1 h 30 min"; None se não houver."""
+    if not _inteiro(segundos) or segundos < 0:
+        return None
+    if segundos < 60:
+        return "menos de um minuto"
+    minutos = (segundos + 30) // 60
+    if minutos < 60:
+        return f"~{minutos} min"
+    return f"~{minutos // 60} h {minutos % 60} min"
+
+
+def tempos_acoes(duracoes_painel: object, rotina: object, completa: object) -> dict[str, dict]:
+    """Tempo de cada ação: log do painel; senão execucao.json (rotina e carga ok/parcial); senão sem medição."""
+    duracoes = _dic(duracoes_painel)
+    itens = {"rotina": _dic(rotina), "carga": _dic(completa)}
+    saida: dict[str, dict] = {}
+    for acao_id in ACOES:
+        s = duracoes.get(acao_id)
+        if _inteiro(s) and s >= 0:
+            saida[acao_id] = {"segundos": s, "curto": tempo_curto(s),
+                              "texto": f"Da última vez, pelo painel, levou {formatar_duracao(s)}.", "origem": "painel"}
+            continue
+        item = itens.get(acao_id, {})
+        s = item.get("duracao_s")
+        if item.get("legivel") and item.get("status") in ("ok", "parcial") and _inteiro(s) and s >= 0:
+            saida[acao_id] = {"segundos": s, "curto": tempo_curto(s),
+                              "texto": f"{ROTULO_EXECUCAO[acao_id]} levou {formatar_duracao(s)}.", "origem": "execucao"}
+        else:
+            saida[acao_id] = {"segundos": None, "curto": None, "texto": TEXTO_SEM_MEDICAO, "origem": None}
+    return saida
+
+
+def hora_marco(linha_tempo: object, id_: str) -> str | None:
+    """Hora (HH:MM) do marco `id_` da linha do tempo; None se não houver."""
+    for m in _dic(linha_tempo).get("marcos") or []:
+        if isinstance(m, dict) and m.get("id") == id_ and isinstance(m.get("hora"), str):
+            return m["hora"]
+    return None
+
+
+def _dia_curto_ano(d: date) -> str:
+    """Dia da semana curto e data com ano: "sex 23/10/2026"."""
+    return f"{DIAS_CURTOS[d.weekday()]} {d:%d/%m/%Y}"
+
+
+def frase_dia(hoje_iso: object, data_ultima: object, caminho_calendario: str | None = None) -> str:
+    """Frase do topo (E1): o que é hoje (pregão ou não) e de qual pregão é a última rotina diária.
+
+    `data_ultima` é a data de referência da última rotina diária (AAAA-MM-DD), ou None se não há nenhuma.
+    """
+    hoje = _data(hoje_iso)
+    if hoje is None:
+        return "Não foi possível saber a data de hoje."
+    pregao, motivo = _pregao(hoje, caminho_calendario)
+    cabeca = f"Hoje é {DIAS_LONGOS[hoje.weekday()]}, {hoje:%d/%m/%Y}"
+    if pregao is None:
+        situacao = "(não foi possível saber se há pregão)"
+    elif pregao:
+        situacao = "(dia de pregão)"
+    elif hoje.weekday() >= 5:
+        situacao = "(sem pregão)"
+    else:
+        situacao = f"(sem pregão: {motivo})"
+    ultima = _data(data_ultima)
+    if ultima is None:
+        cauda = "Nenhuma rotina diária encontrada."
+    elif ultima == hoje:
+        cauda = "A última rotina diária é a de hoje."
+    elif pregao and ultima < hoje:
+        cauda = f"A rotina de hoje ainda não rodou; a última é do pregão de {_dia_curto_ano(ultima)}."
+    else:
+        cauda = f"A última rotina diária é do pregão de {_dia_curto_ano(ultima)}."
+    return f"{cabeca} {situacao}. {cauda}"

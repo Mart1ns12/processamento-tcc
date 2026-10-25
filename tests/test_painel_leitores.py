@@ -281,3 +281,28 @@ def test_ler_prazo_rotina(tmp_path):
     assert leitores.ler_prazo_rotina(raiz) is None
     caminho.unlink()
     assert leitores.ler_prazo_rotina(raiz) is None
+
+
+def test_ler_valores_ajuda_da_fixture(tmp_path):
+    raiz = montar_raiz(tmp_path)
+    assert leitores.ler_valores_ajuda(raiz) == {
+        "prazo": "09:45", "prazo_tardio": "12:00", "inicio_consulta": "08:00", "intervalo": "5",
+        "limite_historico": "10:00", "corte_noite": "08:00", "retorno_min": "-75%", "retorno_max": "+100%",
+        "defasagem": "5", "pvp_min": "0,05", "sorteios": "10.000", "teste_final_inicio": "23/06/2026",
+    }
+
+
+def test_ler_valores_ajuda_invalidos_e_ausente(tmp_path):
+    raiz = montar_raiz(tmp_path)
+    caminho = raiz / "processamento" / "config" / "parametros.yaml"
+    texto = caminho.read_text(encoding="utf-8")
+    assert 'prazo_tardio: "12:00"' in texto and "intervalo_minutos: 5" in texto
+    texto = texto.replace('prazo_tardio: "12:00"', "prazo_tardio: 12:00")
+    texto = texto.replace("intervalo_minutos: 5", "intervalo_minutos: true")
+    caminho.write_text(texto, encoding="utf-8")
+    v = leitores.ler_valores_ajuda(raiz)
+    assert v["prazo_tardio"] is None
+    assert v["intervalo"] is None
+    assert v["prazo"] == "09:45"
+    caminho.unlink()
+    assert leitores.ler_valores_ajuda(raiz) == dict.fromkeys(leitores.CHAVES_AJUDA)

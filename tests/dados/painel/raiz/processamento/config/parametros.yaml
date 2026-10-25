@@ -1,14 +1,26 @@
+corte_noite: "08:00"
 treino:
   teste_final:
     inicio: "2026-06-23"
     fim: null
     liberado: false
   modelo_oficial: false
+  acaso_sorteios: 10000
+fase1:
+  retorno_suspeito_min: -0.75
+  retorno_suspeito_max: 1.0
+  base_defasagem_max_pregoes: 5
+fundamentos:
+  pvp_minimo_plausivel: 0.05
 saida:
   pasta: "saida"
   publicar_top_provisorio: false
+  limite_valido_historico: "10:00"
 rotina:
   pasta_logs: "logs"
   trava: "saida/estado/rotina.trava"
   trava_validade_horas: 6
   prazo: "09:45"
+  prazo_tardio: "12:00"
+  inicio_consulta: "08:00"
+  intervalo_minutos: 5

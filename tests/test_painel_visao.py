@@ -8,7 +8,11 @@ from datetime import date
 from pathlib import Path
 
 from processamento.painel import visao
-from processamento.painel.visao import calendario_meses, dia_curto, fluxo, linha_do_tempo, quando
+from processamento.painel.acoes import ACOES
+from processamento.painel.ajuda import O_QUE_FAZER
+from processamento.painel.saude import cartoes_saude
+from processamento.painel.visao import (calendario_meses, dia_curto, fluxo, frase_dia, hora_marco, linha_do_tempo,
+                                        quando, resumo, tempo_curto, tempos_acoes)
 
 COLETA = {
     "consultado": True,
@@ -272,3 +276,180 @@ def test_visao_nao_importa_banco_nem_configuracao_secreta():
     texto = Path(visao.__file__).read_text(encoding="utf-8")
     for proibido in ("processamento.fontes", "sqlalchemy", "dotenv", "SELECT", "executar_leitura"):
         assert proibido not in texto
+
+
+# ---------- Fase 3: resumo, tempos e frase do dia ----------
+
+FIXTURE_DIAG = Path(__file__).resolve().parent / "dados" / "painel" / "diagnostico_completo.md"
+HOJE_OK = {"data": "2026-10-23", "dia_semana": "sexta", "pregao": True, "motivo": None, "erro": None}
+TRAVA_VAZIA = {"existe": False, "ativa": False, "abandonada": False, "idade_min": None}
+TESTES_OK = {"disponivel": True, "aprovado": True, "interrompido": False, "contagens": {"passed": 1700}}
+SAUDE_OK = {"disponivel": True, "cartoes": [{"id": "contrato", "titulo": "Contrato com a coleta",
+                                             "farol": "ok", "numero": "0 divergências"}]}
+LT = linha_do_tempo(ITEM, "09:45")   # rotina em outro dia: folga None
+
+
+def test_resumo_tudo_certo():
+    assert resumo(HOJE_OK, TRAVA_VAZIA, fluxo(ITEM), LT, SAUDE_OK, TESTES_OK) == {
+        "nivel": "ok", "frase": "Tudo certo", "pontos": []}
+
+
+def test_resumo_atencao_com_os_cartoes_da_fixture():
+    r = resumo(HOJE_OK, TRAVA_VAZIA, fluxo(ITEM), LT, cartoes_saude(FIXTURE_DIAG), TESTES_OK)
+    assert r["nivel"] == "warn"
+    assert r["frase"] == "Atenção: 4 pontos"
+    assert [p["texto"] for p in r["pontos"]] == [
+        "Quantidade de ações (19 empresas)", "Preços suspeitos (5 retornos)",
+        "Lacunas nas séries (3 lacunas)", "Horário das notícias (90,8% sem hora real)"]
+    assert [p["alvo"] for p in r["pontos"]] == [
+        "saude-c-quantidade_acoes", "saude-c-retornos", "saude-c-lacunas", "saude-c-horario_noticias"]
+    assert r["pontos"][0]["o_que_fazer"] == O_QUE_FAZER["saude_quantidade_acoes"]
+
+
+def test_resumo_falhou_com_atencao():
+    fluxo_falhou = fluxo(dict(ITEM, status="falhou", n_pacotes=0, pacotes=[]))
+    r = resumo(HOJE_OK, TRAVA_VAZIA, fluxo_falhou, LT, cartoes_saude(FIXTURE_DIAG), TESTES_OK)
+    assert r["frase"] == "Falhou: Última rotina diária (23/10/2026) falhou · e 4 pontos de atenção"
+    assert r["pontos"][0] == {"nivel": "bad", "texto": "Última rotina diária (23/10/2026) falhou",
+                              "alvo": "fluxo-processamento", "o_que_fazer": O_QUE_FAZER["rotina_falhou"]}
+
+
+def test_resumo_singular_e_parcial():
+    r = resumo(HOJE_OK, TRAVA_VAZIA, fluxo(dict(ITEM, status="parcial")), LT, SAUDE_OK, TESTES_OK)
+    assert r["frase"] == "Atenção: 1 ponto"
+    assert r["pontos"] == [{"nivel": "warn", "texto": "Última rotina diária (23/10/2026) com pendências",
+                            "alvo": "fluxo-processamento", "o_que_fazer": O_QUE_FAZER["rotina_parcial"]}]
+
+
+def test_resumo_rotina_interrompida():
+    r = resumo(HOJE_OK, TRAVA_VAZIA, fluxo(dict(ITEM, status="em_andamento", possivelmente_interrompida=True)),
+               LT, SAUDE_OK, TESTES_OK)
+    assert r["pontos"][0]["texto"] == "Última rotina diária (23/10/2026) pode ter sido interrompida"
+    assert r["pontos"][0]["o_que_fazer"] == O_QUE_FAZER["rotina_interrompida"]
+
+
+def test_resumo_coleta_com_problema():
+    coleta = {"consultado": True, "motivo": "entrega_falhou", "iniciada_em": "2026-10-23T08:00:01-03:00"}
+    r = resumo(HOJE_OK, TRAVA_VAZIA, fluxo(dict(ITEM, coleta=coleta, status="falhou", n_pacotes=0, pacotes=[])),
+               LT, SAUDE_OK, TESTES_OK)
+    assert r["frase"] == "Falhou: Coleta (entrega com problema); Última rotina diária (23/10/2026) falhou"
+    assert r["pontos"][0] == {"nivel": "bad", "texto": "Coleta (entrega com problema)", "alvo": "fluxo-coleta",
+                              "o_que_fazer": O_QUE_FAZER["coleta_bad"]}
+
+
+def test_resumo_atraso_em_relacao_ao_prazo():
+    lt = linha_do_tempo(dict(ITEM_MANHA, inicio="2026-10-23T09:50:00-03:00", fim="2026-10-23T09:52:30-03:00"), "09:45")
+    r = resumo(HOJE_OK, TRAVA_VAZIA, fluxo(ITEM), lt, SAUDE_OK, TESTES_OK)
+    assert r["pontos"] == [{"nivel": "warn", "texto": "Rotina terminou depois do prazo (atraso de 7 min 30 s)",
+                            "alvo": "linha-tempo", "o_que_fazer": O_QUE_FAZER["atraso_prazo"]}]
+
+
+def test_resumo_testes_com_falhas_interrompidos_e_sem_resultado():
+    def testes_com(**kw):
+        return resumo(HOJE_OK, TRAVA_VAZIA, fluxo(ITEM), LT, SAUDE_OK, kw)["pontos"]
+
+    falhou = testes_com(disponivel=True, aprovado=False, interrompido=False, contagens={"failed": 2, "passed": 1698})
+    assert falhou == [{"nivel": "bad", "texto": "Testes automáticos com falhas (2 falhas)", "alvo": "testes",
+                       "o_que_fazer": O_QUE_FAZER["testes_falhas"]}]
+    assert testes_com(disponivel=True, aprovado=False, interrompido=False, contagens={"failed": 1})[0]["texto"] == (
+        "Testes automáticos com falhas (1 falha)")
+    sem_resultado = testes_com(disponivel=True, aprovado=False, interrompido=False, contagens={})
+    assert sem_resultado[0]["nivel"] == "warn"
+    assert sem_resultado[0]["texto"] == "Testes automáticos sem resultado completo"
+    interrompido = testes_com(disponivel=True, aprovado=None, interrompido=True, contagens={})
+    assert interrompido[0]["nivel"] == "warn"
+    assert interrompido[0]["texto"] == "Testes automáticos interrompidos"
+    assert testes_com(disponivel=False, motivo="x") == []
+
+
+def test_resumo_trava_calendario_e_saude_indisponivel():
+    r = resumo({"erro": "feriados inválidos"}, {"abandonada": True, "idade_min": 420}, fluxo(ITEM), LT,
+               {"disponivel": False, "motivo": "x"}, TESTES_OK)
+    assert r["pontos"] == [
+        {"nivel": "warn", "texto": "Saúde dos dados: sem diagnóstico", "alvo": "saude",
+         "o_que_fazer": O_QUE_FAZER["saude_sem_diagnostico"]},
+        {"nivel": "bad", "texto": "Calendário da B3 com erro", "alvo": "historico",
+         "o_que_fazer": O_QUE_FAZER["calendario_erro"]},
+        {"nivel": "warn", "texto": "Trava da rotina esquecida (420 min)", "alvo": "comandos",
+         "o_que_fazer": O_QUE_FAZER["trava_abandonada"]}]
+    assert r["frase"] == "Falhou: Calendário da B3 com erro · e 2 pontos de atenção"
+
+
+def test_resumo_cartao_cinza_conta_como_atencao():
+    saude = {"disponivel": True, "cartoes": [{"id": "retornos", "titulo": "Preços suspeitos",
+                                              "farol": "idle", "numero": "sem dados"}]}
+    r = resumo(HOJE_OK, TRAVA_VAZIA, fluxo(ITEM), LT, saude, TESTES_OK)
+    assert r["pontos"] == [{"nivel": "warn", "texto": "Preços suspeitos (sem dados)", "alvo": "saude-c-retornos",
+                            "o_que_fazer": O_QUE_FAZER["saude_sem_dados"]}]
+
+
+def test_resumo_sem_nada_nao_quebra():
+    r = resumo(None, None, None, None, None, None)
+    assert r["frase"] == "Atenção: 2 pontos"
+    assert [p["texto"] for p in r["pontos"]] == ["Fluxo do dia: sem dados", "Saúde dos dados: sem diagnóstico"]
+
+
+def test_tempo_curto_arredonda_para_o_botao():
+    casos = {None: None, True: None, -1: None, 45: "menos de um minuto", 89: "~1 min", 90: "~2 min",
+             96: "~2 min", 180: "~3 min", 295: "~5 min", 3599: "~1 h 0 min", 5400: "~1 h 30 min"}
+    for entrada, esperado in casos.items():
+        assert tempo_curto(entrada) == esperado, entrada
+
+
+def test_tempos_acoes_prefere_o_log_do_painel():
+    tempos = tempos_acoes({"rotina": 75, "carga": None, "diagnostico": None, "testes": 295},
+                          dict(ITEM, duracao_s=118), dict(COMPLETA, duracao_s=180))
+    assert tempos == {
+        "rotina": {"segundos": 75, "curto": "~1 min", "texto": "Da última vez, pelo painel, levou 1 min 15 s.",
+                   "origem": "painel"},
+        "carga": {"segundos": 180, "curto": "~3 min", "texto": "A última carga completa levou 3 min 0 s.",
+                  "origem": "execucao"},
+        "diagnostico": {"segundos": None, "curto": None, "texto": "Ainda sem medição: pode levar alguns minutos.",
+                        "origem": None},
+        "testes": {"segundos": 295, "curto": "~5 min", "texto": "Da última vez, pelo painel, levou 4 min 55 s.",
+                   "origem": "painel"}}
+
+
+def test_tempos_acoes_ignora_execucao_que_falhou_ou_nao_terminou():
+    tempos = tempos_acoes({}, dict(ITEM, status="falhou", duracao_s=0),
+                          dict(COMPLETA, status="em_andamento", duracao_s=None))
+    assert tempos["rotina"]["origem"] is None and tempos["carga"]["origem"] is None
+    assert tempos["rotina"]["texto"] == tempos["carga"]["texto"] == "Ainda sem medição: pode levar alguns minutos."
+
+
+def test_tempos_acoes_sem_nada_tem_todas_as_acoes():
+    tempos = tempos_acoes(None, None, None)
+    assert set(tempos) == set(ACOES)
+    assert all(t["segundos"] is None for t in tempos.values())
+
+
+def test_hora_marco():
+    assert hora_marco(linha_do_tempo(ITEM_MANHA, "09:45"), "abertura") == "10:00"
+    assert hora_marco(None, "abertura") is None
+    assert hora_marco({"disponivel": False}, "prazo") is None
+
+
+def test_frase_dia_domingo_com_ultima_rotina_de_sexta():
+    assert frase_dia("2026-10-25", "2026-10-23") == (
+        "Hoje é domingo, 25/10/2026 (sem pregão). A última rotina diária é do pregão de sex 23/10/2026.")
+
+
+def test_frase_dia_pregao_sem_rotina_de_hoje_ainda():
+    assert frase_dia("2026-10-23", "2026-10-22") == (
+        "Hoje é sexta, 23/10/2026 (dia de pregão). A rotina de hoje ainda não rodou; "
+        "a última é do pregão de qui 22/10/2026.")
+
+
+def test_frase_dia_pregao_com_rotina_do_proprio_dia():
+    assert frase_dia("2026-10-23", "2026-10-23") == (
+        "Hoje é sexta, 23/10/2026 (dia de pregão). A última rotina diária é a de hoje.")
+
+
+def test_frase_dia_sem_nenhuma_rotina():
+    assert frase_dia("2026-10-25", None) == (
+        "Hoje é domingo, 25/10/2026 (sem pregão). Nenhuma rotina diária encontrada.")
+
+
+def test_frase_dia_feriado_mostra_o_motivo():
+    assert frase_dia("2026-10-12", None) == (
+        "Hoje é segunda, 12/10/2026 (sem pregão: Nossa Senhora Aparecida). Nenhuma rotina diária encontrada.")
