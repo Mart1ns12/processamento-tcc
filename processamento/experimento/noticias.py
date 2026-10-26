@@ -64,8 +64,15 @@ def ligar_empresa(noticias: pd.DataFrame, cnpj_de: dict, mudancas: dict) -> pd.D
 
 def deduplicar(noticias: pd.DataFrame, params: ParametrosExperimento) -> tuple[pd.DataFrame, dict]:
     """Uma linha por (empresa, id). Com `deduplicar_titulo`, também uma por (empresa, dia, título)
-    entre as notícias que não são de cvm_ipe. Fica a de menor momento_ref (empate: menor id)."""
-    ordenadas = noticias.sort_values(["momento_ref", "id"]).reset_index(drop=True)
+    entre as notícias que não são de cvm_ipe. Entre as cópias, fica a que tem probabilidade (prob_positivo e
+    prob_negativo não nulos), se houver; depois a de menor momento_ref (empate: menor id). Sem as colunas de
+    probabilidade, só vale o momento_ref."""
+    ordem = ["momento_ref", "id"]
+    if {"prob_positivo", "prob_negativo"} <= set(noticias.columns):
+        sem_prob = noticias["prob_positivo"].isna() | noticias["prob_negativo"].isna()
+        noticias = noticias.assign(_sem_prob=sem_prob.astype(int))
+        ordem = ["_sem_prob", *ordem]
+    ordenadas = noticias.sort_values(ordem).reset_index(drop=True)
     df = ordenadas.drop_duplicates(["empresa", "id"], keep="first")
     duplicadas_id = len(ordenadas) - len(df)
     duplicadas_titulo = 0
@@ -78,6 +85,8 @@ def deduplicar(noticias: pd.DataFrame, params: ParametrosExperimento) -> tuple[p
         descartar = idx_candidatas[repetida]
         duplicadas_titulo = len(descartar)
         df = df.drop(index=descartar)
+    if "_sem_prob" in df.columns:
+        df = df.drop(columns="_sem_prob")
     contagens = {"duplicadas_id": duplicadas_id, "duplicadas_titulo": duplicadas_titulo}
     return df.reset_index(drop=True), contagens
 
@@ -141,4 +150,5 @@ def preparar_noticias(
     info.update(info_dedup)
     info.update(info_classe)
     info["preparadas"] = len(preparadas)
+    info["sem_probabilidade"] = int(preparadas["score"].isna().sum())
     return preparadas, info

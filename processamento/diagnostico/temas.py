@@ -496,6 +496,26 @@ def secao_precos(ler, mapa: dict, existentes: set) -> dict:
 # Balanços
 # ---------------------------------------------------------------------------
 
+LIMITE_LISTA_PERIODOS = 10  # linhas de período inválido listadas na nota; o resto vira "e mais k"
+
+
+def _periodo_invalido(tipo, dias) -> bool:
+    """Período que o processamento descarta (seção 6): mesma regra de `periodo_valido` em fatos/trimestres."""
+    if dias is None or pd.isna(dias):
+        return True
+    classe = classificar_dias_periodo(inteiro(dias))
+    if tipo == "ITR":
+        return classe not in ("3m", "6m", "9m")
+    if tipo == "DFP":
+        return classe != "12m"
+    return classe == "outro"
+
+
+def _sql_texto(valor) -> str:
+    """Literal SQL de texto com aspas dobradas; None vira NULL."""
+    return "NULL" if valor is None else "'" + valor.replace("'", "''") + "'"
+
+
 def secao_balancos(ler, mapa: dict, existentes: set) -> dict:
     """Seção de balanços: escala, maiores receitas, períodos e datas de entrega."""
     secao = nova_secao("Balanços (v1-balancos)")
@@ -555,17 +575,37 @@ def secao_balancos(ler, mapa: dict, existentes: set) -> dict:
         f"FROM {T} GROUP BY tipo_documento, dias ORDER BY tipo_documento, dias"
     )
     agregado: dict = {}
+    invalidos = []
     for tp, dias, n in _registros(df_per, ("tipo_documento", "dias", "n")):
         rotulo_tipo = "NULL" if texto(tp) is None else texto(tp)
         classe = classificar_dias_periodo(inteiro(dias))
         agregado[(rotulo_tipo, classe)] = agregado.get((rotulo_tipo, classe), 0) + inteiro(n)
+        if _periodo_invalido(texto(tp), dias):
+            invalidos.append((texto(tp), dias, inteiro(n)))
     adicionar_tabela(secao, "Períodos (tipo × classe de dias)", ["tipo_documento", "classe", "n"],
                      [[tp, cl, n] for (tp, cl), n in sorted(agregado.items())])
-    for (tp, cl), n in sorted(agregado.items()):
-        if tp == "DFP" and cl != "12m":
-            secao["divergencias"].append(div("periodo", nome, f"DFP com período {cl}: {n} linhas"))
-        if tp == "ITR" and cl not in ("3m", "6m", "9m"):
-            secao["divergencias"].append(div("periodo", nome, f"ITR com período {cl}: {n} linhas"))
+    if invalidos:
+        total = sum(n for _tp, _dias, n in invalidos)
+        condicoes = [
+            f"({tipo} <=> {_sql_texto(tp)} AND "
+            + (f"DATEDIFF({fim}, {ini}) IS NULL)" if dias is None or pd.isna(dias)
+               else f"DATEDIFF({fim}, {ini}) + 1 = {inteiro(dias)})")
+            for tp, dias, _n in invalidos
+        ]
+        df_inv = ler(
+            f"SELECT {cnpj} AS cnpj, {tipo} AS tipo, {ini} AS ini, {fim} AS fim, "
+            f"DATEDIFF({fim}, {ini}) + 1 AS dias FROM {T} WHERE " + " OR ".join(condicoes)
+            + f" ORDER BY {cnpj}, {ini} LIMIT {LIMITE_LISTA_PERIODOS}"
+        )
+        itens = [
+            f"{texto(cn)} {texto(tp) or 'NULL'} {_data(i)}→{_data(f)} "
+            + ("(sem data)" if pd.isna(d) else f"({inteiro(d)} dias)")
+            for cn, tp, i, f, d in _registros(df_inv, ("cnpj", "tipo", "ini", "fim", "dias"))
+        ]
+        extra = total - len(itens)
+        secao["notas"].append(
+            f"{total} linhas de balanço com período inválido, descartadas pelo processamento (seção 6): "
+            + "; ".join(itens) + (f"; e mais {extra}" if extra > 0 else ""))
 
     # Entrega
     df_ent = ler(

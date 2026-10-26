@@ -371,6 +371,22 @@ def test_caso_3f_retorno_suspeito_vira_aviso_e_a_rodada_segue(banco_teste, tmp_p
     assert not any(a.startswith("falha ao gerar") for a in ex["avisos"])
 
 
+def test_caso_3g_sem_probabilidade_vira_aviso_na_rodada_e_sem_aviso_quando_zero(banco_teste, tmp_path, modelos_dir):
+    # sem probabilidade do FinBERT em todas as notícias: a rodada monta o dataset e avisa com a contagem
+    ler = banco_teste({"v1-noticias": lambda df: df.assign(prob_positivo=None)})
+    pasta = _gerar(tmp_path / "com", ler, modelos=modelos_dir)
+    ex = _execucao(pasta)
+    avisos = [a for a in ex["avisos"] if "sem probabilidade do FinBERT" in a]
+    assert len(avisos) == 1
+    k = avisos[0].split(" notícias")[0]
+    assert k.isdigit() and int(k) > 0
+    assert avisos[0] == (f"{k} notícias sem probabilidade do FinBERT na janela do dataset: tratadas como ausentes "
+                         "(não neutras).")
+
+    # com probabilidade em todas: nenhum aviso desse tipo
+    pasta_zero = _gerar(tmp_path / "sem", banco_teste(), modelos=modelos_dir)
+    assert not any("sem probabilidade do FinBERT" in a for a in _execucao(pasta_zero)["avisos"])
+
 # ---------------------------------------------------------------- pasta limpa (Fase 5; seção 3 do plano)
 
 NOVE = ("acoes.json, series_diarias.json, mercado_dia.json, resumo_acao.json, fundamentos_trimestrais.json, "

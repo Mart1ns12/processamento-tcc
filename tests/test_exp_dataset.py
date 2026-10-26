@@ -3,6 +3,9 @@
 Tickers fictícios e casos exatos (tests/fabrica_experimento.py). Nenhum teste usa banco ou rede.
 """
 
+import dataclasses
+
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -65,6 +68,7 @@ def test_info_das_fases_3_e_6(caso):
     assert info["cobertura_inicio"] == caso["cal"][3].isoformat()
     assert info["sem_horario"] == 1
     assert info["preparadas"] == 2
+    assert info["sem_probabilidade"] == 0
     assert info["sem_data"] == 0
     assert info["fora"] == 0
 
@@ -198,3 +202,12 @@ def test_sem_bdr_e_exclusao_saem_do_universo_do_modelo():
     motivos = universo.groupby("ticker")["motivo"].unique()
     assert set(motivos["BDRX34"]) == {"tipo_nao_aceito"}
     assert set(motivos["CRFB3"]) == {"excluido_por_decisao"}
+
+
+def test_sem_probabilidade_conta_as_preparadas_com_score_vazio(caso):
+    # Sem probabilidade do FinBERT, as duas notícias preparadas ficam com score NaN (tratadas como ausentes).
+    noticias = caso["dados"].noticias.assign(prob_positivo=np.nan)
+    dados = dataclasses.replace(caso["dados"], noticias=noticias)
+    _, info = montar_dataset(dados, caso["cal"])
+    assert info["preparadas"] == 2
+    assert info["sem_probabilidade"] == 2

@@ -1,0 +1,345 @@
+{
+  "pacote": {
+    "versao_contrato": "1.0",
+    "gerado_em": "2026-10-26T10:52:06-03:00",
+    "dados_ate": "2026-10-26T08:00:00-03:00",
+    "data_referencia": "2026-10-26",
+    "pregao_previsto": "2026-10-26",
+    "pregao_base": "2026-10-23",
+    "valido_para_historico": false,
+    "modelo_versao": "xgb-2026-06",
+    "modelo_provisorio": true,
+    "universo": "composicao_historica",
+    "n_candidatas": 70,
+    "selo": "em_avaliacao",
+    "titulo": "5 ações com maior chance de superar o Ibovespa (experimento)",
+    "aviso_fixo": "Não constitui recomendação de investimento.",
+    "avisos": [
+      "Modelo provisório: treinado de 2024-01-02 a 2026-06-19 (cerca de 2,5 anos), só para testar a rotina.",
+      "Gerado depois das 10h: não entra no histórico do experimento.",
+      "Antes da entrada em produção: este top 5 é um teste de funcionamento e não entra no histórico do experimento.",
+      "Modelo de 2026-06 (o do mês de D ainda não foi treinado)."
+    ],
+    "ranking": [
+      {
+        "posicao": 1,
+        "ticker": "WEGE3",
+        "chance": {
+          "valor": null,
+          "referencia_acaso": null,
+          "exibir": false,
+          "status": "calibracao_nao_conferida"
+        },
+        "motivos": [
+          {
+            "fator": "salto_abertura",
+            "valor": 0.008409066633744633,
+            "efeito": "ajudou",
+            "texto": "Abriu em alta de 0,8% no último pregão"
+          },
+          {
+            "fator": "ret_1d",
+            "valor": -0.0288636467673562,
+            "efeito": "ajudou",
+            "texto": "Caiu 2,9% no último pregão (abaixo da média das ações)"
+          },
+          {
+            "fator": "ret_5d",
+            "valor": -0.10960620863221682,
+            "efeito": "atrapalhou",
+            "texto": "Caiu 11,0% nos últimos 5 pregões (abaixo da média das ações)"
+          }
+        ],
+        "noticias_usadas": [
+          "n308485"
+        ]
+      },
+      {
+        "posicao": 2,
+        "ticker": "CPLE3",
+        "chance": {
+          "valor": null,
+          "referencia_acaso": null,
+          "exibir": false,
+          "status": "calibracao_nao_conferida"
+        },
+        "motivos": [
+          {
+            "fator": "ret_1d",
+            "valor": -0.008009118610681987,
+            "efeito": "ajudou",
+            "texto": "Caiu 0,8% no último pregão (abaixo da média das ações)"
+          },
+          {
+            "fator": "volatilidade_20d",
+            "valor": 0.013599618175170598,
+            "efeito": "ajudou",
+            "texto": "Oscilação diária de 1,4% nos últimos 20 pregões (mais calma que a média)"
+          },
+          {
+            "fator": "noticias_dia_tom",
+            "valor": null,
+            "efeito": "ajudou",
+            "texto": "Sem notícias no último pregão e na noite"
+          }
+        ],
+        "noticias_usadas": []
+      },
+      {
+        "posicao": 3,
+        "ticker": "RDOR3",
+        "chance": {
+          "valor": null,
+          "referencia_acaso": null,
+          "exibir": false,
+          "status": "calibracao_nao_conferida"
+        },
+        "motivos": [
+          {
+            "fator": "ret_1d",
+            "valor": -0.0068135190864826445,
+            "efeito": "ajudou",
+            "texto": "Caiu 0,7% no último pregão (abaixo da média das ações)"
+          },
+          {
+            "fator": "volume_relativo",
+            "valor": 2.5458453322476937,
+            "efeito": "ajudou",
+            "texto": "Volume de 2,5× o normal"
+          },
+          {
+            "fator": "mudanca_tom",
+            "valor": null,
+            "efeito": "ajudou",
+            "texto": "Sem base para comparar o tom com o habitual da empresa"
+          }
+        ],
+        "noticias_usadas": []
+      },
+      {
+        "posicao": 4,
+        "ticker": "GOAU4",
+        "chance": {
+          "valor": null,
+          "referencia_acaso": null,
+          "exibir": false,
+          "status": "calibracao_nao_conferida"
+        },
+        "motivos": [
+          {
+            "fator": "ret_1d",
+            "valor": -0.011274945138911807,
+            "efeito": "ajudou",
+            "texto": "Caiu 1,1% no último pregão (abaixo da média das ações)"
+          },
+          {
+            "fator": "volatilidade_20d",
+            "valor": 0.021271052723073326,
+            "efeito": "ajudou",
+            "texto": "Oscilação diária de 2,1% nos últimos 20 pregões (mais calma que a média)"
+          },
+          {
+            "fator": "beta",
+            "valor": 0.8053922761558822,
+            "efeito": "ajudou",
+            "texto": "Beta 0,81: move-se um pouco menos que o Ibovespa"
+          }
+        ],
+        "noticias_usadas": []
+      },
+      {
+        "posicao": 5,
+        "ticker": "GGBR4",
+        "chance": {
+          "valor": null,
+          "referencia_acaso": null,
+          "exibir": false,
+          "status": "calibracao_nao_conferida"
+        },
+        "motivos": [
+          {
+            "fator": "ret_1d",
+            "valor": -0.010204090798779375,
+            "efeito": "ajudou",
+            "texto": "Caiu 1,0% no último pregão (abaixo da média das ações)"
+          },
+          {
+            "fator": "beta",
+            "valor": 0.7345618592578681,
+            "efeito": "ajudou",
+            "texto": "Beta 0,73: move-se bem menos que o Ibovespa"
+          },
+          {
+            "fator": "volatilidade_20d",
+            "valor": 0.021764860178856527,
+            "efeito": "ajudou",
+            "texto": "Oscilação diária de 2,2% nos últimos 20 pregões (mais calma que a média)"
+          }
+        ],
+        "noticias_usadas": []
+      }
+    ]
+  },
+  "interno": {
+    "modelo_arquivo": "xgb-2026-06.json",
+    "modelo_m1_arquivo": "xgb-m1-2026-06.json",
+    "sombra_modelo_1": [
+      "WEGE3",
+      "GOAU4",
+      "CPLE3",
+      "ABEV3",
+      "VIVT3"
+    ],
+    "sombra_volatilidade": [
+      "KLBN11",
+      "BBSE3",
+      "CPLE3",
+      "VALE3",
+      "BRAV3"
+    ],
+    "candidatos": [
+      "ABEV3",
+      "ALOS3",
+      "ASAI3",
+      "AURE3",
+      "AXIA3",
+      "AZZA3",
+      "B3SA3",
+      "BBAS3",
+      "BBDC3",
+      "BBDC4",
+      "BBSE3",
+      "BEEF3",
+      "BPAC11",
+      "BRAP4",
+      "BRAV3",
+      "CMIG4",
+      "CMIN3",
+      "COGN3",
+      "CPFE3",
+      "CPLE3",
+      "CSAN3",
+      "CSNA3",
+      "CYRE3",
+      "DIRR3",
+      "EGIE3",
+      "EMBJ3",
+      "ENEV3",
+      "ENGI11",
+      "EQTL3",
+      "FLRY3",
+      "GGBR4",
+      "GOAU4",
+      "HAPV3",
+      "HYPE3",
+      "IGTI11",
+      "ISAE4",
+      "ITSA4",
+      "ITUB4",
+      "KLBN11",
+      "LREN3",
+      "MBRF3",
+      "MGLU3",
+      "MOTV3",
+      "MRVE3",
+      "MULT3",
+      "NATU3",
+      "PETR3",
+      "PETR4",
+      "POMO4",
+      "PRIO3",
+      "PSSA3",
+      "RADL3",
+      "RAIL3",
+      "RDOR3",
+      "RENT3",
+      "SANB11",
+      "SBSP3",
+      "SUZB3",
+      "TAEE11",
+      "TIMS3",
+      "TOTS3",
+      "UGPA3",
+      "USIM5",
+      "VALE3",
+      "VAMO3",
+      "VBBR3",
+      "VIVA3",
+      "VIVT3",
+      "WEGE3",
+      "YDUQ3"
+    ],
+    "probabilidades": {
+      "ABEV3": 0.5177528858184814,
+      "ALOS3": 0.49238860607147217,
+      "ASAI3": 0.4638797640800476,
+      "AURE3": 0.46033811569213867,
+      "AXIA3": 0.5001718401908875,
+      "AZZA3": 0.4631021320819855,
+      "B3SA3": 0.4598808288574219,
+      "BBAS3": 0.46715256571769714,
+      "BBDC3": 0.4635905623435974,
+      "BBDC4": 0.48793601989746094,
+      "BBSE3": 0.5081496834754944,
+      "BEEF3": 0.49146926403045654,
+      "BPAC11": 0.48125892877578735,
+      "BRAP4": 0.44558945298194885,
+      "BRAV3": 0.4874281883239746,
+      "CMIG4": 0.4935832917690277,
+      "CMIN3": 0.48793989419937134,
+      "COGN3": 0.4781106412410736,
+      "CPFE3": 0.5040795803070068,
+      "CPLE3": 0.5274690985679626,
+      "CSAN3": 0.45207953453063965,
+      "CSNA3": 0.4687904715538025,
+      "CYRE3": 0.47088420391082764,
+      "DIRR3": 0.47610941529273987,
+      "EGIE3": 0.4915394186973572,
+      "EMBJ3": 0.44224828481674194,
+      "ENEV3": 0.5064599514007568,
+      "ENGI11": 0.4793972373008728,
+      "EQTL3": 0.46744275093078613,
+      "FLRY3": 0.49688220024108887,
+      "GGBR4": 0.5229153037071228,
+      "GOAU4": 0.5229260325431824,
+      "HAPV3": 0.4769279658794403,
+      "HYPE3": 0.4804528057575226,
+      "IGTI11": 0.4717625379562378,
+      "ISAE4": 0.5169235467910767,
+      "ITSA4": 0.49491503834724426,
+      "ITUB4": 0.4926968812942505,
+      "KLBN11": 0.5145146250724792,
+      "LREN3": 0.48264580965042114,
+      "MBRF3": 0.46010810136795044,
+      "MGLU3": 0.5106471180915833,
+      "MOTV3": 0.48456645011901855,
+      "MRVE3": 0.49507850408554077,
+      "MULT3": 0.47731077671051025,
+      "NATU3": 0.45971065759658813,
+      "PETR3": 0.48109206557273865,
+      "PETR4": 0.4701369106769562,
+      "POMO4": 0.5015805959701538,
+      "PRIO3": 0.4569629728794098,
+      "PSSA3": 0.5045682787895203,
+      "RADL3": 0.4830743372440338,
+      "RAIL3": 0.47794729471206665,
+      "RDOR3": 0.5236280560493469,
+      "RENT3": 0.4760497510433197,
+      "SANB11": 0.5007285475730896,
+      "SBSP3": 0.4922621548175812,
+      "SUZB3": 0.4701676070690155,
+      "TAEE11": 0.5215086340904236,
+      "TIMS3": 0.4989430010318756,
+      "TOTS3": 0.4997793138027191,
+      "UGPA3": 0.5182397961616516,
+      "USIM5": 0.4889368712902069,
+      "VALE3": 0.45490720868110657,
+      "VAMO3": 0.46044257283210754,
+      "VBBR3": 0.507521390914917,
+      "VIVA3": 0.498797208070755,
+      "VIVT3": 0.5187780857086182,
+      "WEGE3": 0.5340990424156189,
+      "YDUQ3": 0.4547978341579437
+    }
+  }
+}

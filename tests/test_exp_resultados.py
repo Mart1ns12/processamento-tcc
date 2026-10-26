@@ -50,3 +50,17 @@ def test_sem_balancos_devolve_tabela_vazia_com_colunas():
     assert resultado.empty
     assert list(resultado.columns) == ["data", "empresa"]
     assert contagens == {"sem_data": 0, "fora": 0}
+
+
+def test_linha_de_periodo_invalido_nao_gera_dia_de_resultado():
+    # ITR de 31 dias (linha lixo, seção 6) entregue na noite de 18/06: não conta; a ITR válida conta.
+    balancos = pd.DataFrame({
+        "cnpj": ["1", "1", "2"],
+        "tipo_documento": ["ITR", "ITR", "ITR"],
+        "data_inicio_periodo": pd.to_datetime(["2026-03-01", "2026-01-01", "2026-04-01"]),
+        "data_fim_periodo": pd.to_datetime(["2026-03-31", "2026-03-31", "2026-06-30"]),
+        "data_entrega": pd.to_datetime(["2026-06-18", "2026-06-19", "2026-06-19"]),
+    })
+    resultado, contagens = dias_de_resultado(balancos, CAL)
+    assert _pares(resultado) == {(pd.Timestamp("2026-06-19"), "1"), (pd.Timestamp("2026-06-19"), "2")}
+    assert contagens == {"sem_data": 0, "fora": 0}

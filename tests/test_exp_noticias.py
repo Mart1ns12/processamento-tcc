@@ -200,6 +200,59 @@ def test_cvm_ipe_com_mesmo_titulo_no_dia_nao_deduplica():
     assert info["duplicadas_titulo"] == 0
 
 
+def test_copia_com_probabilidade_vence_a_sem_probabilidade_mais_cedo():
+    linhas = [
+        nota(8, "XXXX3", hora="2026-06-18 09:00:00", titulo="Teste F", pp=None, pn=None),
+        nota(9, "XXXX3", hora="2026-06-18 10:00:00", titulo="Teste F", pp=0.5, pn=0.2),
+    ]
+    saida, info = deduplicar(com_empresa(linhas), PARAMS)
+    assert list(saida["id"]) == [9]
+    assert info == {"duplicadas_id": 0, "duplicadas_titulo": 1}
+    assert "_sem_prob" not in saida.columns
+
+
+def test_copia_com_probabilidade_vence_tambem_pelo_id_da_mesma_noticia():
+    linhas = [
+        nota(10, "XXXX3", hora="2026-06-18 09:00:00", pp=0.5, pn=None),
+        nota(10, "XXXX4", hora="2026-06-18 10:00:00", pp=0.4, pn=0.1),
+    ]
+    saida, info = deduplicar(com_empresa(linhas), PARAMS)
+    assert list(saida["id"]) == [10]
+    assert saida.iloc[0]["ticker"] == "XXXX4"
+    assert info == {"duplicadas_id": 1, "duplicadas_titulo": 0}
+
+
+def test_duas_copias_sem_probabilidade_fica_a_mais_cedo():
+    linhas = [
+        nota(11, "XXXX3", hora="2026-06-18 11:00:00", titulo="Teste G", pp=None, pn=None),
+        nota(12, "XXXX3", hora="2026-06-18 09:00:00", titulo="Teste G", pp=None, pn=None),
+    ]
+    saida, info = deduplicar(com_empresa(linhas), PARAMS)
+    assert list(saida["id"]) == [12]
+    assert info == {"duplicadas_id": 0, "duplicadas_titulo": 1}
+
+
+def test_cvm_ipe_nao_deduplica_por_titulo_mesmo_com_copia_com_probabilidade():
+    linhas = [
+        nota(13, "XXXX3", hora="2026-06-18 09:00:00", titulo="Fato X", origem="cvm_ipe", pp=None, pn=None),
+        nota(14, "XXXX3", hora="2026-06-18 10:00:00", titulo="Fato X", origem="cvm_ipe", pp=0.5, pn=0.2),
+    ]
+    saida, info = deduplicar(com_empresa(linhas), PARAMS)
+    assert sorted(saida["id"]) == [13, 14]
+    assert info["duplicadas_titulo"] == 0
+
+
+def test_deduplicar_sem_colunas_de_probabilidade_fica_a_mais_cedo():
+    linhas = [
+        nota(15, "XXXX3", hora="2026-06-18 11:00:00", titulo="Teste H"),
+        nota(16, "XXXX3", hora="2026-06-18 09:00:00", titulo="Teste H"),
+    ]
+    df = com_empresa(linhas).drop(columns=["prob_positivo", "prob_negativo"])
+    saida, info = deduplicar(df, PARAMS)
+    assert list(saida["id"]) == [16]
+    assert info == {"duplicadas_id": 0, "duplicadas_titulo": 1}
+
+
 # ---------------------------------------------------------------- janela e score
 
 

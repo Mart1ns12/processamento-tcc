@@ -202,7 +202,9 @@ def test_point_in_time_t_anterior_so_a_noite_de_t():
 
 def test_probabilidade_ausente_gera_status_indisponivel():
     noticias = _noticias_do_plano()
-    noticias = noticias.assign(prob_positivo=noticias["prob_positivo"].where(noticias["id"] != "n05", np.nan))
+    # n05 e a cópia de título dela (n10) sem probabilidade: a cópia com probabilidade venceria a deduplicação (E10)
+    sem_prob = noticias["id"].isin(["n05", "n10"])
+    noticias = noticias.assign(prob_positivo=noticias["prob_positivo"].where(~sem_prob, np.nan))
     janela = _janela(noticias)
     linha = janela.set_index("id").loc["n05"]
     assert linha["status"] == "indisponivel"
@@ -212,6 +214,22 @@ def test_probabilidade_ausente_gera_status_indisponivel():
     assert np.isnan(resumo["positivas"][0])
     assert resumo["positivas"][1] == "indisponivel"
     assert resumo["tom_medio"][1] == "indisponivel"
+
+
+def test_copia_com_probabilidade_vence_no_painel_e_o_resumo_sai_ok():
+    # Cópia de n05 (mesma empresa, mesmo dia, mesmo título) às 09:00 sem probabilidade: a deduplicação fica com a
+    # de 19:42, que tem probabilidade; o resumo do dia sai "ok" (sem a regra, a cópia de 09:00 ficaria "indisponivel")
+    noticias = _noticias_do_plano()
+    copia = noticias[noticias["id"] == "n05"].assign(
+        id="n12", momento_ref=sp("2026-10-22 09:00:00"), data_hora_publicacao=sp("2026-10-22 09:00:00"),
+        prob_positivo=NAN, prob_negativo=NAN,
+    )
+    janela = _janela(pd.concat([noticias, copia], ignore_index=True))
+    assert "n12" not in ids_da_empresa(janela, "1")
+    assert janela.set_index("id").loc["n05", "status"] == "ok"
+    resumo = resumo_noticias(_da_empresa(janela, "1"), True)
+    assert resumo["quantidade"] == (7.0, "ok")
+    assert resumo["tom_medio"][1] == "ok"
 
 
 def test_sem_noticias_devolve_janela_vazia():

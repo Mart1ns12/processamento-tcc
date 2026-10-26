@@ -14,6 +14,7 @@ from processamento.diagnostico.esperado import ETAPAS_COLETA, ETAPAS_EXECUCAO_MA
 from processamento.diagnostico.temas import (
     _data_referencia_usada,
     montar_sql_formato_iso,
+    secao_balancos,
     secao_noticias,
     secao_painel,
     secao_precos,
@@ -543,3 +544,73 @@ def test_retornos_suspeitos_5e_tabela_ausente_pula_sem_consultar(mapa):
     assert len(secao["notas"]) == 1
     assert secao["notas"][0].startswith("pulada: tabela ausente")
     assert secao["tabelas"] == []
+
+
+# ---------------------------------------------------------------------------
+# Balanços: período inválido vira nota (descartado pelo processamento), não divergência
+# ---------------------------------------------------------------------------
+
+def _ler_balancos(periodos, linhas_invalidas=None):
+    """Dublê de `ler` para secao_balancos: escala, múltiplos de mil, períodos, linhas inválidas e entrega."""
+    def _ler(sql):
+        if "LOG10" in sql:
+            return pd.DataFrame({"ordem": [8], "n": [10]})
+        if "MOD(ROUND" in sql:
+            return pd.DataFrame({"com_valor": [10], "multiplos_de_mil": [0]})
+        if "GROUP BY tipo_documento, dias" in sql:
+            return periodos
+        if "LIMIT 10" in sql:
+            if linhas_invalidas is None:
+                raise AssertionError(f"não devia listar linhas inválidas: {sql}")
+            return linhas_invalidas
+        if "sem_entrega" in sql:
+            return pd.DataFrame({"total": [10], "sem_entrega": [0], "entrega_antes_do_fim": [0]})
+        raise AssertionError(f"SQL inesperado: {sql}")
+    return _ler
+
+
+_PERIODOS_MISTOS = pd.DataFrame({
+    "tipo_documento": ["DFP", "DFP", "ITR", "ITR", "ITR", "ITR"],
+    "dias": [90, 365, 31, 90, 181, 365],
+    "n": [1, 5, 2, 7, 4, 3],
+})
+_INVALIDAS_3 = pd.DataFrame({
+    "cnpj": ["00000000000101", "00000000000202", "00000000000303"],
+    "tipo": ["ITR", "ITR", "DFP"],
+    "ini": [date(2021, 1, 1), date(2021, 3, 1), date(2021, 1, 1)],
+    "fim": [date(2021, 12, 31), date(2021, 3, 31), date(2021, 3, 31)],
+    "dias": [365, 31, 90],
+})
+
+
+def test_periodo_invalido_vira_nota_com_lista_nao_divergencia(mapa):
+    secao = secao_balancos(_ler_balancos(_PERIODOS_MISTOS, _INVALIDAS_3), mapa, {"v1-balancos"})
+    assert [d for d in secao["divergencias"] if d["tema"] == "periodo"] == []
+    assert ("6 linhas de balanço com período inválido, descartadas pelo processamento (seção 6): "
+            "00000000000101 ITR 2021-01-01→2021-12-31 (365 dias); "
+            "00000000000202 ITR 2021-03-01→2021-03-31 (31 dias); "
+            "00000000000303 DFP 2021-01-01→2021-03-31 (90 dias); e mais 3") in secao["notas"]
+
+
+def test_periodo_so_valido_nao_gera_nota_nem_consulta_lista(mapa):
+    validos = _PERIODOS_MISTOS[_PERIODOS_MISTOS["tipo_documento"] == "ITR"].iloc[[1]]
+    validos = pd.concat([validos, pd.DataFrame({"tipo_documento": ["DFP"], "dias": [366], "n": [2]})])
+    secao = secao_balancos(_ler_balancos(validos), mapa, {"v1-balancos"})
+    assert secao["divergencias"] == []
+    assert not any("período inválido" in nota for nota in secao["notas"])
+
+
+def test_lista_de_periodo_invalido_limitada_a_10_com_e_mais(mapa):
+    linhas = pd.DataFrame({
+        "cnpj": [f"0000000000{i:04d}" for i in range(10)],
+        "tipo": ["ITR"] * 10,
+        "ini": [date(2021, 1, 1)] * 10,
+        "fim": [date(2021, 12, 31)] * 10,
+        "dias": [365] * 10,
+    })
+    periodos = pd.DataFrame({"tipo_documento": ["ITR"], "dias": [365], "n": [12]})
+    secao = secao_balancos(_ler_balancos(periodos, linhas), mapa, {"v1-balancos"})
+    nota = next(n for n in secao["notas"] if "período inválido" in n)
+    assert nota.startswith("12 linhas de balanço com período inválido")
+    assert nota.count("(365 dias)") == 10
+    assert nota.endswith("; e mais 2")

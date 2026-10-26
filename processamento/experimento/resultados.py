@@ -10,6 +10,9 @@ from __future__ import annotations
 import pandas as pd
 
 from processamento import calendario
+from processamento.fatos.trimestres import so_periodos_validos
+
+_COLUNAS_PERIODO = {"tipo_documento", "data_inicio_periodo", "data_fim_periodo"}
 
 
 def dias_de_resultado(
@@ -18,8 +21,11 @@ def dias_de_resultado(
     """Pares (data, empresa) únicos: pregão t cuja noite contém a entrega de balanço.
 
     `empresa` é o CNPJ do balanço. Contagens: `sem_data` (data_entrega nula, ignorada) e `fora`
-    (entrega fora do calendário, por linha de balanço).
+    (entrega fora do calendário, por linha de balanço). Linhas de período inválido (seção 6) saem
+    antes, quando o DataFrame traz as colunas de período; sem elas, nada é filtrado.
     """
+    if _COLUNAS_PERIODO <= set(balancos.columns):
+        balancos = so_periodos_validos(balancos)
     sem_data = balancos["data_entrega"].isna()
     validos = balancos.loc[~sem_data].reset_index(drop=True)
     datas = pd.to_datetime(validos["data_entrega"]).dt.normalize()

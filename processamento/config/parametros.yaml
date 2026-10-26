@@ -216,6 +216,7 @@ saida:
   pasta_registros: "registros/experimento"  # top 5 do dia e resultado (uso único; S11)
   tom_neutro: 0.05                          # |tom| até isto = "tom neutro" nos textos
   publicar_top_provisorio: false            # true = grava experimento_top e experimento_historico mesmo com treino.modelo_oficial false (seção 8.5)
+  tolerancia_serie_relativa: 1.0e-6        # ponto antigo do series_diarias só conta como mudado acima disto (ruído float32 da coleta ~1e-7)
 # Rotina diária (seção 4 da especificação; plano da etapa 8). HORAS E CAMINHOS ENTRE ASPAS.
 rotina:
   inicio_consulta: "08:00"        # 1ª consulta ao painel da coleta (São Paulo)

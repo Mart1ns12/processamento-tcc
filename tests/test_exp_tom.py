@@ -219,3 +219,38 @@ def test_mudanca_tom_nao_olha_pregao_depois_de_t():
     depois = _mudanca(com_futuro, params)[pd.Timestamp("2026-06-18")]
     assert depois == pytest.approx(antes, abs=1e-12)
     assert depois == pytest.approx(-0.25, abs=1e-12)
+
+
+def test_janela_com_score_vazio_conta_qtd_mas_nao_tom_nem_extremo():
+    # Scores 0,4, -0,2 e NaN: a notícia sem score conta em noticias_dia_qtd (3), mas não entra no tom nem no extremo.
+    nots = _nots(("p1", "1", "dia", "2026-06-18", 0.4), ("p2", "1", "dia", "2026-06-18", -0.2),
+                 ("p3", "1", "dia", "2026-06-18", NAN))
+    linhas = _linhas(("2026-06-18", "XXXX3", "1", "S1"))
+    out = variaveis_de_noticias(nots, linhas, CAL3, PARAMS, noite_aberta=None, cobertura_inicio=None)
+    r = out.iloc[0]
+    assert r["noticias_dia_qtd"] == 3
+    assert r["noticias_dia_tom"] == pytest.approx(0.1, abs=1e-12)
+    assert r["noticias_dia_extremo"] == pytest.approx(0.4, abs=1e-12)
+
+
+CAL_G = ["2026-06-12", "2026-06-15", "2026-06-16", "2026-06-17", "2026-06-18", "2026-06-19"]
+PARAMS_G = dataclasses.replace(PARAMS, mudanca_tom_pregoes=5, mudanca_tom_minimo=5)
+
+
+def _mudanca_g(nots):
+    """mudanca_tom de 06-19 com base de 5 pregões (06-12 a 06-18), mínimo de 5 notícias com score."""
+    linhas = _linhas(("2026-06-19", "XXXX3", "1", "S1"))
+    out = variaveis_de_noticias(nots, linhas, CAL_G, PARAMS_G, noite_aberta=None, cobertura_inicio=None)
+    return out.iloc[0]["mudanca_tom"]
+
+
+def test_mudanca_tom_conta_so_noticias_com_score():
+    base = [("a", "1", "dia", "2026-06-12", 0.2), ("b", "1", "dia", "2026-06-15", 0.4),
+            ("c", "1", "dia", "2026-06-16", -0.3), ("d", "1", "dia", "2026-06-17", 0.1),
+            ("e", "1", "dia", "2026-06-18", 0.6)]
+    hoje = [("h", "1", "dia", "2026-06-19", 0.5)]
+    sem_score = [("f", "1", "dia", "2026-06-15", NAN), ("g", "1", "dia", "2026-06-18", NAN)]
+    # base: (0,2 + 0,4 - 0,3 + 0,1 + 0,6) / 5 = 0,2; tom de 06-19 = 0,5; as sem score não entram
+    assert _mudanca_g(_nots(*base, *hoje, *sem_score)) == pytest.approx(0.3, abs=1e-12)
+    # com 4 notícias com score na base e 3 sem score, não chega ao mínimo de 5: NaN
+    assert np.isnan(_mudanca_g(_nots(*base[:4], *hoje, *sem_score, ("i", "1", "dia", "2026-06-16", NAN))))

@@ -107,3 +107,23 @@ def test_chave_a_mais_continua_erro_com_publicar_presente(tmp_path):
     bloco = _BLOCO_VALIDO + "  publicar_top_provisorio: true\n  extra: 1\n"
     with pytest.raises(ErroParametrosSaida, match="chave desconhecida"):
         carregar_parametros_saida(_escrever(tmp_path, bloco))
+
+
+def test_yaml_real_carrega_a_tolerancia_de_serie():
+    assert carregar_parametros_saida().tolerancia_serie_relativa == 1e-6
+
+
+def test_tolerancia_serie_ausente_e_1e_6(tmp_path):
+    assert carregar_parametros_saida(_escrever(tmp_path, _BLOCO_VALIDO)).tolerancia_serie_relativa == 1e-6
+
+
+def test_tolerancia_serie_explicita_e_lida(tmp_path):
+    bloco = _BLOCO_VALIDO + "  tolerancia_serie_relativa: 2.0e-6\n"
+    assert carregar_parametros_saida(_escrever(tmp_path, bloco)).tolerancia_serie_relativa == 2e-6
+
+
+@pytest.mark.parametrize("valor", ["0", "-1.0e-6", "0.01", "true", '"1e-6"'])
+def test_tolerancia_serie_invalida_erra(tmp_path, valor):
+    bloco = _BLOCO_VALIDO + f"  tolerancia_serie_relativa: {valor}\n"
+    with pytest.raises(ErroParametrosSaida, match="saida.tolerancia_serie_relativa"):
+        carregar_parametros_saida(_escrever(tmp_path, bloco))

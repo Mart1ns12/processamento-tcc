@@ -91,6 +91,16 @@ def test_executar_grava_csv_e_json_do_banco_de_teste(banco_teste, tmp_path):
     assert registro["sha256"] == hashlib.sha256(csv.read_bytes()).hexdigest()
     assert registro["parametros"]["experimento"]["retornos"] == {"ret_1d": 1, "ret_5d": 5, "ret_20d": 20}
     assert "setor_excluir" in registro["parametros"]["precos"]
+    assert registro["sem_probabilidade"] == 0
+
+
+def test_executar_conta_sem_probabilidade_no_json(banco_teste, tmp_path):
+    # Sem probabilidade do FinBERT em todas as notícias: o JSON traz as preparadas como sem probabilidade
+    ler = banco_teste(alterar={"v1-noticias": lambda df: df.assign(prob_positivo=None)})
+    csv = executar("todas", None, None, tmp_path, ler=ler, existe_composicao=False)
+    registro = json.loads(csv.with_suffix(".json").read_text(encoding="utf-8"))
+    assert registro["preparadas"] > 0
+    assert registro["sem_probabilidade"] == registro["preparadas"]
 
 
 def test_executar_ate_corta_os_pregoes(banco_teste, tmp_path):

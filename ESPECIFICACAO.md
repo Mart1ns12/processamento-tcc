@@ -1,6 +1,6 @@
 # ESPECIFICAÇÃO DO MÓDULO DE PROCESSAMENTO (fonte da verdade)
 
-> Versão de 24/10/2026. Este arquivo descreve **só o que vale hoje** e deve ser seguido na implementação.
+> Versão de 26/10/2026. Este arquivo descreve **só o que vale hoje** e deve ser seguido na implementação.
 > O porquê das decisões, os resultados antigos e o histórico ficam em `HISTORICO.md` (consulte só quando precisar justificar algo).
 > Se algo aqui conflitar com o `HISTORICO.md`, **vale este arquivo**.
 
@@ -124,12 +124,12 @@ Ticker sem `.SA`; datas `AAAA-MM-DD`; ponto decimal; vazio = `NULL` (nunca 0); b
 | Lacuna | Comportamento do processamento |
 |---|---|
 | EBITDA e endividamento com insumo vazio (colunas preenchidas desde 22/10/2026, mas ~10% das linhas sem valor) | `status = indisponivel` no indicador que dependia do valor vazio |
-| Histórico (24/10/2026): preços desde 30/12/2019; balanços e ações emitidas desde 2022; notícias desde 01/01/2024 (91% das de 2024 sem hora, marcadas "só data" pela coleta) | Implementar tudo. **Não treinar o modelo "para valer"** até o usuário declarar o histórico completo (`treino.modelo_oficial: true`, R7); até lá, só teste de funcionamento (sem conclusões) |
+| Histórico (26/10/2026): preços desde 30/12/2019; índices, balanços e ações emitidas desde 2021; notícias desde 01/01/2023 (a maioria sem hora, marcadas "só data" pela coleta) | Implementar tudo. **Não treinar o modelo "para valer"** até o usuário declarar o histórico completo (`treino.modelo_oficial: true`, R7); até lá, só teste de funcionamento (sem conclusões) |
 | Composição histórica do Ibovespa | Ver 3.5 |
 | Troca de ação por BDR (JBSS3 → JBSS32 em 09/06/2025) | Não une os históricos (seção 6): JBSS3 fica com as suas linhas (até 06/06/2025) e entra no universo histórico enquanto está na composição (classe ON pelo sufixo, empresa pela raiz); a BDR começa em 09/06/2025 |
 | Ações deslistadas sem preço nas fontes: CRFB3, SRNA3, STBP3 (decidido com a coleta em 22/10/2026) | Fora do universo **em todas as datas**. Lista em `processamento/config/exclusoes.yaml` (`tickers_excluidos`). Entra na limitação de **viés de sobrevivência** do TCC |
 | Classes extintas nos proventos (ex.: VALE5, AXIA6, CPLE5) | Classe que **não aparece** no `other_codes` da empresa em `v1-raw_b3_cadastro` é **extinta hoje**, mas existiu: seus proventos são reais e **contam normalmente** no histórico de proventos e no payout, ligados à empresa pela raiz (seção 6). **Units (final 11) continuam de fora** do payout (regra da unit). "Extinta" é só informação. Decidido em 22/10/2026 pelos números do diagnóstico: AXIA5, AXIA6 e CPLE5 pagaram dentro do período analisado |
-| Empresas sem balanço nas fontes: CNPJs 03847461000192 e 06057223000171 (decidido com a coleta em 22/10/2026) | A empresa continua no painel de preços e no modelo; P/L, P/VP, ROE, margens, EBITDA, endividamento e payout saem com `status = indisponivel`. Lista em `exclusoes.yaml` (`cnpjs_sem_balanco`) |
+| Empresa sem balanço utilizável nas fontes: CNPJ 06057223000171 (Assaí, ASAI3: só 3 ITRs de 2021; pedido à coleta na seção 10). A Bradespar (03847461000192) saiu da lista em 26/10/2026: tem balanços de 2021 a 2023, e a regra do balanço velho cuida do resto | A empresa continua no painel de preços e no modelo; P/L, P/VP, ROE, margens, EBITDA, endividamento e payout saem com `status = indisponivel`. Lista em `exclusoes.yaml` (`cnpjs_sem_balanco`) |
 | Empresa que parou de entregar balanço | Balanço de referência vencido em t (passou o fim do mês de `data_fim_periodo` + `fundamentos.balanco_idade_max_meses`, 15 meses; seção 6, "Balanço velho"): P/L, P/VP, ROE, margens, EBITDA, endividamento e payout 12m saem `indisponivel` |
 | Itens acima no diagnóstico (etapa 1) | Aparecem como **nota "excluídos por decisão"**, não como divergência |
 
@@ -199,6 +199,7 @@ Fonte dos dados: tabelas da seção 3. `fech` = `fechamento`; `aj` = `fechamento
 | Ação → empresa | Ligar pelo `cnpj` do `v1-cadastro`. Notícia da empresa vale para todas as suas ações (PETR3 e PETR4). **Classes fora do `v1-cadastro`** (ex.: ITUB3 nos proventos): aplicar antes a `v1-mudancas_ticker` e ligar pelas **4 primeiras letras** (raiz) à empresa do cadastro. Isso vale também para classes **extintas** (fora do `other_codes` da empresa em `v1-raw_b3_cadastro`): os proventos delas contam no histórico e no payout (seção 3.4). Classes 3 = ON; 4, 5 e 6 (PN, PNA, PNB) = **PN**; 11 = unit (decidido em 22/10/2026) |
 | Units | Indicadores por ação da unit = indicador por ação × (`unit_qtd_on` + `unit_qtd_pn`) |
 | Trimestre isolado | ITR traz o trimestre e o acumulado; usar a linha cujo período tem ~3 meses. **4º trimestre = DFP (ano) − acumulado de 9 meses do 3º ITR.** Depreciação (quando vier) pode estar só acumulada: calcular pela diferença |
+| Período inválido (26/10/2026) | Linha de `v1-balancos` com período fora do esperado é **descartada antes de qualquer conta** (referência, saldos, trimestres, 12 meses, payout, dias de resultado): ITR só vale com 3, 6 ou 9 meses; DFP só com 12 (classes de dias do diagnóstico). Ex.: ITR de 01/03 a 31/03/2021 com tudo 0 (RECV3, LREN3) e ITR de 12 meses copiando a DFP 2021 (AZZA3). O diagnóstico lista essas linhas como nota |
 | 12 meses | Soma dos 4 últimos trimestres isolados |
 | Point-in-time | Em cada data, usar só balanços com `data_entrega ≤ data` |
 | Balanço velho | Em t, o balanço de referência (D11) vale até o **fim do mês** de `data_fim_periodo` + `fundamentos.balanco_idade_max_meses` (15) meses de calendário (decidido em 24/10/2026: o limite é o fim do mês, não o dia exato; ex.: fim 31/12/2023 vale até 31/03/2025; fim 30/09/2024 vale até 31/12/2025; fim 29/02/2024 vale até 31/05/2025). Depois disso, P/L, P/VP, ROE, margens bruta e líquida, EBITDA (valor e margem), endividamento (DL, DL/PL, DL/EBITDA, caixa líquido) e payout 12m saem `indisponivel`, também nos pontos diários de P/L e P/VP do `series_diarias`; a empresa sai das medianas do setor desses indicadores. Não mudam: yield, `payout_por_ano`, `proventos_por_ano`, `fundamentos_trimestrais` e `balanco_referencia` (continua mostrando o balanço usado). Bancos e seguradoras seguem `nao_se_aplica` onde já eram (decidido em 24/10/2026) |
@@ -333,7 +334,7 @@ Enquanto a API não existe, o processamento **gera os mesmos pacotes como arquiv
 | `status` da chance | `ok` ou `calibracao_nao_conferida` (só no `chance` do `experimento_top`) |
 | Arquivos | Um arquivo por pacote em `saida/AAAA-MM-DD/<pacote>.json` (D = dia da rotina), com envelope `{pacote, versao_contrato, chave, gerado_em, dados_ate, registros, removidos}`; cada registro repete os metadados |
 | Datas de referência | D = dia da rotina = pregão previsto; t = último pregão antes de D. `mercado_dia`, `resumo_acao`, `noticias_dia` usam t; `experimento_top` e `execucao` usam D; `dados_ate` = 08:00 de D |
-| Envio "quando muda" | `acoes`, `fundamentos_trimestrais`, `proventos` e `series_diarias` comparam com o estado do último envio (`saida/estado/`): só vai o novo ou alterado; o que sumiu vai em `removidos`; série com ponto antigo alterado vai inteira com `substituir_serie: true` |
+| Envio "quando muda" | `acoes`, `fundamentos_trimestrais`, `proventos` e `series_diarias` comparam com o estado do último envio (`saida/estado/`): só vai o novo ou alterado; o que sumiu vai em `removidos`; série com ponto antigo alterado vai inteira com `substituir_serie: true`. No `series_diarias`, ponto antigo só conta como alterado com diferença relativa acima de `saida.tolerancia_serie_relativa` (1e-6) ou status diferente (26/10/2026: a coleta grava o ajustado em float32 e regrava o histórico todo dia, ruído de até ~7e-7; os valores continuam sem arredondar) |
 
 ### 8.2 Os pacotes
 
@@ -499,7 +500,7 @@ Decidido em 24/10/2026.
 - **E7 `mudanca_tom`:** base = todas as notícias da empresa (noite, pregão, pré-abertura) com pregão de referência nos 30 pregões anteriores a t (sem t); mínimo de 5 notícias com score.
 - **E8 `tom_setor`:** média, entre as outras empresas do setor (sem o próprio CNPJ) presentes no universo do dia, do tom da janela (`noticias_dia_tom`) de cada empresa; cada empresa 1 voto.
 - **E9 `tom_mercado`:** média dos scores da janela das empresas do universo do dia, cada `id` uma vez.
-- **E10 Repetidas:** mesma empresa, mesma data de publicação e mesmo título normalizado contam uma vez (a mais cedo); documentos `cvm_ipe` não são deduplicados.
+- **E10 Repetidas:** mesma empresa, mesma data de publicação e mesmo título normalizado contam uma vez (a mais cedo **entre as que têm probabilidade do FinBERT**; sem nenhuma com probabilidade, a mais cedo; desde 26/10/2026); documentos `cvm_ipe` não são deduplicados. Notícia sem probabilidade é **ausente** (nunca neutra): conta em `noticias_dia_qtd`, fica fora do tom, do extremo, da `mudanca_tom` (mínimo de 5 conta só as com score), do `tom_setor` e do `tom_mercado`; o JSON do dataset traz `sem_probabilidade` e o `execucao` avisa quando > 0. No painel, uma notícia sem probabilidade deixa o resumo do dia `indisponivel`.
 - **E11 Dias de resultado (modelo 3b):** `v1-balancos.data_entrega`, com a regra das 23:59:59 → `dia_resultado = true` no pregão cuja noite contém a entrega. Limitações: balanço reapresentado fica com a data da última versão; divulgação antes da abertura cai um pregão depois.
 - **E12 Histórico mínimo:** retornos exigem o preço base; volatilidade e volume relativo 20 pregões completos; beta 252/120; exposições 120/60; 52 semanas 252/120; `mudanca_tom` 30 pregões.
 - **E13** `ret_1d` usa o último preço disponível até 5 pregões antes da data-alvo (seção 6, "Base velha"); `salto_abertura` exige o pregão anterior.
@@ -599,6 +600,13 @@ Com ~1 ano de histórico, a etapa 6 é **só teste de funcionamento** (3.4): o r
 - **BV3 Diagnóstico:** seção "Lacunas nas séries de preços e índices" (nota).
 - **BV4 Pasta limpa:** seção 8.5.
 
+**Acréscimo de 26/10/2026 (histórico desde 2021; plano em `docs/plano_historico_2021.md`)**
+- **HN1 Período inválido:** ITR fora de 3/6/9 meses e DFP fora de 12 meses são descartadas antes de qualquer conta (seção 6); o diagnóstico lista como nota.
+- **HN2 Bradespar:** 03847461000192 sai de `cnpjs_sem_balanco`; o Assaí (06057223000171) fica (seção 3.4).
+- **HN3 Notícia sem probabilidade:** ausente, nunca neutra; repetidas preferem a cópia com probabilidade; `sem_probabilidade` no JSON do dataset e aviso no `execucao` (E10).
+- **HN4 Calendário:** horários e feriados já cobriam 2021–2022; casos novos de teste nas trocas de horário de 2021 a 2023. Com os índices desde 2021, a base 100 de CDI, IPCA, IDIV, SMLL e IFIX foi reancorada uma vez (fator constante; % das janelas iguais).
+- **HN5 Tolerância das séries:** `saida.tolerancia_serie_relativa` (1e-6) na comparação do envio "quando muda" do `series_diarias` (8.1); a âncora da base 100 continua no 1º dia da série.
+
 ---
 
 ## 10. Pendências externas (não bloqueiam a implementação)
@@ -630,6 +638,12 @@ Com ~1 ano de histórico, a etapa 6 é **só teste de funcionamento** (3.4): o r
 | Execução `tipo = 'etapa'` (ex.: a coleta refaz só a `entrega` pelo painel): a rotina não usa como gatilho (seção 4). Se esse for o jeito normal de consertar um dia, a rotina não enxerga: avisar a coleta | Coleta |
 | **Preços com erro de escala em `v1-precos`** (medido em 24/10/2026 no pacote): AZUL3 com `fechamento` e `fechamento_ajustado` ~141 mil vezes maiores de 09/04 a 17/04/2026 (30.599.848 contra ~217), e salto de ×46 em 10/02/2026 sem volta (provável grupamento não ajustado no `fechamento_ajustado`). Pedido à coleta: corrigir o histórico. Enquanto isso, o processamento isola os retornos suspeitos (seção 6) | Coleta |
 | **Experimento × retornos suspeitos (resolver antes do treino definitivo):** situação conferida no código em 25/10/2026. **Já excluem** os retornos suspeitos: `volatilidade_20d`, `beta`, `exposicao_dolar` e `exposicao_petroleo` (`experimento/variaveis.py`, com a mesma máscara do painel). **Ainda usam o preço como veio:** `ret_1d`/`ret_5d`/`ret_20d`, `ret_vs_setor` (média do setor), `dist_max_52s`/`dist_min_52s` e o alvo (`alvo`, `ret_t1`). Ex.: AZUL3 (no universo) contamina 09/04 e 20/04/2026 (rank da `ret_vs_setor` das outras 6 de Bens Industriais) e, nas linhas dela, `ret_*`, `dist_max_52s` (1 ano) e o alvo de 08/04 e 17/04. Nem todo retorno suspeito é erro da coleta: há eventos reais (ex.: cisão de empresa). Decisão pendente: máscara de retornos suspeitos no `ret_vs_setor` e descarte (ou não) das linhas afetadas | Processamento |
+| **Preço ajustado em float32** (medido em 26/10/2026): `fechamento_ajustado` (e `fechamento`) vêm com precisão de float32 dentro de um `double` (ex.: PETR4 `58.68000030517578`) e o histórico é regravado todo dia, então cada preço ajustado muda alguns bits por dia: o `indice_retorno_total` varia até ~7e-7 relativo sem mudança real (152 de 177 séries entre as cargas de 23/10 e 26/10; as `SETOR_SEM` herdam). Pedido à coleta: calcular e gravar o ajustado em **float64**. Enquanto isso, o envio "quando muda" ignora diferenças abaixo de 1e-6 (8.1) | Coleta |
+| **Alvo perto do empate com o IBOV** (limitação, medida em 26/10/2026 no dataset de 23/10): pelo ruído de float32 acima, a cada regeração do dataset os retornos mudam ~1e-7. Em 11 de 117.364 linhas, \|`ret_t1` − `ret_ibov_t1`\| < 1e-6 (2 abaixo de 1e-7): o `alvo` delas pode trocar entre 0 e 1, e o sha256 do dataset muda mesmo sem dado novo. Efeito desprezível (0,01% das linhas); registrado no TCC. Resolve-se com o ajustado em float64 | Coleta |
+| **Balanços faltando:** Bradespar (03847461000192) só tem de 2021 até a DFP 2023 (falta 2024 a 2026); Assaí (06057223000171) só tem os ITRs do 1º ao 3º trimestre de 2021 (falta do 4º trimestre de 2021 em diante). Pedido à coleta: carregar esses balanços | Coleta |
+
+**Resolvidas em 26/10/2026:**
+- Notícias sem probabilidade do FinBERT (13.248 no diagnóstico das 11:50, quase todas de 2023): preenchidas pela coleta no mesmo dia (0 na leitura seguinte, de 264.623). A regra para o caso continua (E10).
 
 **Resolvidas em 22/10/2026** (as fontes não tinham os dados; não foi erro da coleta):
 - CRFB3, SRNA3 e STBP3 sem preço → removidas da análise (seção 3.4). Registrar no TCC como **viés de sobrevivência**.

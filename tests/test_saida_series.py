@@ -285,6 +285,54 @@ def test_comparar_nada_mudou_nao_envia(atuais_banco):
     assert enviar == [] and removidos == []
 
 
+def test_comparar_ruido_de_7e_7_no_ponto_antigo_nao_envia(atuais_banco):
+    estado = copy.deepcopy(atuais_banco)
+    antigo = atuais_banco["PETR4"]["valores"]["indice_retorno_total"][0]
+    estado["PETR4"]["valores"]["indice_retorno_total"][0] = antigo * (1 + 7e-7)  # ruído float32 da coleta
+    enviar, removidos = comparar_series(atuais_banco, estado)
+    assert enviar == [] and removidos == []
+
+
+def test_comparar_ruido_de_7e_7_com_ponto_novo_manda_so_o_ponto(atuais_banco):
+    estado = copy.deepcopy(atuais_banco)
+    estado["PETR4"] = copy.deepcopy(_recortar(atuais_banco["PETR4"], 3))
+    antigo = atuais_banco["PETR4"]["valores"]["indice_retorno_total"][0]
+    estado["PETR4"]["valores"]["indice_retorno_total"][0] = antigo * (1 + 7e-7)
+    enviar, removidos = comparar_series(atuais_banco, estado)
+    assert [r["ticker"] for r in enviar] == ["PETR4"]
+    assert enviar[0]["datas"] == ["2025-10-21"]
+    assert enviar[0]["substituir_serie"] is False
+    assert removidos == []
+
+
+def test_comparar_ruido_de_2e_6_no_ponto_antigo_manda_a_serie_inteira(atuais_banco):
+    estado = copy.deepcopy(atuais_banco)
+    antigo = atuais_banco["PETR4"]["valores"]["indice_retorno_total"][0]
+    estado["PETR4"]["valores"]["indice_retorno_total"][0] = antigo * (1 + 2e-6)
+    enviar, _ = comparar_series(atuais_banco, estado)
+    assert [r["ticker"] for r in enviar] == ["PETR4"]
+    assert enviar[0]["substituir_serie"] is True
+    assert enviar[0]["datas"] == DATAS4
+
+
+def test_comparar_status_diferente_com_o_mesmo_valor_manda_a_serie_inteira(atuais_banco):
+    estado = copy.deepcopy(atuais_banco)
+    estado["PETR4"]["status"]["fechamento"] = [{"de": DATAS4[0], "ate": DATAS4[0], "status": "indisponivel"}]
+    enviar, _ = comparar_series(atuais_banco, estado)
+    assert [r["ticker"] for r in enviar] == ["PETR4"]
+    assert enviar[0]["substituir_serie"] is True
+    assert enviar[0]["datas"] == DATAS4
+
+
+def test_comparar_tolerancia_1e_9_reproduz_o_comportamento_antigo(atuais_banco):
+    estado = copy.deepcopy(atuais_banco)
+    antigo = atuais_banco["PETR4"]["valores"]["indice_retorno_total"][0]
+    estado["PETR4"]["valores"]["indice_retorno_total"][0] = antigo * (1 + 7e-7)
+    enviar, _ = comparar_series(atuais_banco, estado, tolerancia_relativa=1e-9)
+    assert [r["ticker"] for r in enviar] == ["PETR4"]
+    assert enviar[0]["substituir_serie"] is True
+
+
 # ---------------------------------------------------------------- 6: dividendo não força reenvio
 
 def test_dividendo_nao_forca_reenvio(banco_teste):

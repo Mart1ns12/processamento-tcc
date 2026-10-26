@@ -107,9 +107,17 @@ def test_pregoes_aceita_date_e_timestamp():
         (date(2020, 2, 26), time(13, 0), time(18, 0)),  # quarta-feira de cinzas
         (date(2020, 3, 6), time(10, 0), time(18, 0)),
         (date(2020, 3, 9), time(10, 0), time(17, 0)),
+        (date(2021, 3, 12), time(10, 0), time(18, 0)),
+        (date(2021, 3, 15), time(10, 0), time(17, 0)),
         (date(2021, 11, 5), time(10, 0), time(17, 0)),
         (date(2021, 11, 8), time(10, 0), time(18, 0)),
         (date(2022, 3, 2), time(13, 0), time(18, 0)),  # quarta-feira de cinzas
+        (date(2022, 3, 11), time(10, 0), time(18, 0)),
+        (date(2022, 3, 14), time(10, 0), time(17, 0)),
+        (date(2022, 11, 4), time(10, 0), time(17, 0)),
+        (date(2022, 11, 7), time(10, 0), time(18, 0)),
+        (date(2023, 3, 10), time(10, 0), time(18, 0)),
+        (date(2023, 3, 13), time(10, 0), time(17, 0)),
         (date(2023, 11, 3), time(10, 0), time(17, 0)),
         (date(2023, 11, 6), time(10, 0), time(18, 0)),
         (date(2024, 2, 14), time(13, 0), time(18, 0)),  # quarta-feira de cinzas

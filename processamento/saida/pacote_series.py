@@ -247,19 +247,20 @@ def _pontos(serie: dict) -> dict[str, dict[str, tuple]]:
             for i, d in enumerate(serie["datas"])}
 
 
-def _mesmo(a: tuple, b: tuple) -> bool:
-    """Mesmo valor (rel 1e-9, abs 1e-12; None só é igual a None) e mesmo status."""
+def _mesmo(a: tuple, b: tuple, tolerancia_relativa: float) -> bool:
+    """Mesmo valor (rel `tolerancia_relativa`, abs 1e-12; None só é igual a None) e mesmo status."""
     (va, sa), (vb, sb) = a, b
     if sa != sb:
         return False
     if va is None or vb is None:
         return va is None and vb is None
-    return math.isclose(va, vb, rel_tol=1e-9, abs_tol=1e-12)
+    return math.isclose(va, vb, rel_tol=tolerancia_relativa, abs_tol=1e-12)
 
 
-def _envio_da_serie(atual: dict, anterior: dict) -> dict | None:
+def _envio_da_serie(atual: dict, anterior: dict, tolerancia_relativa: float = 1e-6) -> dict | None:
     """Série a enviar frente ao estado: a inteira, só os pontos novos, ou None (nada a enviar).
 
+    Ponto antigo conta como mudado só acima de `tolerancia_relativa` (ruído float32 da coleta).
     Ponto do estado com data < inicio_janela atual saiu pelo corte: não conta como sumido.
     """
     ini = atual["inicio_janela"]
@@ -270,7 +271,7 @@ def _envio_da_serie(atual: dict, anterior: dict) -> dict | None:
         for d, campos_ant in pb.items():
             if d < ini:
                 continue
-            if d not in pa or not all(_mesmo(campos_ant[c], pa[d][c]) for c in campos_ant):
+            if d not in pa or not all(_mesmo(campos_ant[c], pa[d][c], tolerancia_relativa) for c in campos_ant):
                 inteira = True
                 break
     if not inteira and ultima is not None:
@@ -297,18 +298,20 @@ def _recorte_novo(atual: dict, novas: set[str]) -> dict:
     return {**atual, "datas": datas, "valores": valores, "status": status, "substituir_serie": False}
 
 
-def comparar_series(atuais: dict[str, dict], estado: dict[str, dict] | None) -> tuple[list[dict], list[dict]]:
+def comparar_series(atuais: dict[str, dict], estado: dict[str, dict] | None,
+                    tolerancia_relativa: float = 1e-6) -> tuple[list[dict], list[dict]]:
     """(séries a enviar, removidos [{"ticker"}]) frente ao estado do último envio (seção 2.4).
 
     `estado None` = primeira vez: manda tudo com `substituir_serie` True. Cada série enviada leva
-    `substituir_serie`; as que não mudaram não vão.
+    `substituir_serie`; as que não mudaram não vão. `tolerancia_relativa`: ver `_envio_da_serie`.
     """
     if estado is None:
         return [{**s, "substituir_serie": True} for s in atuais.values()], []
     enviar = []
     for ticker, atual in atuais.items():
         anterior = estado.get(ticker)
-        registro = {**atual, "substituir_serie": True} if anterior is None else _envio_da_serie(atual, anterior)
+        registro = ({**atual, "substituir_serie": True} if anterior is None
+                    else _envio_da_serie(atual, anterior, tolerancia_relativa))
         if registro is not None:
             enviar.append(registro)
     removidos = [{"ticker": t} for t in estado if t not in atuais] if estado is not None else []
@@ -324,16 +327,18 @@ def _registro(meta: dict, serie: dict) -> dict:
 
 def montar_series_diarias(ins: Insumos, multiplos: dict[str, Grade], estado: list[dict] | None,
                           gerado_em: str, dados_ate: str,
-                          params_precos: ParametrosPrecos | None = None) -> tuple[list[dict], list[dict], list[dict]]:
+                          params_precos: ParametrosPrecos | None = None,
+                          tolerancia_relativa: float = 1e-6) -> tuple[list[dict], list[dict], list[dict]]:
     """(registros, removidos, novo_estado) do `series_diarias`.
 
     `estado` é o que `contrato.ler_estado("series_diarias")` devolve (lista de séries, ou None na
     primeira vez). `novo_estado` é a lista que `contrato.gravar_estado` grava depois do envio aceito.
+    `tolerancia_relativa` (saida.tolerancia_serie_relativa) vai para `comparar_series`.
     Os registros não são validados aqui: a validação é do `contrato.gravar_lote`.
     """
     atuais = series_completas(ins, multiplos, params_precos)
     anterior = None if estado is None else {s["ticker"]: s for s in estado}
-    enviar, removidos = comparar_series(atuais, anterior)
+    enviar, removidos = comparar_series(atuais, anterior, tolerancia_relativa)
     meta = contrato.meta(gerado_em, dados_ate)
     registros = [_registro(meta, s) for s in enviar]
     return registros, removidos, list(atuais.values())

@@ -13,7 +13,7 @@ from pathlib import Path
 from processamento import calendario, fontes
 
 _CHAVES = {"limite_valido_historico", "pasta", "pasta_estado", "pasta_registros", "tom_neutro"}
-_OPCIONAIS = {"publicar_top_provisorio"}  # ausente = false (yamls de teste montados à mão)
+_OPCIONAIS = {"publicar_top_provisorio", "tolerancia_serie_relativa"}  # ausente = padrão (yamls de teste montados à mão)
 _RE_HORA = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 
 
@@ -31,6 +31,7 @@ class ParametrosSaida:
     pasta_registros: Path
     tom_neutro: float
     publicar_top_provisorio: bool = False
+    tolerancia_serie_relativa: float = 1e-6
 
 
 def _texto(valor: object, onde: str) -> str:
@@ -57,6 +58,15 @@ def _tom_neutro(valor: object, onde: str) -> float:
         raise ErroParametrosSaida(f"{onde} deve ser um número (recebeu {valor!r})")
     if not (0 <= valor < 1):
         raise ErroParametrosSaida(f"{onde} deve ser maior ou igual a zero e menor que um (recebeu {valor!r})")
+    return float(valor)
+
+
+def _tolerancia(valor: object, onde: str) -> float:
+    """Número > 0 e < 0,01 (bool não conta); levanta `ErroParametrosSaida` se não bater."""
+    if isinstance(valor, bool) or not isinstance(valor, (int, float)):
+        raise ErroParametrosSaida(f"{onde} deve ser um número (recebeu {valor!r})")
+    if not (0 < valor < 0.01):
+        raise ErroParametrosSaida(f"{onde} deve ser maior que zero e menor que 0,01 (recebeu {valor!r})")
     return float(valor)
 
 
@@ -88,4 +98,5 @@ def carregar_parametros_saida(caminho: str | None = None) -> ParametrosSaida:
         pasta_registros=fontes.RAIZ / _texto(bloco["pasta_registros"], "saida.pasta_registros"),
         tom_neutro=_tom_neutro(bloco["tom_neutro"], "saida.tom_neutro"),
         publicar_top_provisorio=publicar,
+        tolerancia_serie_relativa=_tolerancia(bloco.get("tolerancia_serie_relativa", 1e-6), "saida.tolerancia_serie_relativa"),
     )

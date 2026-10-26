@@ -38,6 +38,8 @@ COMPACTOS = ("series_diarias", "proventos")                              # seç�
 COLETA_NAO_CONSULTADA = {"consultado": False, "nota": "gatilho da coleta não consultado (etapa 8)"}
 AVISO_SEM_MODELO = "sem arquivo de modelo em {pasta}: experimento_top não gerado"
 AVISO_RETREINO = "Retreino de {mes} falhou ({tipo}): usando o modelo anterior."
+AVISO_SEM_PROBABILIDADE = ("{k} notícias sem probabilidade do FinBERT na janela do dataset: tratadas como ausentes "
+                           "(não neutras).")
 AVISO_CHECAGEM = "falha na checagem diária ({tipo}): avisos de checagem não gerados."
 AVISO_SUSPEITOS_FALHA = "falha na checagem de retornos suspeitos ({tipo}): aviso não gerado."
 AVISO_COMPLETO = ("Carga completa: pacotes inteiros, sem o envio incremental; o estado do envio e os registros "
@@ -206,8 +208,11 @@ def gerar(d: date, *, ler=None, pasta_saida: Path | None = None, pasta_modelos: 
             precos=ins.precos, cadastro=ins.cadastro, noticias=ins.noticias, balancos=ins.balancos,
             universo=universo(), mudancas=ins.mudancas,
         )
-        return montar_dataset(dados, ins.cal, versao_noticias="todas", proximo_ao_vivo=d,
-                              params=params_exp, params_precos=params_precos)
+        df, info = montar_dataset(dados, ins.cal, versao_noticias="todas", proximo_ao_vivo=d,
+                                  params=params_exp, params_precos=params_precos)
+        if info["sem_probabilidade"] > 0:   # uma vez só: o dataset é cacheado
+            avisos.append(AVISO_SEM_PROBABILIDADE.format(k=info["sem_probabilidade"]))
+        return df, info
 
     def estado_de(nome: str):
         return contrato.ler_estado(estado_dir, nome)
@@ -224,7 +229,8 @@ def gerar(d: date, *, ler=None, pasta_saida: Path | None = None, pasta_modelos: 
 
     def series():
         return pacote_series.montar_series_diarias(ins, multiplos(), estado_de("series_diarias"), gerado_em, dados_ate,
-                                                   params_precos=params_precos)
+                                                   params_precos=params_precos,
+                                                   tolerancia_relativa=params_saida.tolerancia_serie_relativa)
 
     def mercado():
         return pacotes_fatos.montar_mercado_dia(ins, grades(), gerado_em, dados_ate), [], None

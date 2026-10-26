@@ -9,15 +9,20 @@ import math
 import pandas as pd
 import pytest
 
-from fabrica_fundamentos import CNPJ, EXCL, LINHAS_A, LINHAS_B, LINHAS_C, LINHAS_D, LINHAS_F, T, balanco_de
+from fabrica_fundamentos import (
+    CNPJ, EXCL, LINHAS_A, LINHAS_AZZAS, LINHAS_B, LINHAS_C, LINHAS_D, LINHAS_F, LINHAS_LIXO, T, balanco_de,
+)
 from processamento.exclusoes import Exclusoes
 from processamento.fatos.precos import HIST, INDISPONIVEL, OK
 from processamento.fatos.trimestres import (
     FLUXO,
+    entregues_ate,
     estoques_no_fim,
     foto_balanco,
     meses_do_periodo,
+    periodo_valido,
     referencia,
+    so_periodos_validos,
     trimestres_isolados,
 )
 
@@ -26,6 +31,8 @@ B = balanco_de(CNPJ["B"], LINHAS_B)
 C = balanco_de(CNPJ["C"], LINHAS_C)
 D = balanco_de(CNPJ["D"], LINHAS_D)
 F = balanco_de(CNPJ["F"], LINHAS_F)
+LIXO = balanco_de(CNPJ["A"], LINHAS_LIXO)
+AZZAS = balanco_de(CNPJ["A"], LINHAS_AZZAS)
 
 
 def _ts(texto: str) -> pd.Timestamp:
@@ -278,3 +285,62 @@ def test_cnpj_sem_linhas_e_fora_da_lista_e_indisponivel():
     assert foto.status_base == INDISPONIVEL
     _par(foto.fluxo_12m["receita_liquida"], None, INDISPONIVEL)
     _par(foto.estoque["patrimonio_liquido"], None, INDISPONIVEL)
+
+
+# ---------------------------------------------------------------------------
+# (h) Período inválido descartado antes de qualquer conta (seção 6, item 1)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("tipo,ini,fim,esperado", [
+    ("ITR", "2021-01-01", "2021-03-31", True),
+    ("ITR", "2021-01-01", "2021-06-30", True),
+    ("ITR", "2021-01-01", "2021-09-30", True),
+    ("ITR", "2021-01-01", "2021-12-31", False),
+    ("ITR", "2021-03-01", "2021-03-31", False),
+    ("DFP", "2021-01-01", "2021-12-31", True),
+    ("DFP", "2021-01-01", "2021-03-31", False),
+    ("XYZ", "2021-01-01", "2021-12-31", True),
+    ("XYZ", "2021-03-01", "2021-03-31", False),
+    ("ITR", None, "2021-03-31", False),
+])
+def test_periodo_valido(tipo, ini, fim, esperado):
+    assert periodo_valido(tipo, _ts(ini) if ini else None, _ts(fim)) is esperado
+
+
+def test_so_periodos_validos_sem_linhas_mantem_colunas():
+    vazio = LIXO.iloc[0:0]
+    filtrado = so_periodos_validos(vazio)
+    assert filtrado.empty
+    assert list(filtrado.columns) == list(LIXO.columns)
+
+
+def test_linha_de_31_dias_nao_entra_e_caixa_fica_indisponivel():
+    # Em 2021-06-01 só o ITR de 1º trimestre (100 de receita) é válido; o de 31 dias sai antes das contas.
+    t = _ts("2021-06-01")
+    assert len(entregues_ate(LIXO, t)) == 1
+    tri = trimestres_isolados(LIXO, t)
+    assert len(tri) == 1
+    assert tri.iloc[0]["data_fim_periodo"] == _ts("2021-03-31")
+    assert tri.iloc[0]["receita_liquida"] == pytest.approx(100, rel=1e-9)
+    # O caixa da linha de 31 dias era 0 (viraria (0.0, ok)); agora é só o caixa vazio da linha válida.
+    estoque = estoques_no_fim(LIXO, CNPJ["A"], _ts("2021-03-31"), t)
+    _par(estoque["caixa"], None, INDISPONIVEL)
+
+
+def test_itr_de_12_meses_nao_entra_antes_da_dfp():
+    # Em 2022-03-10 a ITR de 12 meses (entregue no mesmo dia) não entra; a DFP ainda não.
+    t = _ts("2022-03-10")
+    entregues = entregues_ate(AZZAS, t)
+    assert len(entregues) == 4
+    assert all(meses_do_periodo(i, f) in (3, 6, 9) for i, f in
+               zip(entregues["data_inicio_periodo"], entregues["data_fim_periodo"]))
+    tri = trimestres_isolados(AZZAS, t)
+    quarto = tri[tri["data_fim_periodo"] == _ts("2021-12-31")].iloc[0]
+    assert quarto["receita_liquida"] == pytest.approx(100, rel=1e-9)
+    assert quarto["origem"] == "itr_3m"
+
+
+def test_dfp_aparece_no_dia_seguinte_a_itr_de_12_meses():
+    entregues = entregues_ate(AZZAS, _ts("2022-03-11"))
+    assert list(entregues["tipo_documento"]).count("DFP") == 1
+    assert len(entregues) == 5

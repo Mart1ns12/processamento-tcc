@@ -46,10 +46,39 @@ def meses_do_periodo(ini, fim) -> int | None:
     return None if classe == "outro" else int(classe[:-1])
 
 
+def periodo_valido(tipo, ini, fim) -> bool:
+    """Período aceito na linha de balanço: ITR com 3, 6 ou 9 meses; DFP com 12; outro tipo, se classificado."""
+    meses = meses_do_periodo(ini, fim)
+    if meses is None:
+        return False
+    if tipo == "ITR":
+        return meses in (3, 6, 9)
+    if tipo == "DFP":
+        return meses == 12
+    return True
+
+
+def so_periodos_validos(balancos: pd.DataFrame) -> pd.DataFrame:
+    """Linhas de balanço com período válido (ver `periodo_valido`); as demais saem antes de qualquer conta.
+
+    Sem a coluna `tipo_documento`, vale só a regra de meses (3, 6, 9 ou 12). Sem as colunas de
+    período, nada é filtrado (DataFrame vazio de fixtures que só trazem cnpj e datas de entrega).
+    """
+    if not {"data_inicio_periodo", "data_fim_periodo"} <= set(balancos.columns):
+        return balancos
+    if "tipo_documento" in balancos.columns:
+        validas = [periodo_valido(t, i, f) for t, i, f in zip(
+            balancos["tipo_documento"], balancos["data_inicio_periodo"], balancos["data_fim_periodo"])]
+    else:
+        validas = [meses_do_periodo(i, f) in (3, 6, 9, 12) for i, f in zip(
+            balancos["data_inicio_periodo"], balancos["data_fim_periodo"])]
+    return balancos[pd.Series(validas, index=balancos.index, dtype=bool)]
+
+
 def entregues_ate(balancos: pd.DataFrame, t) -> pd.DataFrame:
-    """Linhas com `data_entrega <= t`. Linha sem data de entrega (NaT) fica de fora."""
+    """Linhas com `data_entrega <= t` e período válido (seção 6). Linha sem data de entrega (NaT) fica de fora."""
     limite = pd.Timestamp(t)
-    return balancos[balancos["data_entrega"] <= limite]
+    return so_periodos_validos(balancos[balancos["data_entrega"] <= limite])
 
 
 def _com_meses(entregues: pd.DataFrame) -> pd.DataFrame:
