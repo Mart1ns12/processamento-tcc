@@ -9,10 +9,11 @@ from pathlib import Path
 import pytest
 from fabrica_painel import montar_raiz
 
-from processamento.painel.saude import cartoes_saude, tabela_md
+from processamento.painel.saude import afetadas_saude, cartoes_saude, tabela_md
 
 FIXTURE = Path(__file__).resolve().parent / "dados" / "painel" / "diagnostico_completo.md"
 REAL = Path(__file__).resolve().parents[1] / "docs" / "diagnostico_banco.md"
+NOVIDADES = Path(__file__).resolve().parent / "dados" / "painel" / "novidades"
 
 DIAG_ZEROS = (
     "- Gerado em: 2026-10-25 08:00 (America/Sao_Paulo)\n"
@@ -162,6 +163,57 @@ def test_diagnostico_da_raiz_de_fixture(tmp_path):
     assert _farois(resultado) == ["bad", "idle", "idle", "idle", "idle", "idle"]
     assert resultado["cartoes"][1]["numero"] == "sem dados"
     assert resultado["cartoes"][1]["fonte"] is None
+
+
+def test_afetadas_fixture_quantidade_retornos_e_lacunas():
+    afetadas = afetadas_saude(FIXTURE)
+
+    assert "contrato" not in afetadas
+    assert [i["rotulo"] for i in afetadas["quantidade_acoes"]["itens"]] == ["AXIA3", "ENEV3", "ABEV3", "EMBJ3"]
+    assert afetadas["quantidade_acoes"]["total"] == 4
+    assert afetadas["quantidade_acoes"]["titulo"] == "Empresas afetadas"
+    assert [(i["rotulo"], i["detalhe"]) for i in afetadas["retornos"]["itens"]] == [
+        ("AZUL3", "10/02/2026"), ("AZUL3", "09/04/2026"), ("AZUL3", "20/04/2026"),
+        ("PCAR3", "01/03/2021"), ("UGPA3", "28/06/2021"),
+    ]
+    assert afetadas["retornos"]["titulo"] == "Ações afetadas"
+    assert [(i["rotulo"], i["detalhe"]) for i in afetadas["lacunas"]["itens"]] == [
+        ("IDIV", "02/01/2025 a 19/10/2026"),
+        ("IFIX", "02/01/2025 a 19/10/2026"),
+        ("SMLL", "02/01/2025 a 19/10/2026"),
+    ]
+    assert afetadas["lacunas"]["titulo"] == "Séries afetadas"
+
+
+def test_afetadas_contrato_da_raiz_de_fixture(tmp_path):
+    raiz = montar_raiz(tmp_path)
+
+    afetadas = afetadas_saude(raiz / "docs" / "diagnostico_banco.md")
+
+    assert afetadas["contrato"] == {
+        "titulo": "Tabelas afetadas",
+        "itens": [{"rotulo": "v1-precos", "detalhe": "coluna_faltando"}],
+        "total": 1,
+    }
+
+
+def test_afetadas_diagnostico_atual_da_novidades():
+    afetadas = afetadas_saude(NOVIDADES / "atual.md")
+
+    assert [i["rotulo"] for i in afetadas["quantidade_acoes"]["itens"]] == ["HAPV3"]
+    assert [(i["rotulo"], i["detalhe"]) for i in afetadas["retornos"]["itens"]] == [
+        ("PCAR3", "01/03/2021"), ("UGPA3", "28/06/2021"),
+    ]
+    assert [(i["rotulo"], i["detalhe"]) for i in afetadas["lacunas"]["itens"]] == [
+        ("IDIV", "02/01/2025 a 30/12/2025"),
+        ("IFIX", "02/01/2025 a 30/12/2025"),
+        ("SMLL", "02/01/2025 a 30/12/2025"),
+    ]
+    assert "contrato" not in afetadas
+
+
+def test_afetadas_arquivo_ausente_vira_dict_vazio(tmp_path):
+    assert afetadas_saude(tmp_path / "nao_existe.md") == {}
 
 
 @pytest.mark.skipif(not REAL.is_file(), reason="docs/diagnostico_banco.md não existe neste checkout")

@@ -1,0 +1,855 @@
+{
+ "pacote": "resumo_acao",
+ "registros": [
+  {
+   "ticker": "ABEV3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.07853719398375603,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "ALOS3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.25469547555619243,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "ASAI3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.42971016110254145,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "AUAU3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.22159091473528814,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "AURE3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.2939632289710743,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "AXIA3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.12413794418861124,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "AZUL3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.22974767209435676,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "AZZA3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.3522727119851299,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "B3SA3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.3627907003001998,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "BBAS3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.2932847977905618,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "BBDC3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.2065337570618635,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "BBDC4",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.21698580500081133,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "BBSE3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.012362658236139246,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "BEEF3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.22248244775813386,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "BPAC11",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.24830869168882508,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "BRAP4",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": 0.01315097301367607,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "BRAV3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.11987092288850842,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "BRKM5",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.23557687899064572,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "CMIG4",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.11396743059220482,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "CMIN3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.06212423987948923,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "COGN3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.38387095955482486,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "CPFE3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.14239807234823376,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "CPLE3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.12918106986197797,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "CSAN3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.4673076764366325,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "CSNA3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.17462931018161998,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "CVCB3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.3757961870492399,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "CYRE3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.44813046586494754,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "DIRR3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.2404844797347927,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "EGIE3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.10685290086718391,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "EMBJ3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": 0.0888511444221527,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "ENEV3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.15279541092396987,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "ENGI11",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.28855122540906275,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "EQTL3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.28723405500671595,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "FLRY3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.20703266178740398,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "GGBR4",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": 0.009119803959041661,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "GMAT3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.30943397092157143,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "GOAU4",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": 0.010526389758675148,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "HAPV3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.5492638671051049,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "HYPE3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.245504606754408,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "IGTI11",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.22888200821771065,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "IRBR3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.08807446794357654,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "ISAE4",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.0819208940615993,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "ITSA4",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.12540823146117286,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "ITUB4",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.1366459332996619,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "JBSS32",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": 0.0972584726370167,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "KLBN11",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": 0.032382007399717416,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "LREN3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.33607679315301087,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "LWSA3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.2734082390314956,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "MBRF3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.10597091431869898,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "MGLU3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.5823482769118598,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "MOTV3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.26930694696003576,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "MRVE3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.4252733557518268,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "MULT3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.25259791768141204,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "NATU3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.25189876252308663,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "PCAR3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.2409241009790033,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "PETR3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.06805638829082028,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "PETR4",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.08179957757493694,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "POMO4",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.14255761657393995,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "PRIO3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.036043408565225254,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "PSSA3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.0659170493443425,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "RADL3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.22534519200030922,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "RAIL3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.16756179906605484,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "RAIZ4",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.23255812180500046,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "RAPT4",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.48387101354394946,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "RDOR3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.19917674767090177,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "RECV3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.12968748614657688,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "RENT3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.3958412593944747,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "SANB11",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.04467858405036729,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "SAUD3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.129909348498081,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "SBSP3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.20981861102313926,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "SLCE3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.0022869644769671904,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "SMTO3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.046555799418317556,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "SUZB3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": 0.10078959624185879,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "TAEE11",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.0949720670391061,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "TIMS3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.051859599958356095,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "TOTS3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.1449831009335386,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "UGPA3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.0858624545811052,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "USIM5",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.10708899334715083,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "VALE3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": 0.04006455034580636,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "VAMO3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.5678627071972806,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "VBBR3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.10078170410685927,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "VIVA3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.27746947130879884,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "VIVT3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.05365400891150207,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "WEGE3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": 0.04212495334293975,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "YDUQ3",
+   "data_referencia": "2026-10-26",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.3554130900766451,
+     "status": "ok"
+    }
+   }
+  }
+ ]
+}

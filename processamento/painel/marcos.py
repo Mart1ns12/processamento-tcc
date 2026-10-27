@@ -21,6 +21,18 @@ from processamento.painel.relatorios import (
 RE_PROGRESSO = re.compile(r"\[\s*(\d{1,3})%\]\s*$")
 RE_RELATORIO = re.compile(r"^Relatório: .+ \| divergências: (\d+)$")
 
+# Marcadores que o `processamento/painel/dia.py` imprime (uma linha por etapa).
+RE_DIA_INICIO = re.compile(r"^# dia: etapa=(\w+) inicio=(\S+)$")
+RE_DIA_FIM = re.compile(r"^# dia: etapa=(\w+) fim codigo=(-?\d+) detalhe=(.*)$")
+RE_DIA_PULADA = re.compile(r"^# dia: etapa=(\w+) pulada motivo=(.*)$")
+_IDS_DIA = ("rotina", "carga", "publicador")
+_ETAPAS_DIA = [
+    ("rotina", "Rotina do dia (só leitura do banco da coleta)"),
+    ("carga", "Carga completa em saida_completa/"),
+    ("publicador", "Publicador (grava no banco da API)"),
+    ("fim", "Encerrado"),
+]
+
 # Linhas que terminam a ação com erro, nos scripts que não usam `resultado_terminal` (carga e diagnóstico).
 _INICIO_TERMINAL_BANCO = (
     "Configuração do banco incompleta",
@@ -145,12 +157,48 @@ TERMINAIS: dict[str, Callable[[str], tuple[str, str] | None] | None] = {
 }
 
 
+def marcos_dia(linhas: list[str], *, rodando: bool, codigo: int | None, significado: str | None) -> list[dict]:
+    """Etapas do dia completo, a partir dos marcadores `# dia: ...` (rotina, carga, publicador e fim)."""
+    est = {i: {"id": i, "rotulo": r, "estado": "espera", "detalhe": None} for i, r in _ETAPAS_DIA}
+    comecou = False
+    for linha in linhas:
+        m = RE_DIA_INICIO.match(linha)
+        if m and m.group(1) in _IDS_DIA:
+            est[m.group(1)]["estado"] = "agora"
+            comecou = True
+            continue
+        m = RE_DIA_FIM.match(linha)
+        if m and m.group(1) in _IDS_DIA:
+            est[m.group(1)]["estado"] = "concluida" if int(m.group(2)) == 0 else "erro"
+            est[m.group(1)]["detalhe"] = m.group(3)
+            continue
+        m = RE_DIA_PULADA.match(linha)
+        if m and m.group(1) in _IDS_DIA:
+            est[m.group(1)]["estado"] = "pulada"
+            est[m.group(1)]["detalhe"] = m.group(2)
+
+    terminou = not rodando and codigo is not None
+    for i in _IDS_DIA:
+        if terminou and est[i]["estado"] == "agora":
+            est[i]["estado"] = "erro"
+        elif terminou and est[i]["estado"] == "espera":
+            est[i]["estado"] = "pulada"
+    if rodando and not comecou:
+        est["rotina"]["estado"] = "agora"
+    if terminou:
+        est["fim"]["estado"] = "concluida" if codigo == 0 else "erro"
+        est["fim"]["detalhe"] = significado
+    return [est[i] for i, _ in _ETAPAS_DIA]
+
+
 def marcos_acao(acao_id: str | None, linhas: list[str], *, rodando: bool, codigo: int | None,
                 significado: str | None) -> list[dict]:
     """Etapas da ação com `estado` (espera, agora, concluida, erro, pulada) e `detalhe`.
 
     `acao_id` desconhecido ou None devolve lista vazia. `significado` é o texto do código de saída.
     """
+    if acao_id == "dia":
+        return marcos_dia(linhas, rodando=rodando, codigo=codigo, significado=significado)
     if acao_id not in ETAPAS:
         return []
     etapas = ETAPAS[acao_id]

@@ -13,6 +13,8 @@ SEM_DADOS = "sem dados"
 CAMPOS = frozenset({
     "prazo", "prazo_tardio", "inicio_consulta", "intervalo", "limite_historico", "corte_noite",
     "retorno_min", "retorno_max", "defasagem", "pvp_min", "sorteios", "teste_final_inicio", "abertura",
+    "tempo_limite_api", "atipico_min_acoes", "atipico_retorno", "atipico_ibov", "coerencia_ivvb11",
+    "coerencia_dif", "etapas_conferidas",
 })
 
 # id -> (título, texto). Strings entre aspas simples: os textos usam aspas duplas e nunca apóstrofo.
@@ -51,6 +53,14 @@ AJUDA: dict[str, tuple[str, str]] = {
     "acao_carga": ('Gerar a carga completa', 'O que faz: gera todos os pacotes inteiros do último dia processado, para o site começar do zero. Muda algo: só grava na pasta saida_completa/; não mexe no envio diário nem nos registros do experimento. Lê o banco da coleta (só leitura).'),
     "acao_diagnostico": ('Rodar o diagnóstico do banco', 'O que faz: passa o termômetro no banco da coleta e reescreve o relatório docs/diagnostico_banco.md, que alimenta os cartões de Saúde dos dados. Muda algo: só reescreve esse relatório; no banco, só lê.'),
     "acao_testes": ('Rodar os testes', 'O que faz: roda os testes automáticos (pytest). Não usa o banco nem a internet. Muda algo: não muda nenhum dado; só grava o registro da execução na pasta logs/painel/. É a única ação que pode ser parada no meio.'),
+    "api": ('API', 'É o serviço na internet que entrega ao site os dados já publicados. O painel pergunta só se ela está no ar, numa rota pública que não pede chave, e nunca envia chave nem senha. Mostra se a API respondeu, se o banco dela respondeu, a data da última publicação completa e quanto tempo a resposta levou. Se a API não responder a tempo, aparece "sem resposta" e o resto do painel continua funcionando. A consulta é feita por este computador, não pelo navegador, e se repete de tempos em tempos.'),
+    "banco_api": ('Banco da API', 'É o banco onde o publicador grava os pacotes do processamento e de onde a API lê. A data mostrada é a da última publicação completa (com a carga completa), informada pela própria API. Ela é comparada com a data da última rotina diária que terminou bem (ok ou com pendências): se for mais antiga, falta publicar essa data. Uma manhã em que a rotina falhou publica só o registro da execução e não muda essa data. A data é a da pasta da rotina (a manhã); o pregão dos dados é o pregão anterior.'),
+    "tempo_api": ('Tempo de resposta da API', 'Quanto tempo a API levou para responder, medido por este computador. O painel guarda as últimas medições na pasta logs/painel/ e mostra a última e a média. Média acima de {tempo_limite_api} fica amarela. A distância até o servidor pesa: um servidor longe do Brasil responde mais devagar.'),
+    "novidades": ('Novidades da coleta', 'Compara o relatório do diagnóstico atual com o anterior, que o painel guarda na pasta logs/painel/ sempre que percebe um diagnóstico novo. Mostra só o que mudou de verdade: linhas e início das tabelas, divergências, empresas com quantidade de ações suspeita, preços suspeitos, lacunas, o histórico do experimento e a cor dos cartões de saúde. Tabelas que crescem todo pregão (preços, notícias e índices) aparecem no fim da lista. A primeira comparação aparece depois do segundo diagnóstico visto pelo painel.'),
+    "dia_atipico": ('Dia atípico', 'Aparece quando pelo menos {atipico_min_acoes} ações tiveram, no mesmo pregão, retorno acima de {atipico_retorno} em módulo, para cima ou para baixo. Para separar um evento real de um erro da coleta, o cartão mostra também a variação do Ibovespa e do índice de empresas menores (SMLL) no mesmo dia. Se o Ibovespa se moveu mais que {atipico_ibov}, o movimento foi amplo e provavelmente real. Se não, as ações se moveram sozinhas e vale conferir os dados da coleta. Os números vêm dos pacotes do último pregão processado (pasta saida/).'),
+    "etapas_coleta": ('Etapas da coleta', 'Lista as etapas do daily da coleta usado pela rotina, com a situação de cada uma no momento em que a rotina consultou o painel da coleta: concluída, falhou, pulada ou pendente (sem registro ainda). As que não concluíram ficam destacadas. O processamento espera a etapa "entrega"; se uma destas não concluir, vira aviso na rodada: {etapas_conferidas}. Se a coleta terminar uma etapa depois, a lista só muda quando a rotina rodar de novo.'),
+    "saude_coerencia_mercado": ('Coerência do mercado', 'O que é: confere se os números do mercado no último pregão processado fazem sentido juntos. Dólar e IVVB11 (fundo que segue a bolsa americana, cotado em reais): se andam em sentidos opostos e o IVVB11 se move mais de {coerencia_ivvb11}, é suspeito, porque a bolsa americana teria de ter se movido ainda mais. Ibovespa e a mediana dos retornos das ações: se andam em sentidos opostos com diferença maior que {coerencia_dif}, também é suspeito. Por que está amarelo: um desses pares não bateu. O processamento não muda nenhum número por causa deste cartão: ele só avisa. Quando a coleta corrigir: o cartão volta ao verde na próxima rotina.'),
+    "acao_dia": ('Rodar o dia completo', 'O que faz: em sequência, roda a rotina do dia, gera a carga completa e chama o publicador do projeto da API, que grava os pacotes no banco da API. É a única ação do painel que grava num banco. Se a rotina terminar ok ou com pendências, a carga completa e o publicador rodam. Se a rotina falhar, a carga completa não roda e o publicador grava só o registro da execução, para o site avisar que os dados são do pregão anterior. Se a rotina não gerar nada (dia sem pregão, configuração, banco ou trava), nada é publicado. O publicador roda com o Python do projeto da API, que lê as próprias configurações: o painel não lê nem envia nenhuma senha ou chave. Não pode ser parado no meio. Nunca escreve no banco da coleta.'),
 }
 
 # chave -> texto curto de "O que fazer".
@@ -74,6 +84,13 @@ O_QUE_FAZER: dict[str, str] = {
     "testes_falhas": 'Abrir o log dos testes, ver qual falhou e corrigir o código antes de confiar nos números.',
     "testes_interrompidos": 'Rodar os testes de novo até o fim.',
     "trava_abandonada": 'Nada, se nenhuma rotina estiver rodando: a próxima rotina apaga a trava velha sozinha.',
+    "api_sem_resposta": 'Abrir o endereço da API no navegador. Se continuar sem resposta, ver no painel do Railway se o serviço está no ar. Enquanto isso, o site fica sem dados novos.',
+    "api_banco_fora": 'A API está no ar, mas o banco dela não respondeu. Ver no painel do Railway se o banco está ligado.',
+    "api_lenta": 'Conferir a região do Railway (US East é a mais próxima do Brasil).',
+    "banco_atrasado": 'Rodar o dia completo (seção Ações) ou, no projeto da API, o publicador para a data esperada.',
+    "saude_coerencia_mercado": 'Conferir na coleta os preços do dólar, do IVVB11 e do Ibovespa nesse pregão. Se forem erro, avisar a coleta e rodar a rotina de novo depois da correção.',
+    "dia_atipico_amplo": 'Nada no processamento: é um aviso de evento de mercado, não um erro dos dados. O mercado inteiro se moveu junto. Vale só confirmar no noticiário o que aconteceu nesse pregão.',
+    "dia_atipico_isolado": 'Conferir na coleta os preços dessas ações nesse pregão antes de confiar nos indicadores do dia. Se for erro, avisar a coleta e rodar a rotina de novo depois da correção.',
 }
 
 # Palavras do painel (E2): termo -> texto, na ordem do glossário.

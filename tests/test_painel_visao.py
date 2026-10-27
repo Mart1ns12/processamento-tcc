@@ -11,8 +11,9 @@ from processamento.painel import visao
 from processamento.painel.acoes import ACOES
 from processamento.painel.ajuda import O_QUE_FAZER
 from processamento.painel.saude import cartoes_saude
-from processamento.painel.visao import (calendario_meses, dia_curto, fluxo, frase_dia, hora_marco, linha_do_tempo,
-                                        quando, resumo, tempo_curto, tempos_acoes)
+from processamento.painel.visao import (bloco_api, bloco_banco, calendario_meses, dia_curto, etapas_coleta, fluxo,
+                                        frase_dia, hora_marco, linha_do_tempo, quando, resumo, tempo_curto,
+                                        tempos_acoes)
 
 COLETA = {
     "consultado": True,
@@ -400,6 +401,8 @@ def test_tempos_acoes_prefere_o_log_do_painel():
     tempos = tempos_acoes({"rotina": 75, "carga": None, "diagnostico": None, "testes": 295},
                           dict(ITEM, duracao_s=118), dict(COMPLETA, duracao_s=180))
     assert tempos == {
+        "dia": {"segundos": None, "curto": None, "texto": "Ainda sem medição: pode levar alguns minutos.",
+                "origem": None},
         "rotina": {"segundos": 75, "curto": "~1 min", "texto": "Da última vez, pelo painel, levou 1 min 15 s.",
                    "origem": "painel"},
         "carga": {"segundos": 180, "curto": "~3 min", "texto": "A última carga completa levou 3 min 0 s.",
@@ -453,3 +456,161 @@ def test_frase_dia_sem_nenhuma_rotina():
 def test_frase_dia_feriado_mostra_o_motivo():
     assert frase_dia("2026-10-12", None) == (
         "Hoje é segunda, 12/10/2026 (sem pregão: Nossa Senhora Aparecida). Nenhuma rotina diária encontrada.")
+
+
+# ---------- Fase 7: etapas da coleta, bloco da API, banco da API e pontos novos do resumo ----------
+
+ETAPAS_DIA = {"precos": "concluida", "macro": "concluida", "noticias": "concluida", "ipe": "concluida",
+              "enriquecimento": "concluida", "juiza": "concluida", "cadastro": "concluida", "entrega": "concluida",
+              "analise": "falhou"}
+ITEM_ETAPAS = {"coleta": {"etapas": ETAPAS_DIA, "consulta_hhmm": "10:49", "daily": "2026-10-27-daily-080001"}}
+
+
+def test_etapas_coleta_resumo_e_destaque():
+    r = etapas_coleta(ITEM_ETAPAS)
+    assert r["disponivel"] is True and r["motivo"] is None
+    assert r["resumo"] == "8 de 9 etapas concluídas · não concluíram: análise (falhou)"
+    assert r["nao_concluidas"] == ["análise (falhou)"]
+    assert r["etapas"][-1] == {"id": "analise", "rotulo": "análise", "status": "falhou", "texto": "falhou",
+                               "destaque": True}
+    assert r["etapas"][0]["destaque"] is False
+    assert r["consulta_hhmm"] == "10:49" and r["daily"] == "2026-10-27-daily-080001"
+
+
+def test_etapas_coleta_pendente_e_pulada():
+    r = etapas_coleta({"coleta": {"etapas": {"ipe": None, "juiza": "pulada"}}})
+    assert [e["texto"] for e in r["etapas"]] == ["pendente", "pulada"]
+    assert r["resumo"] == "0 de 2 etapas concluídas · não concluíram: IPE (pendente), juíza (pulada)"
+
+
+def test_etapas_coleta_sem_etapas_mostra_a_nota():
+    nota = "Nenhum daily de hoje encontrado. Consulta única (--sem-esperar)."
+    r = etapas_coleta({"coleta": {"nota": nota}})
+    assert r["disponivel"] is False and r["motivo"] == nota
+    assert r["etapas"] == [] and r["resumo"] is None
+    assert etapas_coleta(None)["disponivel"] is False
+
+
+AGORA_API = "2026-10-27T10:58:03-03:00"
+OK_API = {"respondeu": True, "http": 200, "ms": 900, "status": "ok", "banco": "ok",
+          "ultima_publicacao": "2026-10-27", "erro": None}
+MEDICOES_API = [{"ms": 800}, {"ms": 1000}, {"ms": None}, {"ms": 900}]
+
+
+def _situacao(consulta=None, medicoes=(), **extra):
+    base = {"configurada": True, "erro_config": None, "timeout_s": 5.0, "consulta": consulta,
+            "consultado_em": AGORA_API, "medicoes": list(medicoes)}
+    base.update(extra)
+    return base
+
+
+def test_bloco_api_no_ar_com_tempos():
+    r = bloco_api(_situacao(OK_API, MEDICOES_API), 2.0)
+    assert r["estado"] == "ok" and r["titulo"] == "No ar" and r["pontos"] == []
+    assert r["linhas"] == ["Status ok · banco ok", "Última publicação completa: 27/10/2026",
+                           "Última: 0,90 s · média 0,90 s (3 de 4 com resposta)", "Consultada às 10:58:03"]
+    assert r["ultima_publicacao"] == "2026-10-27" and r["consultado_em"] == "10:58:03"
+
+
+def test_bloco_api_lenta_vira_aviso_com_um_ponto():
+    r = bloco_api(_situacao(OK_API, MEDICOES_API), 0.5)
+    assert r["estado"] == "warn"
+    assert r["pontos"] == [{"nivel": "warn", "texto": "API lenta (média 0,90 s)", "chave": "api_lenta"}]
+
+
+def test_bloco_api_sem_resposta_por_timeout():
+    consulta = {"respondeu": False, "http": None, "ms": None, "status": None, "banco": None,
+                "ultima_publicacao": None, "erro": "TimeoutError"}
+    r = bloco_api(_situacao(consulta, [{"ms": None}]), 2.0)
+    assert r["estado"] == "warn" and r["titulo"] == "Sem resposta"
+    assert r["linhas"][0] == "Sem resposta em até 5 s (TimeoutError)"
+    assert r["pontos"] == [{"nivel": "warn", "texto": "API sem resposta", "chave": "api_sem_resposta"}]
+
+
+def test_bloco_api_503_e_banco_fora():
+    r = bloco_api(_situacao(dict(OK_API, http=503, status=None, banco=None)), 2.0)
+    assert r["estado"] == "bad" and r["titulo"] == "Banco da API fora"
+    assert r["linhas"][0] == "Status sem dados · banco sem dados"
+    assert r["pontos"] == [{"nivel": "bad", "texto": "Banco da API fora", "chave": "api_banco_fora"}]
+
+
+def test_bloco_api_nao_configurada_e_sem_consulta_ficam_ociosas():
+    nao = bloco_api({"configurada": False, "erro_config": "Sem painel.api_url no parametros.yaml.",
+                     "consulta": None, "medicoes": []}, 2.0)
+    assert nao["configurada"] is False and nao["estado"] == "idle" and nao["titulo"] == "Não configurada"
+    assert nao["linhas"] == ["Sem painel.api_url no parametros.yaml."]
+    sem_consulta = bloco_api(_situacao(None), 2.0)
+    assert sem_consulta["estado"] == "idle" and sem_consulta["titulo"] == "sem dados"
+
+
+def test_bloco_banco_em_dia_com_pregao():
+    r = bloco_banco(_situacao(OK_API), "2026-10-27", "2026-10-26")
+    assert r["estado"] == "ok" and r["titulo"] == "Em dia"
+    assert r["linhas"] == ["Última publicação completa: 27/10/2026",
+                           "Esperada: 27/10/2026 (pregão de 26/10/2026)"]
+    assert r["pontos"] == []
+
+
+def test_bloco_banco_atrasado_tem_ponto():
+    r = bloco_banco(_situacao(dict(OK_API, ultima_publicacao="2026-10-23")), "2026-10-27", None)
+    assert r["estado"] == "warn" and r["titulo"] == "Publicação atrasada"
+    assert r["linhas"] == ["Última publicação completa: 23/10/2026", "Esperada: 27/10/2026"]
+    assert r["pontos"] == [{"nivel": "warn",
+                            "texto": "Banco da API: última publicação completa 23/10/2026, esperada 27/10/2026",
+                            "chave": "banco_atrasado"}]
+
+
+def test_bloco_banco_sem_resposta_fora_e_sem_comparacao():
+    sem_resposta = bloco_banco(_situacao(dict(OK_API, respondeu=False, erro="TimeoutError")), "2026-10-27", None)
+    assert sem_resposta["estado"] == "idle" and sem_resposta["linhas"] == ["Depende da resposta da API."]
+    assert bloco_banco(_situacao(None), "2026-10-27", None)["estado"] == "idle"
+    fora = bloco_banco(_situacao(dict(OK_API, http=503)), "2026-10-27", None)
+    assert fora["estado"] == "bad" and fora["titulo"] == "Fora" and fora["pontos"] == []
+    sem_esperado = bloco_banco(_situacao(OK_API), None, None)
+    assert sem_esperado["estado"] == "idle" and sem_esperado["titulo"] == "sem rotina para comparar"
+    assert sem_esperado["linhas"] == ["Última publicação completa: 27/10/2026"]
+    nada = bloco_banco(_situacao(dict(OK_API, ultima_publicacao=None)), "2026-10-27", None)
+    assert nada["estado"] == "warn" and nada["titulo"] == "Nada publicado ainda"
+    assert nada["pontos"] == [{"nivel": "warn", "texto": "Banco da API: nada publicado ainda",
+                               "chave": "banco_atrasado"}]
+
+
+def test_resumo_pontos_de_api_banco_e_dia_atipico_na_ordem():
+    banco = {"pontos": [{"nivel": "warn", "texto": "Banco da API: nada publicado ainda", "chave": "banco_atrasado"}]}
+    api = {"pontos": [{"nivel": "warn", "texto": "API sem resposta", "chave": "api_sem_resposta"}]}
+    atipico = {"pontos": [{"nivel": "warn",
+                           "texto": "Dia atípico no pregão de 26/10/2026 (16 ações): "
+                                    "aviso de evento de mercado, não erro dos dados",
+                           "chave": "dia_atipico_amplo"}]}
+    r = resumo(HOJE_OK, TRAVA_VAZIA, fluxo(ITEM), LT, SAUDE_OK, TESTES_OK, api=api, banco=banco, dia_atipico=atipico)
+    assert [(p["alvo"], p["texto"]) for p in r["pontos"]] == [
+        ("fluxo-banco", "Banco da API: nada publicado ainda"),
+        ("fluxo-api", "API sem resposta"),
+        ("dia-atipico", "Dia atípico no pregão de 26/10/2026 (16 ações): "
+                        "aviso de evento de mercado, não erro dos dados")]
+    assert r["pontos"][1]["o_que_fazer"] == O_QUE_FAZER["api_sem_resposta"]
+    assert r["pontos"][2]["o_que_fazer"] == O_QUE_FAZER["dia_atipico_amplo"]
+    assert r["frase"] == "Atenção: 3 pontos"
+
+
+def test_resumo_ignora_pontos_malformados_dos_blocos_novos():
+    r = resumo(HOJE_OK, TRAVA_VAZIA, fluxo(ITEM), LT, SAUDE_OK, TESTES_OK,
+               api={"pontos": ["lixo", {"nivel": "warn"}, {"nivel": "x", "texto": "t", "chave": "c"}]},
+               dia_atipico=None)
+    assert r["pontos"] == []
+
+
+def test_resumo_cartao_de_coerencia_tem_alvo_e_o_que_fazer():
+    saude = {"disponivel": True, "cartoes": [{"id": "coerencia_mercado", "titulo": "Coerência do mercado",
+                                              "farol": "warn", "numero": "1 sinal suspeito"}]}
+    r = resumo(HOJE_OK, TRAVA_VAZIA, fluxo(ITEM), LT, saude, TESTES_OK)
+    assert r["pontos"] == [{"nivel": "warn", "texto": "Coerência do mercado (1 sinal suspeito)",
+                            "alvo": "saude-c-coerencia_mercado",
+                            "o_que_fazer": O_QUE_FAZER["saude_coerencia_mercado"]}]
+
+
+def test_resumo_sem_diagnostico_vem_antes_dos_cartoes():
+    saude = {"disponivel": False, "cartoes": [{"id": "retornos", "titulo": "Preços suspeitos",
+                                               "farol": "warn", "numero": "5 retornos"}]}
+    r = resumo(HOJE_OK, TRAVA_VAZIA, fluxo(ITEM), LT, saude, TESTES_OK)
+    assert [p["alvo"] for p in r["pontos"]] == ["saude", "saude-c-retornos"]

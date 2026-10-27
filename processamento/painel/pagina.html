@@ -41,7 +41,9 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-sans);fo
 @media (min-width:1280px){
   .wrap > #sec-experimento{grid-column:span 7}
   .wrap > #sec-historico{grid-column:span 5}
-  .faixa-fluxo{grid-template-columns:minmax(0,7fr) minmax(0,5fr)}
+  .faixa-fluxo{grid-template-columns:minmax(0,1fr)}
+  .faixa-manha{grid-template-columns:minmax(0,7fr) minmax(0,5fr)}
+  .faixa-manha.uma{grid-template-columns:minmax(0,1fr)}
   .faixa-acoes{grid-template-columns:minmax(0,8fr) minmax(0,4fr)}
 }
 @media (max-width:599px){.tl{margin:6px 24px 0}.card{padding:14px}}
@@ -78,7 +80,7 @@ p{margin:0}
 .erro-rede{background:var(--bad-soft);color:var(--bad);font-weight:600;padding:10px 14px;border-radius:8px}
 
 /* fluxo */
-.flow{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;gap:10px;align-items:stretch}
+.flow{display:grid;grid-template-columns:1fr auto 1fr auto 1fr auto 1fr auto 1fr;gap:10px;align-items:stretch}
 .stage{border:1px solid var(--line);border-radius:10px;padding:14px;display:grid;gap:6px;position:relative;background:var(--surface);align-content:start}
 .stage::before{content:"";position:absolute;inset:0 auto 0 0;width:4px;border-radius:10px 0 0 10px;background:var(--idle)}
 .stage.ok::before{background:var(--ok)}
@@ -88,6 +90,7 @@ p{margin:0}
 .stage .big{font-size:1.25rem;font-weight:600}
 .stage .meta{font-size:.82rem;color:var(--muted)}
 .arrow{align-self:center;color:var(--idle);font-size:1.4rem}
+@container (max-width:1100px){.flow{grid-template-columns:repeat(2,minmax(0,1fr))}.flow .arrow{display:none}}
 @container (max-width:640px){.flow{grid-template-columns:1fr}.arrow{transform:rotate(90deg);justify-self:center}}
 .linha-ajuda{font-size:.8rem;color:var(--muted);display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 
@@ -146,7 +149,7 @@ pre{margin:8px 0 0;background:var(--track);border-radius:8px;padding:10px;font-f
 .health{display:grid;grid-template-columns:minmax(0,1fr);gap:10px}
 @media (min-width:600px){.health{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (min-width:900px){.health{grid-template-columns:repeat(3,minmax(0,1fr))}}
-@media (min-width:1700px){.health{grid-template-columns:repeat(6,minmax(0,1fr))}}
+@media (min-width:1700px){.health{grid-template-columns:repeat(7,minmax(0,1fr))}}
 .hc{border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:grid;gap:6px;align-content:start;border-left-width:4px}
 .hc.ok{border-left-color:var(--ok)} .hc.warn{border-left-color:var(--warn)} .hc.bad{border-left-color:var(--bad)} .hc.idle{border-left-color:var(--idle)}
 .hc .n{font-family:var(--f-mono);font-size:1.3rem;font-weight:500}
@@ -211,6 +214,8 @@ tbody tr.selecionada{background:var(--accent-soft)}
 .rodada ul{margin:4px 0 0;padding-left:20px;font-size:.84rem}
 .etapas{margin:6px 0;font-size:.84rem}
 .etapa{display:inline-block;margin:2px 12px 2px 0}
+.etapa.destaque{font-weight:600}
+.afetadas{font-size:.8rem}
 ul{margin:4px 0;padding-left:20px}
 .tests{display:grid;gap:10px;align-content:start}
 .tests .big{font-family:var(--f-mono);font-size:2rem;line-height:1}
@@ -248,7 +253,7 @@ ul{margin:4px 0;padding-left:20px}
 /* impressão (E3): sem botões, "?" nem log; uma coluna; blocos recolhidos abertos */
 @media print{
   .ajuda-btn,.toggle,#comandos .actions,#run,#erro-rede,#ajuda-caixa{display:none!important}
-  .faixa,.faixa-fluxo,.faixa-acoes,.exp,.health{grid-template-columns:minmax(0,1fr)}
+  .faixa,.faixa-fluxo,.faixa-manha,.faixa-acoes,.exp,.health{grid-template-columns:minmax(0,1fr)}
   .flow{grid-template-columns:minmax(0,1fr)}
   .arrow{transform:rotate(90deg);justify-self:center}
   .wrap > #sec-experimento,.wrap > #sec-historico{grid-column:1 / -1}
@@ -307,6 +312,8 @@ ul{margin:4px 0;padding-left:20px}
         <p class="linha-ajuda"><span id="carga-linha">última carga completa: sem dados</span><button class="ajuda-btn" type="button" data-ajuda="carga_vs_rotina" aria-label="Ajuda" aria-expanded="false" aria-controls="ajuda-caixa" hidden>?</button></p>
         <p class="fazer" data-fazer="agora" hidden></p>
       </section>
+    </div>
+    <div class="faixa faixa-manha" id="faixa-manha">
       <section class="card" id="linha-tempo" aria-labelledby="h-tl">
         <div class="cardhead"><div class="tit-linha"><h3 class="card-tit" id="h-tl">A manhã do pregão</h3><button class="ajuda-btn" type="button" data-ajuda="linha_tempo" aria-label="Ajuda" aria-expanded="false" aria-controls="ajuda-caixa" hidden>?</button></div></div>
         <div class="tit-linha"><p class="why" id="tl-why"></p><button class="ajuda-btn" type="button" data-ajuda="prazo" aria-label="Ajuda" aria-expanded="false" aria-controls="ajuda-caixa" hidden>?</button></div>
@@ -319,6 +326,7 @@ ul{margin:4px 0;padding-left:20px}
         <p class="note" id="tl-avisos" hidden></p>
         <p class="fazer" data-fazer="linha-tempo" hidden></p>
       </section>
+      <section class="card" id="dia-atipico" aria-labelledby="h-atip" hidden><div class="cardhead"><div class="tit-linha" id="atip-tit"><h3 class="card-tit" id="h-atip">Dia atípico</h3></div><span class="pill warn" id="pill-atip"></span></div><p id="atip-texto"></p><p class="note" id="atip-indices"></p><p class="why" id="atip-frase"></p><div id="atip-acoes"></div><p class="note" id="atip-fonte"></p><p class="fazer" data-fazer="dia-atipico" hidden></p></section>
     </div>
   </section>
 
@@ -326,6 +334,7 @@ ul{margin:4px 0;padding-left:20px}
     <div class="tit-linha"><h2 class="secao-tit" id="h-saude"><span class="num">3</span> Saúde dos dados</h2><button class="ajuda-btn" type="button" data-ajuda="saude" aria-label="Ajuda" aria-expanded="false" aria-controls="ajuda-caixa" hidden>?</button></div>
     <section class="card" id="saude" aria-labelledby="h-saude">
       <p class="why">O processamento confere os dados da coleta antes de usar. Quando algo vem errado, ele marca "indisponível" em vez de mostrar um número falso.</p>
+      <div class="novidades" id="novidades"><div class="tit-linha" id="novid-tit"><h3 class="card-tit">Novidades da coleta</h3></div><p id="novid-frase"></p><p class="note" id="novid-quando"></p><details id="novid-det"><summary>ver tudo</summary><ul id="novid-lista"></ul></details></div>
       <p class="note" id="saude-gerado"></p>
       <div class="health" id="saude-cartoes"></div>
       <p class="fazer" data-fazer="saude" hidden></p>
@@ -473,6 +482,7 @@ const DESCRICAO = new Map([
   ["carga", "Gera todos os pacotes inteiros, para a interface começar do zero."],
   ["diagnostico", "Confere o banco da coleta contra a especificação e reescreve o relatório."],
   ["testes", "Roda os testes automáticos, sem o banco. Pode ser interrompido."],
+  ["dia", "Roda a rotina, a carga completa e o publicador da API, em sequência, e leva os dados do dia até o banco da API."],
 ]);
 const CLASSE_STATUS = new Map([["ok", "ok"], ["parcial", "warn"], ["falhou", "bad"], ["em_andamento", "idle"]]);
 const ROTULO_STATUS = new Map([
@@ -492,6 +502,7 @@ const CLASSE_MARCO = new Map([
   ["pulada", ["skip", "–"]],
 ]);
 const CLASSE_TRECHO = new Map([["coleta", "coleta"], ["processamento", "proc"], ["folga", "folga"]]);
+const CLASSE_ETAPA = new Map([["concluida", "ok"], ["falhou", "bad"], ["pulada", "warn"], ["em_andamento", "idle"]]);
 const ESTADOS = ["ok", "warn", "bad", "idle"];
 
 const $ = (id) => document.getElementById(id);
@@ -765,6 +776,24 @@ function ul(itens) {
   return lista;
 }
 
+// Primeiros `max` itens, "e mais N" e, havendo resto, todos dentro de um <details>. Sem max numérico, mostra todos.
+function listaComMais(textos, max) {
+  const todos = listaSegura(textos).map((t) => txt(t));
+  const corte = Number.isFinite(max) ? Math.max(0, Math.floor(max)) : todos.length;
+  const primeiros = todos.slice(0, corte);
+  const resto = todos.length - primeiros.length;
+  const bloco = criar("div", null, "afetadas");
+  bloco.appendChild(document.createTextNode(primeiros.join(", ")));
+  if (resto > 0) {
+    bloco.appendChild(document.createTextNode(" e mais " + resto));
+    const det = criar("details");
+    det.appendChild(criar("summary", "ver todas (" + todos.length + ")"));
+    det.appendChild(ul(todos));
+    bloco.appendChild(det);
+  }
+  return bloco;
+}
+
 // linhas: arrays de valores (texto ou nó). Valores nulos aparecem como "sem dados".
 function tabela(cabecalhos, linhas) {
   const wrap = criar("div", null, "tabela-rolagem");
@@ -903,6 +932,24 @@ function seta() {
   return s;
 }
 
+// Etapas do daily da coleta (foto do execucao.json): as que não concluíram ficam destacadas.
+function etapasColetaNode(ce) {
+  const bloco = criar("div", null, "etapas");
+  if (ce.disponivel !== true) {
+    bloco.appendChild(criar("span", txt(ce.motivo), "meta"));
+    return bloco;
+  }
+  listaSegura(ce.etapas).filter((e) => e && typeof e === "object").forEach((e) => {
+    const item = criar("span", null, "etapa" + (e.destaque === true ? " destaque" : ""));
+    const pill = criar("span", null, "pill " + (CLASSE_ETAPA.get(e.status) || "idle"));
+    pill.appendChild(criar("span", null, "dot"));
+    item.appendChild(pill);
+    item.appendChild(document.createTextNode(" " + txt(e.rotulo) + (e.destaque === true ? " (" + txt(e.texto) + ")" : "")));
+    bloco.appendChild(item);
+  });
+  return bloco;
+}
+
 function renderFluxo(d) {
   const v = d.visao || {};
   const fx = v.fluxo || {};
@@ -933,7 +980,11 @@ function renderFluxo(d) {
   const etapas = typeof c.etapas_concluidas === "number" && typeof c.etapas_total === "number"
     ? c.etapas_concluidas + " de " + c.etapas_total + " etapas concluídas"
     : txt(c.nota);
-  const coleta = estagio(c, "1 · Coleta (outro módulo)", [txt(c.resumo), etapas], "fluxo-coleta", botaoAjuda("coleta"));
+  const ce = v.coleta_etapas || {};
+  const situacao = typeof ce.consulta_hhmm === "string" ? "Situação na consulta das " + ce.consulta_hhmm : "Situação na consulta: " + SEM;
+  const coleta = estagio(c, "1 · Coleta (outro módulo)",
+    [txt(c.resumo), ce.resumo || etapas, etapasColetaNode(ce), metaComAjuda(situacao, botaoAjuda("etapas_coleta"))],
+    "fluxo-coleta", botaoAjuda("coleta"));
 
   const duracao = "Duração " + txt(p.duracao_texto) + (typeof p.n_acoes === "number" ? " · " + p.n_acoes + " ações" : "");
   const rodada = "Rodada " + txt(p.rodada) + (typeof p.n_avisos === "number" ? " · " + p.n_avisos + " avisos" : "");
@@ -946,10 +997,17 @@ function renderFluxo(d) {
   let publicado = "Top 5: " + SEM;
   if (exp.top_publicado === true) publicado = "Top 5 publicado na interface";
   else if (exp.top_publicado === false) publicado = "Top 5 retido (não enviado à interface)";
-  const interfaceNo = estagio(i, "3 · Interface", [metaComAjuda(contrato, botaoAjuda("contrato")), publicado],
+  const banco = estagio(v.banco, "3 · Banco da API", listaSegura((v.banco || {}).linhas), "fluxo-banco", botaoAjuda("banco_api"));
+
+  const apiBloco = v.api || {};
+  const tempoApi = apiBloco.tempo && typeof apiBloco.tempo.texto === "string" ? apiBloco.tempo.texto : null;
+  const linhasApi = listaSegura(apiBloco.linhas).map((l) => (l === tempoApi ? metaComAjuda(l, botaoAjuda("tempo_api")) : l));
+  const apiNo = estagio(apiBloco, "4 · API", linhasApi, "fluxo-api", botaoAjuda("api"));
+
+  const interfaceNo = estagio(i, "5 · Interface", [metaComAjuda(contrato, botaoAjuda("contrato")), publicado],
     "fluxo-interface", botaoAjuda("interface"), botaoAjuda("pacotes"));
 
-  fluxo.replaceChildren(coleta, seta(), processamento, seta(), interfaceNo);
+  fluxo.replaceChildren(coleta, seta(), processamento, seta(), banco, seta(), apiNo, seta(), interfaceNo);
 }
 
 // ---- linha do tempo da manhã ----
@@ -1005,7 +1063,7 @@ function renderLinhaTempo(d) {
 
 function origemData(id, d) {
   if (id === "carga") return " (última rotina diária)";
-  if (id !== "rotina") return "";
+  if (id !== "rotina" && id !== "dia") return "";
   const origem = (d.data_rotina || {}).origem;
   return origem === "hoje" ? " (hoje)" : origem === "ultimo_pregao" ? " (último pregão)" : "";
 }
@@ -1034,7 +1092,10 @@ function cartaoBotao(id, b, d) {
 
 function renderBotoes(d) {
   const botoes = d.botoes || {};
-  $("botoes").replaceChildren(...Object.keys(botoes).map((id) => cartaoBotao(id, botoes[id] || {}, d)));
+  // "Rodar o dia completo" vem primeiro: é o caminho normal da manhã.
+  const ids = Object.keys(botoes);
+  const ordem = ids.includes("dia") ? ["dia", ...ids.filter((id) => id !== "dia")] : ids;
+  $("botoes").replaceChildren(...ordem.map((id) => cartaoBotao(id, botoes[id] || {}, d)));
 }
 
 // Etapas do Executor vêm prontas em `marcos` (servidor); aqui só se desenha.
@@ -1255,7 +1316,7 @@ function renderEtapas(d) {
 
 // ---- saúde dos dados ----
 
-function cartaoSaude(c) {
+function cartaoSaude(c, sv) {
   const cartao = criar("div", null, "hc " + farol(c.farol));
   const id = typeof c.id === "string" ? c.id : "";
   const cab = criar("div", null, "tit-linha");
@@ -1267,6 +1328,14 @@ function cartaoSaude(c) {
   cartao.appendChild(cab);
   cartao.appendChild(criar("span", txt(c.numero), "n"));
   cartao.appendChild(criar("p", txt(c.texto)));
+  const af = sv && sv.afetadas && id ? sv.afetadas[id] : null;
+  const itensAf = af ? listaSegura(af.itens).filter((i) => i && typeof i === "object") : [];
+  if (itensAf.length) {
+    const p = criar("p");
+    p.appendChild(criar("strong", txt(af.titulo) + ": "));
+    p.appendChild(listaComMais(itensAf.map((i) => txt(i.rotulo) + (i.detalhe ? " (" + i.detalhe + ")" : "")), sv.afetadas_max));
+    cartao.appendChild(p);
+  }
   if (c.fonte) cartao.appendChild(criar("span", c.fonte, "so"));
   const fazer = id ? linhaFazer("saude-c-" + id) : null;
   if (fazer) cartao.appendChild(fazer);
@@ -1282,7 +1351,44 @@ function renderSaudeCartoes(d) {
     cont.replaceChildren(motivo(sv.disponivel === false ? sv.motivo : SEM));
     return;
   }
-  cont.replaceChildren(...listaSegura(sv.cartoes).map(cartaoSaude));
+  cont.replaceChildren(...listaSegura(sv.cartoes).map((c) => cartaoSaude(c, sv)));
+}
+
+// Novidades da coleta (topo da Saúde): frase, quando foi comparado e a lista recolhida.
+function renderNovidades(d) {
+  const nv = (d.visao || {}).novidades || {};
+  const tit = $("novid-tit");
+  if (!tit.querySelector(".ajuda-btn")) tit.appendChild(botaoAjuda("novidades"));
+  const lista = $("novid-lista");
+  if (nv.disponivel !== true) {
+    $("novid-frase").textContent = txt(nv.motivo);
+    $("novid-quando").textContent = "";
+    $("novid-det").hidden = true;
+    lista.replaceChildren();
+    return;
+  }
+  $("novid-frase").textContent = txt(nv.frase);
+  $("novid-quando").textContent = "Diagnóstico de " + dataBr(nv.atual_em) + " comparado com o de " + dataBr(nv.anterior_em);
+  $("novid-det").hidden = false;
+  lista.replaceChildren(...listaSegura(nv.itens).filter((it) => it && typeof it === "object")
+    .map((it) => criar("li", txt(it.texto))));
+}
+
+// Dia atípico: o cartão só aparece quando há dia atípico ativo; sem ele, a manhã ocupa a faixa toda.
+function renderDiaAtipico(d) {
+  const da = (d.visao || {}).dia_atipico || {};
+  const card = $("dia-atipico");
+  card.hidden = da.ativo !== true;
+  $("faixa-manha").classList.toggle("uma", card.hidden);
+  if (card.hidden) return;
+  if (!$("atip-tit").querySelector(".ajuda-btn")) $("atip-tit").appendChild(botaoAjuda("dia_atipico"));
+  $("atip-texto").textContent = txt(da.texto);
+  $("atip-indices").textContent = txt(da.ibov_texto) + " · " + txt(da.smll_texto);
+  $("atip-frase").textContent = txt(da.frase);
+  $("atip-fonte").textContent = typeof da.fonte === "string" ? da.fonte : "";
+  const acoes = listaSegura(da.acoes).filter((a) => a && typeof a === "object");
+  $("atip-acoes").replaceChildren(listaComMais(acoes.map((a) => txt(a.ticker) + " " + txt(a.texto)), da.max));
+  pilula($("pill-atip"), "warn", da.amplo === true ? "amplo" : "isolado");
 }
 
 // Diagnóstico completo (dentro do bloco recolhível de Saúde).
@@ -1520,7 +1626,9 @@ function renderizarPainel(d) {
   pillHoje(d);
   renderFluxo(d);
   renderLinhaTempo(d);
+  renderDiaAtipico(d);
   renderSaudeCartoes(d);
+  renderNovidades(d);
   renderSaude(d);
   renderExperimento(d);
   renderHistorico(d);

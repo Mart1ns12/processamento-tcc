@@ -1,0 +1,35 @@
+{
+ "pacote": "resumo_acao",
+ "registros": [
+  {
+   "ticker": "ABEV3",
+   "data_referencia": "2026-10-22",
+   "rentabilidade": {
+    "d1": {
+     "valor": 0.012582329404012382,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "PETR4",
+   "data_referencia": "2026-10-22",
+   "rentabilidade": {
+    "d1": {
+     "valor": 0.0013853130918559664,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "ticker": "VALE3",
+   "data_referencia": "2026-10-22",
+   "rentabilidade": {
+    "d1": {
+     "valor": -0.039668860678650275,
+     "status": "ok"
+    }
+   }
+  }
+ ]
+}

@@ -90,9 +90,28 @@ def test_significado_por_acao_e_codigo():
 
 
 def test_acoes_fixas():
-    assert set(ACOES) == {"rotina", "carga", "diagnostico", "testes"}
+    assert set(ACOES) == {"dia", "rotina", "carga", "diagnostico", "testes"}
     assert ACOES["testes"].pode_parar is True
     assert ACOES["rotina"].pode_parar is False
+
+
+def test_dia_e_a_primeira_acao_e_nao_pode_parar():
+    assert list(ACOES)[0] == "dia"
+    assert ACOES["dia"].pode_parar is False
+
+
+def test_montar_comando_dia_com_data():
+    assert montar_comando("dia", d_rotina=date(2026, 10, 26), d_carga=None) == [
+        sys.executable, "-m", "processamento.painel.dia", "--data", "2026-10-26"]
+
+
+def test_montar_comando_dia_sem_data_devolve_none():
+    assert montar_comando("dia", d_rotina=None, d_carga=date(2026, 10, 26)) is None
+
+
+def test_significado_do_dia_com_codigo_seis():
+    assert significado("dia", 6, False) == (
+        "rotina falhou, mas há uma carga completa antiga deste dia: publicador não rodado")
 
 
 def test_executor_estado_vazio(tmp_path):
@@ -211,7 +230,7 @@ def test_executor_mantem_so_os_logs_mais_recentes(tmp_path):
 
 
 def test_nenhum_comando_destrava_o_teste_final():
-    assert set(ACOES) == {"rotina", "carga", "diagnostico", "testes"}
+    assert set(ACOES) == {"dia", "rotina", "carga", "diagnostico", "testes"}
     for acao_id in ACOES:
         argv = montar_comando(acao_id, d_rotina=date(2026, 10, 23), d_carga=date(2026, 10, 23))
         assert argv is not None

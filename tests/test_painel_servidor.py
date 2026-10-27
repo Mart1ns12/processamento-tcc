@@ -7,6 +7,7 @@ são `sys.executable -c ...` (nada de rotina, carga ou diagnóstico de verdade).
 import http.client
 import json
 import shutil
+import socket
 import subprocess
 import sys
 import threading
@@ -18,7 +19,7 @@ import pytest
 
 from fabrica_painel import montar_raiz
 from processamento.calendario import SP
-from processamento.painel import acoes, ajuda, leitores
+from processamento.painel import acoes, ajuda, api, leitores
 from processamento.painel.servidor import (
     CSP_PAGINA,
     criar_servidor,
@@ -92,10 +93,11 @@ def subir(tmp_path):
     """Sobe servidores de teste (uma raiz nova em tmp_path/<nome> para cada um) e os encerra no fim."""
     ativos = []
 
-    def _subir(relogio=RELOGIO, nome="a"):
+    def _subir(relogio=RELOGIO, nome="a", consultar_api=None):
         raiz = montar_raiz(tmp_path / nome)
         chamadas: list = []
-        s = criar_servidor(raiz, 0, montar_comando=_montar_falso(chamadas), relogio=relogio)
+        s = criar_servidor(raiz, 0, montar_comando=_montar_falso(chamadas), relogio=relogio,
+                           consultar_api=consultar_api)
         s.chamadas = chamadas
         threading.Thread(target=s.serve_forever, daemon=True).start()
         ativos.append(s)
@@ -197,7 +199,7 @@ def test_api_painel_visao_com_as_fixtures(srv):
     _, _, corpo = pedir(srv, "GET", "/api/painel")
     dados = _json(corpo)
     assert set(dados["visao"]) == {"fluxo", "linha_tempo", "saude", "calendario", "resumo", "tempos", "ajuda",
-                                   "dia", "glossario"}
+                                   "dia", "glossario", "api", "banco", "coleta_etapas", "novidades", "dia_atipico"}
     fluxo = dados["visao"]["fluxo"]
     assert fluxo["coleta"]["estado"] == "ok"
     assert fluxo["coleta"]["etapas_concluidas"] == 9
@@ -218,7 +220,8 @@ def test_api_painel_visao_com_as_fixtures(srv):
     assert linha["folga_s"] is None
     cartoes = dados["visao"]["saude"]["cartoes"]
     assert cartoes[0]["numero"] == "2 divergências"
-    assert [c["farol"] for c in cartoes] == ["bad", "idle", "idle", "idle", "idle", "idle"]
+    # O 7º cartão é a "Coerência do mercado" (pregão de 22/10 da fixture: sem sinal suspeito).
+    assert [c["farol"] for c in cartoes] == ["bad", "idle", "idle", "idle", "idle", "idle", "ok"]
     meses = dados["visao"]["calendario"]
     assert meses[0]["titulo"] == "outubro de 2026"
     dia_23 = next(d for d in meses[0]["dias"] if d["data"] == "2026-10-23")
@@ -247,6 +250,8 @@ def test_api_painel_resumo_tempos_e_ajuda(srv):
                         "origem": None},
         "testes": {"segundos": 96, "curto": "~2 min", "texto": "Da última vez, pelo painel, levou 1 min 36 s.",
                    "origem": "painel"},
+        "dia": {"segundos": None, "curto": None, "texto": "Ainda sem medição: pode levar alguns minutos.",
+                "origem": None},
     }
     a = dados["visao"]["ajuda"]
     assert set(a) == set(ajuda.AJUDA)
@@ -497,3 +502,123 @@ def test_aviso_da_rotina_explica_o_registro_do_top5():
     assert frase in _aviso_rotina({"data": "2026-10-23", "origem": "ultimo_pregao"}, hoje)
     assert frase in _aviso_rotina({"data": "2026-10-23", "origem": "hoje"}, hoje)
     assert _aviso_rotina({"data": None}, hoje) is None
+
+
+# ---------------------------------------------------------------- API e botão "dia" (sem rede, sem chave)
+
+@pytest.fixture
+def sem_rede(monkeypatch):
+    """Bloqueia qualquer conexão de saída; 127.0.0.1 continua livre (é o próprio servidor de teste)."""
+    conectar_real = socket.socket.connect
+
+    def _conectar(self, endereco):
+        if isinstance(endereco, tuple) and endereco and endereco[0] == "127.0.0.1":
+            return conectar_real(self, endereco)
+        raise AssertionError(f"conexão de saída bloqueada no teste: {endereco!r}")
+
+    monkeypatch.setattr(socket.socket, "connect", _conectar)
+
+
+def _consultor_falso(chamadas: list):
+    """Consultor da API de mentira: registra cada consulta e devolve uma resposta saudável."""
+
+    def consultar(base, timeout_s):
+        chamadas.append((base, timeout_s))
+        return {"respondeu": True, "http": 200, "ms": 840, "status": "ok", "banco": "ok",
+                "ultima_publicacao": "2026-10-23", "erro": None}
+
+    return consultar
+
+
+def _configurar_api(tmp_api: Path, raiz: Path) -> Path:
+    """Liga a API falsa na raiz de teste: api_url de exemplo e uma pasta de projeto com .venv, publicador e um .env
+    com segredo (que nunca pode aparecer nas respostas)."""
+    (tmp_api / ".venv" / "Scripts").mkdir(parents=True)
+    (tmp_api / ".venv" / "Scripts" / "python.exe").write_bytes(b"")
+    (tmp_api / "publicador").mkdir()
+    (tmp_api / "publicador" / "__main__.py").write_text("", encoding="utf-8")
+    (tmp_api / '.env').write_text("PROC_API_CHAVES=chave-secreta-xyz\n", encoding="utf-8")
+    yaml = raiz / "processamento" / "config" / "painel.yaml"
+    texto = yaml.read_text(encoding="utf-8").rstrip("\n") + "\n"
+    texto += 'api_url: "https://api.exemplo.invalid"\n' + f'dir_api: "{tmp_api.as_posix()}"\n'
+    yaml.write_text(texto, encoding="utf-8")
+    return tmp_api
+
+
+def test_dia_sem_api_configurada_fica_bloqueado_e_nao_quebra(srv):
+    _, _, corpo = pedir(srv, "GET", "/api/painel")
+    dados = _json(corpo)
+    assert dados["visao"]["api"]["estado"] == "idle"
+    assert dados["visao"]["api"]["titulo"] == "Não configurada"
+    assert dados["visao"]["banco"]["estado"] == "idle"
+    assert dados["visao"]["dia_atipico"]["ativo"] is False
+    assert dados["visao"]["coleta_etapas"]["resumo"] == "9 de 9 etapas concluídas"
+    assert dados["visao"]["novidades"]["disponivel"] is False
+    assert (srv.raiz / "logs" / "painel" / "diagnostico_visto.log").is_file()
+    assert list(dados["botoes"])[0] == "dia"
+    assert dados["botoes"]["dia"]["habilitado"] is False
+    assert dados["botoes"]["dia"]["motivo"] == (
+        "Projeto da API não configurado: falta dir_api em processamento/config/painel.yaml.")
+    assert dados["visao"]["saude"]["afetadas"]["contrato"]["total"] == 1
+
+
+def test_api_configurada_consulta_uma_vez_e_nao_vaza_a_chave(subir, tmp_path, sem_rede):
+    consultas: list = []
+    s = subir(nome="api", consultar_api=_consultor_falso(consultas))
+    _configurar_api(tmp_path / "projeto_api", s.raiz)
+    _, _, primeiro = pedir(s, "GET", "/api/painel")
+    _, _, corpo = pedir(s, "GET", "/api/painel")
+    assert len(consultas) == 1
+    assert consultas[0] == ("https://api.exemplo.invalid", 5)
+    dados = _json(corpo)
+    assert dados["visao"]["api"]["titulo"] == "No ar"
+    assert dados["visao"]["banco"]["titulo"] == "Em dia"
+    assert dados["botoes"]["dia"]["habilitado"] is True
+    medicoes = (s.raiz / "logs" / "painel" / "api_tempos.log").read_text(encoding="utf-8").splitlines()
+    assert len(medicoes) == 1
+    assert b"chave-secreta-xyz" not in primeiro
+    assert b"chave-secreta-xyz" not in corpo
+
+
+def test_post_dia_com_api_configurada_passa_a_data_da_rotina(subir, tmp_path, sem_rede):
+    s = subir(nome="dia", consultar_api=_consultor_falso([]))
+    _configurar_api(tmp_path / "projeto_api", s.raiz)
+    status, _, corpo = pedir(s, "POST", "/api/acao/iniciar", {"acao": "dia"})
+    assert status == 202, corpo
+    assert s.chamadas[0] == ("dia", date(2026, 10, 23), date(2026, 10, 23))
+    assert s.executor.esperar(30)
+
+
+def test_consulta_da_api_manda_so_accept_e_user_agent(sem_rede):
+    enviado: dict = {}
+
+    class _Resposta:
+        status = 200
+
+        def read(self, _limite=None):
+            return b'{"status":"ok","banco":"ok","ultima_publicacao":"2026-10-23"}'
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    def abrir(req, timeout):
+        enviado["url"] = req.full_url
+        enviado["cabecalhos"] = {nome.lower() for nome in req.headers}
+        return _Resposta()
+
+    resultado = api.consultar_saude("https://api.exemplo.invalid", 5, abrir=abrir)
+    assert resultado["respondeu"] is True
+    assert resultado["http"] == 200
+    assert enviado["url"] == "https://api.exemplo.invalid/v1/saude"
+    assert enviado["cabecalhos"] == {"accept", "user-agent"}
+
+
+def test_painel_nao_tem_cabecalho_de_chave_da_api():
+    proibidos = ["X-" + "API-Key", "Author" + "ization"]
+    for arquivo in sorted((REPO / "processamento" / "painel").glob("*.py")):
+        texto = arquivo.read_text(encoding="utf-8")
+        for termo in proibidos:
+            assert termo not in texto, f"{arquivo.name} contém {termo!r}"

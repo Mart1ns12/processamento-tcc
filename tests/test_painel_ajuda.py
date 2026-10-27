@@ -11,12 +11,14 @@ IDS = {"resumo", "fluxo", "coleta", "processamento", "interface", "pacotes", "co
        "saude_quantidade_acoes", "saude_retornos", "saude_lacunas", "saude_horario_noticias",
        "saude_cobertura", "experimento", "teste_funcionamento", "cadeado", "modelo", "top5_retido",
        "chance", "modelo_sombra", "grafico", "faixa_acaso", "historico", "testes", "acao_rotina",
-       "acao_carga", "acao_diagnostico", "acao_testes"}
+       "acao_carga", "acao_diagnostico", "acao_testes", "api", "banco_api", "tempo_api", "novidades",
+       "dia_atipico", "etapas_coleta", "saude_coerencia_mercado", "acao_dia"}
 CHAVES_FAZER = {"saude_contrato", "saude_quantidade_acoes", "saude_retornos", "saude_lacunas",
                 "saude_horario_noticias", "saude_cobertura", "saude_sem_dados", "saude_sem_diagnostico",
                 "coleta_warn", "coleta_bad", "rotina_falhou", "rotina_parcial", "rotina_interrompida",
                 "sem_rotina", "atraso_prazo", "calendario_erro", "testes_falhas", "testes_interrompidos",
-                "trava_abandonada"}
+                "trava_abandonada", "api_sem_resposta", "api_banco_fora", "api_lenta", "banco_atrasado",
+                "saude_coerencia_mercado", "dia_atipico_amplo", "dia_atipico_isolado"}
 TERMOS_GLOSSARIO = ["Pregão", "Ibovespa", "Indicador", "Indisponível", "Histórico insuficiente",
                     "Pacote", "Rodada", "Diagnóstico", "Walk-forward", "Faixa do acaso", "Calibração",
                     "P/L", "P/VP", "Payout", "Dividend yield"]
@@ -29,8 +31,8 @@ def _todos():
 
 def _sem_placeholders_e_excecoes(texto):
     # "top 5" (nome do produto), "B3" (nome da bolsa) e "95%" (definição da faixa) não são dados.
-    sem = re.sub(r"\{[a-z_]+\}", "", texto)
-    return re.sub(r"(?i)top 5", "", sem).replace("B3", "").replace("95%", "")
+    sem = re.sub(r"\{[a-z0-9_]+\}", "", texto)
+    return re.sub(r"(?i)top 5", "", sem).replace("B3", "").replace("95%", "").replace("IVVB11", "")
 
 
 def test_ids_e_chaves_completos():
@@ -85,6 +87,19 @@ def test_montar_ajuda_preenche_campos():
                   'do experimento.'),
     }
     assert "o prazo da rotina (09:45) e a abertura da bolsa (sem dados)" in a["linha_tempo"]["texto"]
+
+
+def test_textos_novos_recebem_os_valores_do_yaml():
+    a = montar_ajuda({"atipico_min_acoes": "5", "atipico_retorno": "30%", "atipico_ibov": "5%",
+                      "coerencia_ivvb11": "3%", "coerencia_dif": "2%", "tempo_limite_api": "2 s",
+                      "etapas_conferidas": "precos, noticias, enriquecimento"})
+    assert "pelo menos 5 ações" in a["dia_atipico"]["texto"]
+    assert "acima de 30% em módulo" in a["dia_atipico"]["texto"]
+    assert "mais que 5%" in a["dia_atipico"]["texto"]
+    assert "mais de 3%" in a["saude_coerencia_mercado"]["texto"]
+    assert "maior que 2%" in a["saude_coerencia_mercado"]["texto"]
+    assert "Média acima de 2 s fica amarela" in a["tempo_api"]["texto"]
+    assert "nunca envia chave nem senha" in a["api"]["texto"]
 
 
 def test_montar_ajuda_sem_chaves_no_resultado():

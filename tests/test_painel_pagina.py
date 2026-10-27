@@ -218,7 +218,7 @@ def test_tema_claro_e_escuro_com_tokens():
 
 def test_acoes_fixas_no_painel():
     texto = _pagina()
-    for trecho in ["Espera a coleta do dia", "Gera todos os pacotes inteiros", "Confere o banco da coleta", "Roda os testes automáticos"]:
+    for trecho in ["Espera a coleta do dia", "Gera todos os pacotes inteiros", "Confere o banco da coleta", "Roda os testes automáticos", "Roda a rotina, a carga completa e o publicador da API"]:
         assert trecho in texto, trecho
     assert "/api/acao/iniciar" in texto
     assert "/api/acao/parar" in texto
@@ -234,7 +234,7 @@ def test_secoes_numeradas_na_ordem_de_leitura():
 
 def test_cartoes_dentro_das_secoes():
     texto = _pagina()
-    ordem = ['id="sec-fluxo"', 'id="agora"', 'id="linha-tempo"', 'id="sec-saude"', 'id="saude"', 'id="sec-experimento"', 'id="experimento"', 'id="sec-historico"', 'id="historico"', 'id="sec-acoes"', 'id="comandos"', 'id="testes"']
+    ordem = ['id="sec-fluxo"', 'id="agora"', 'id="linha-tempo"', 'id="dia-atipico"', 'id="sec-saude"', 'id="saude"', 'id="novidades"', 'id="sec-experimento"', 'id="experimento"', 'id="sec-historico"', 'id="historico"', 'id="sec-acoes"', 'id="comandos"', 'id="testes"']
     posicoes = [texto.index(trecho) for trecho in ordem]
     assert posicoes == sorted(posicoes)
 
@@ -277,7 +277,7 @@ def test_ids_de_ajuda_batem_com_o_dicionario():
     texto = _pagina()
     estaticos = set(re.findall(r'data-ajuda="([a-z0-9_]+)"', texto))
     literais = set(re.findall(r'botaoAjuda\("([a-z0-9_]+)"\)', texto))
-    dinamicos = {"saude_" + c[0] for c in _CARTOES} | {"acao_" + a for a in ACOES}
+    dinamicos = {"saude_" + c[0] for c in _CARTOES} | {"saude_coerencia_mercado"} | {"acao_" + a for a in ACOES}
     assert estaticos | literais | dinamicos == set(AJUDA)
     assert len(estaticos) == 14
     assert 'botaoAjuda("saude_" + id)' in texto
@@ -344,3 +344,52 @@ def test_calendario_apaga_dias_futuros_e_cartao_alinhado_no_topo():
     assert 'classes.push("fut")' in texto
     assert "celulaDia(dia, hojeIso)" in texto
     assert "align-content:start}" in texto
+
+
+# ---------------------------------------------------------------- Fase F9: fluxo de 5 estágios, dia atípico, novidades, afetadas
+
+
+def test_fluxo_cinco_estagios_api_banco_e_tempo():
+    texto = _pagina()
+    for trecho in [
+        '"fluxo-banco"',
+        '"fluxo-api"',
+        'botaoAjuda("api")',
+        'botaoAjuda("banco_api")',
+        'botaoAjuda("tempo_api")',
+        'botaoAjuda("etapas_coleta")',
+        "coleta_etapas",
+        "3 · Banco da API",
+        "4 · API",
+        "5 · Interface",
+        "fluxo.replaceChildren(coleta, seta(), processamento, seta(), banco, seta(), apiNo, seta(), interfaceNo)",
+        "repeat(7,minmax(0,1fr))",
+        "@container (max-width:1100px)",
+        ".flow .arrow{display:none}",
+    ]:
+        assert trecho in texto, trecho
+    assert "http://" not in texto and "https://" not in texto
+
+
+def test_dia_atipico_novidades_e_afetadas():
+    texto = _pagina()
+    for trecho in [
+        'id="faixa-manha"',
+        'id="dia-atipico"',
+        'botaoAjuda("dia_atipico")',
+        'botaoAjuda("novidades")',
+        'id="novidades"',
+        "afetadas",
+        "e mais ",
+        "ver todas",
+        'data-fazer="dia-atipico"',
+        'dia_atipico',
+    ]:
+        assert trecho in texto, trecho
+
+
+def test_botao_dia_primeiro_em_acoes_e_origem_da_data():
+    texto = _pagina()
+    assert 'const ordem = ids.includes("dia") ? ["dia", ...ids.filter((id) => id !== "dia")] : ids;' in texto
+    assert 'if (id !== "rotina" && id !== "dia") return "";' in texto
+    assert '["dia", "Roda a rotina, a carga completa e o publicador da API' in texto

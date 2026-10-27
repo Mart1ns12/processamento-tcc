@@ -28,6 +28,7 @@ class Acao:
 
 
 ACOES: dict[str, Acao] = {
+    "dia": Acao("dia", "Rodar o dia completo", True, False),
     "rotina": Acao("rotina", "Rodar a rotina do dia", True, False),
     "carga": Acao("carga", "Gerar a carga completa", True, False),
     "diagnostico": Acao("diagnostico", "Rodar o diagnóstico do banco", True, False),
@@ -35,6 +36,15 @@ ACOES: dict[str, Acao] = {
 }
 
 SIGNIFICADOS: dict[str, dict[int, str]] = {
+    "dia": {
+        0: "publicado: completo, ou só a execução quando a rotina falhou (veja o log)",
+        1: "publicador recusou a publicação (motivo no log)",
+        2: "configuração do painel: pasta ou Python do projeto da API não encontrados",
+        3: "a rotina não gerou saída nova (sem pregão, configuração, banco ou trava): nada publicado",
+        4: "carga completa falhou: nada publicado",
+        5: "publicador: configuração ou banco da API",
+        6: "rotina falhou, mas há uma carga completa antiga deste dia: publicador não rodado",
+    },
     "rotina": {
         0: "ok, parcial ou dia sem pregão (veja o log)",
         2: "configuração (banco, parâmetros ou calendário)",
@@ -77,6 +87,8 @@ def montar_comando(acao_id: str, *, d_rotina: date | None, d_carga: date | None)
     """Monta o argv da ação (None quando falta a data). Levanta KeyError para id desconhecido."""
     if acao_id not in ACOES:
         raise KeyError(acao_id)
+    if acao_id == "dia":
+        return None if d_rotina is None else [sys.executable, "-m", "processamento.painel.dia", "--data", d_rotina.isoformat()]
     if acao_id == "rotina":
         if d_rotina is None:
             return None

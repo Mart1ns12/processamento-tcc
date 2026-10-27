@@ -285,3 +285,85 @@ def cartoes_saude(caminho: Path) -> dict:
         except Exception:
             cartoes.append(_cartao(id_, titulo, "idle", "sem dados", "Não foi possível ler este cartão.", None))
     return {"disponivel": True, "motivo": None, "gerado_em": diag["gerado_em"], "cartoes": cartoes}
+
+
+# ---------------------------------------------------------------- linhas afetadas
+
+def _afetadas(titulo: str, itens: list[dict]) -> dict | None:
+    if not itens:
+        return None
+    return {"titulo": titulo, "itens": itens, "total": len(itens)}
+
+
+def _tabela_por_prefixo(linhas: list[str], prefixo: str) -> list[dict[str, str]]:
+    """Tabela do primeiro `### ` cujo título começa com `prefixo`; lista vazia se não existe."""
+    alvo = next((linha for linha in linhas if linha.startswith("### " + prefixo)), None)
+    if alvo is None:
+        return []
+    return tabela_md(linhas, alvo[len("### "):]) or []
+
+
+def _afetadas_contrato(caminho: Path) -> dict | None:
+    diag = ler_diagnostico(caminho)
+    if not diag.get("disponivel"):
+        return None
+    itens = [{"rotulo": d["tabela"], "detalhe": d["tema"]}
+             for d in diag["divergencias"] if d["tabela"] not in ("", "-")]
+    return _afetadas("Tabelas afetadas", itens)
+
+
+def _afetadas_quantidade(linhas: list[str]) -> dict | None:
+    achada = _secao(linhas, "Quantidade de ações suspeita")
+    if achada is None:
+        return None
+    tab = tabela_md(achada[2], "Empresas com quantidade de ações suspeita") or []
+    itens = [{"rotulo": t, "detalhe": None}
+             for r in tab for t in (r.get("tickers") or "").split(", ") if t]
+    return _afetadas("Empresas afetadas", itens)
+
+
+def _afetadas_retornos(linhas: list[str]) -> dict | None:
+    achada = _secao(linhas, "Retornos diários suspeitos")
+    if achada is None:
+        return None
+    tab = tabela_md(achada[2], "Retornos diários suspeitos") or []
+    itens = [{"rotulo": r["ticker"], "detalhe": _data_br(r.get("data", ""))} for r in tab if r.get("ticker")]
+    return _afetadas("Ações afetadas", itens)
+
+
+def _afetadas_lacunas(linhas: list[str]) -> dict | None:
+    achada = _secao(linhas, "Lacunas nas séries")
+    if achada is None:
+        return None
+    corpo = achada[2]
+    tabelas = _tabela_por_prefixo(corpo, "Lacunas em v1-precos") + (tabela_md(corpo, "Lacunas em v1-indices") or [])
+    itens = [{"rotulo": r.get("serie") or r.get("ticker", ""),
+              "detalhe": f"{_data_br(r.get('inicio', ''))} a {_data_br(r.get('fim', ''))}"}
+             for r in tabelas]
+    return _afetadas("Séries afetadas", itens)
+
+
+def afetadas_saude(caminho: Path) -> dict[str, dict]:
+    """Linhas afetadas de cada cartão (tabelas, empresas, ações e séries) do diagnóstico. Arquivo ausente: {}.
+
+    Só inclui o cartão quando há itens; `total` é o número de itens.
+    """
+    try:
+        linhas = caminho.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return {}
+    construtores = {
+        "contrato": lambda: _afetadas_contrato(caminho),
+        "quantidade_acoes": lambda: _afetadas_quantidade(linhas),
+        "retornos": lambda: _afetadas_retornos(linhas),
+        "lacunas": lambda: _afetadas_lacunas(linhas),
+    }
+    resultado: dict[str, dict] = {}
+    for id_, construtor in construtores.items():
+        try:
+            bloco = construtor()
+        except Exception:
+            bloco = None
+        if bloco:
+            resultado[id_] = bloco
+    return resultado

@@ -1,0 +1,10 @@
+# Fixture do painel.yaml (sem api_url e sem dir_api, para nenhum teste tocar a API real).
+api_timeout_s: 5
+api_intervalo_s: 60
+api_tempo_limite_s: 2.0
+api_medicoes: 10
+dia_atipico_min_acoes: 5
+dia_atipico_ibov_amplo: 0.05
+coerencia_ivvb11_min_abs: 0.03
+coerencia_ibov_mediana_dif: 0.02
+afetadas_max: 5

@@ -16,6 +16,7 @@ from processamento import calendario
 from processamento.calendario import SP
 from processamento.painel.acoes import ACOES
 from processamento.painel.ajuda import O_QUE_FAZER
+from processamento.painel.api import resumo_tempos
 from processamento.painel.leitores import _instante, formatar_duracao
 
 MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro",
@@ -311,8 +312,165 @@ def _ponto(nivel: str, texto: str, alvo: str, chave: str) -> dict:
     return {"nivel": nivel, "texto": texto, "alvo": alvo, "o_que_fazer": O_QUE_FAZER.get(chave)}
 
 
+ROTULOS_ETAPA = {"precos": "preços", "macro": "macro", "noticias": "notícias", "ipe": "IPE",
+                 "enriquecimento": "enriquecimento", "juiza": "juíza", "cadastro": "cadastro", "entrega": "entrega",
+                 "analise": "análise"}
+TEXTO_ETAPA = {"concluida": "concluída", "falhou": "falhou", "pulada": "pulada", "em_andamento": "em andamento"}
+
+
+def _real(valor: object) -> bool:
+    return isinstance(valor, (int, float)) and not isinstance(valor, bool)
+
+
+def _data_de(valor: object) -> date | None:
+    """Data de um date, de um datetime ou de texto AAAA-MM-DD; None se inválida."""
+    if isinstance(valor, datetime):
+        return valor.date()
+    if isinstance(valor, date):
+        return valor
+    return _data(valor)
+
+
+def _dd_mm_aaaa(valor: object) -> str | None:
+    d = _data_de(valor)
+    return None if d is None else f"{d:%d/%m/%Y}"
+
+
+def etapas_coleta(item: object) -> dict:
+    """Etapas do daily da coleta, com a situação de cada uma na consulta da rotina (foto do execucao.json)."""
+    coleta = _dic(_dic(item).get("coleta"))
+    consulta_hhmm, daily = coleta.get("consulta_hhmm"), coleta.get("daily")
+    etapas = coleta.get("etapas")
+    if not (isinstance(etapas, dict) and etapas):
+        motivo = coleta.get("nota") or coleta.get("motivo_texto") or "Coleta não consultada."
+        return {"disponivel": False, "motivo": motivo, "consulta_hhmm": consulta_hhmm, "daily": daily,
+                "etapas": [], "nao_concluidas": [], "resumo": None}
+    lista = []
+    for id_, valor in etapas.items():
+        status = valor.get("status") if isinstance(valor, dict) else valor
+        if not isinstance(status, str):
+            status = None
+        texto = "pendente" if status is None else TEXTO_ETAPA.get(status, status)
+        lista.append({"id": id_, "rotulo": ROTULOS_ETAPA.get(id_, id_), "status": status, "texto": texto,
+                      "destaque": status != "concluida"})
+    nao = [f"{e['rotulo']} ({e['texto']})" for e in lista if e["destaque"]]
+    concluidas = sum(1 for e in lista if e["status"] == "concluida")
+    frase = f"{concluidas} de {len(lista)} etapas concluídas"
+    if nao:
+        frase += " · não concluíram: " + ", ".join(nao)
+    return {"disponivel": True, "motivo": None, "consulta_hhmm": consulta_hhmm, "daily": daily,
+            "etapas": lista, "nao_concluidas": nao, "resumo": frase}
+
+
+def _banco_fora(consulta: dict) -> bool:
+    """A API respondeu, mas diz que o banco dela não responde (HTTP 503 ou banco diferente de "ok")."""
+    return consulta.get("http") == 503 or consulta.get("banco") != "ok"
+
+
+def _ponto_api(nivel: str, texto: str, chave: str) -> dict:
+    return {"nivel": nivel, "texto": texto, "chave": chave}
+
+
+def bloco_api(situacao: object, limite_s: object) -> dict:
+    """Bloco "API": se o serviço respondeu, se o banco dele respondeu e quanto tempo a resposta levou."""
+    s = _dic(situacao)
+    limite = limite_s if _real(limite_s) else None
+    medicoes = [m for m in s.get("medicoes") or [] if isinstance(m, dict)]
+    tempo = resumo_tempos(medicoes, limite)
+    if s.get("configurada") is not True:
+        return {"configurada": False, "estado": "idle", "titulo": "Não configurada", "status": None, "banco": None,
+                "ultima_publicacao": None, "consultado_em": None, "tempo": tempo,
+                "linhas": [s.get("erro_config") or "API não configurada."], "pontos": []}
+    consulta = s.get("consulta")
+    if not isinstance(consulta, dict):
+        return {"configurada": True, "estado": "idle", "titulo": "sem dados", "status": None, "banco": None,
+                "ultima_publicacao": None, "consultado_em": None, "tempo": tempo, "linhas": [], "pontos": []}
+
+    hora = _sp(s.get("consultado_em"))
+    ultima = _data_de(consulta.get("ultima_publicacao"))
+    status, banco, http = consulta.get("status"), consulta.get("banco"), consulta.get("http")
+    linhas, pontos = [], []
+    if consulta.get("respondeu") is not True:
+        timeout = s.get("timeout_s")
+        timeout_txt = f"{timeout:g}".replace(".", ",") if _real(timeout) else "sem dados"
+        estado, titulo = "warn", "Sem resposta"
+        linhas.append(f"Sem resposta em até {timeout_txt} s ({consulta.get('erro') or 'sem detalhe'})")
+        pontos.append(_ponto_api("warn", "API sem resposta", "api_sem_resposta"))
+    elif _banco_fora(consulta):
+        estado, titulo = "bad", "Banco da API fora"
+        linhas.append(f"Status {status or 'sem dados'} · banco {banco or 'sem dados'}")
+        pontos.append(_ponto_api("bad", "Banco da API fora", "api_banco_fora"))
+    elif http == 200 and status == "ok" and banco == "ok":
+        estado, titulo = "ok", "No ar"
+        linhas.append("Status ok · banco ok")
+    else:
+        estado, titulo = "warn", f"Resposta inesperada (HTTP {http or 'sem dados'})"
+        linhas.append(f"Status {status or 'sem dados'} · banco {banco or 'sem dados'}")
+        pontos.append(_ponto_api("warn", f"API com resposta inesperada (HTTP {http or 'sem dados'})",
+                                 "api_sem_resposta"))
+
+    if ultima is not None:
+        linhas.append(f"Última publicação completa: {ultima:%d/%m/%Y}")
+    linhas.append(tempo["texto"])
+    if hora is not None:
+        linhas.append(f"Consultada às {hora:%H:%M:%S}")
+    if estado == "ok" and tempo["acima_limite"]:
+        estado = "warn"
+        media = f"{tempo['media_s']:.2f}".replace(".", ",")
+        pontos.append(_ponto_api("warn", f"API lenta (média {media} s)", "api_lenta"))
+    return {"configurada": True, "estado": estado, "titulo": titulo, "status": status, "banco": banco,
+            "ultima_publicacao": None if ultima is None else ultima.isoformat(),
+            "consultado_em": None if hora is None else f"{hora:%H:%M:%S}", "tempo": tempo,
+            "linhas": linhas, "pontos": pontos}
+
+
+def bloco_banco(situacao: object, esperado: object, pregao: object) -> dict:
+    """Bloco "Banco da API": a última publicação completa, informada pela API, comparada com a data esperada."""
+    s = _dic(situacao)
+    consulta = s.get("consulta")
+    if s.get("configurada") is not True or not isinstance(consulta, dict) or consulta.get("respondeu") is not True:
+        return {"estado": "idle", "titulo": "sem dados", "ultima_publicacao": None, "esperada": None,
+                "linhas": ["Depende da resposta da API."], "pontos": []}
+    if _banco_fora(consulta):
+        return {"estado": "bad", "titulo": "Fora", "ultima_publicacao": None, "esperada": None,
+                "linhas": ["A API respondeu que o banco dela não responde."], "pontos": []}
+
+    ultima = _data_de(consulta.get("ultima_publicacao"))
+    esp = _data_de(esperado)
+    pregao_txt = _dd_mm_aaaa(pregao)
+    sufixo = f" (pregão de {pregao_txt})" if pregao_txt else ""
+    linhas = []
+    if ultima is not None:
+        linhas.append(f"Última publicação completa: {ultima:%d/%m/%Y}")
+    if esp is not None:
+        linhas.append(f"Esperada: {esp:%d/%m/%Y}{sufixo}")
+    datas = {"ultima_publicacao": None if ultima is None else ultima.isoformat(),
+             "esperada": None if esp is None else esp.isoformat()}
+    if ultima is None:
+        return {"estado": "warn", "titulo": "Nada publicado ainda", **datas, "linhas": linhas,
+                "pontos": [{"nivel": "warn", "texto": "Banco da API: nada publicado ainda", "chave": "banco_atrasado"}]}
+    if esp is None:
+        return {"estado": "idle", "titulo": "sem rotina para comparar", **datas, "linhas": linhas, "pontos": []}
+    if ultima >= esp:
+        return {"estado": "ok", "titulo": "Em dia", **datas, "linhas": linhas, "pontos": []}
+    texto = f"Banco da API: última publicação completa {ultima:%d/%m/%Y}, esperada {esp:%d/%m/%Y}"
+    return {"estado": "warn", "titulo": "Publicação atrasada", **datas, "linhas": linhas,
+            "pontos": [{"nivel": "warn", "texto": texto, "chave": "banco_atrasado"}]}
+
+
+def _pontos_do_bloco(bloco: object, alvo: str) -> list[dict]:
+    """Pontos (warn/bad) que um bloco já traz (API, Banco, dia atípico), com o alvo da tela."""
+    saida = []
+    for p in _dic(bloco).get("pontos") or []:
+        p = _dic(p)
+        if p.get("nivel") in ("warn", "bad") and isinstance(p.get("texto"), str) and isinstance(p.get("chave"), str):
+            saida.append(_ponto(p["nivel"], p["texto"], alvo, p["chave"]))
+    return saida
+
+
 def pontos_de_atencao(hoje: object, trava: object, fluxo_dia: object, linha_tempo: object,
-                      saude_visao: object, testes: object) -> list[dict]:
+                      saude_visao: object, testes: object, *, api: object = None, banco: object = None,
+                      dia_atipico: object = None) -> list[dict]:
     """Faróis amarelos (warn) e vermelhos (bad) da tela, na ordem em que aparecem na página."""
     hoje, trava, fluxo_dia, linha_tempo, saude_visao, testes = (
         _dic(v) for v in (hoje, trava, fluxo_dia, linha_tempo, saude_visao, testes))
@@ -335,23 +493,25 @@ def pontos_de_atencao(hoje: object, trava: object, fluxo_dia: object, linha_temp
                                  "fluxo-processamento", "rotina_interrompida"))
     else:
         pontos.append(_ponto("warn", "Fluxo do dia: sem dados", "agora", "sem_rotina"))
+    pontos += _pontos_do_bloco(banco, "fluxo-banco")
+    pontos += _pontos_do_bloco(api, "fluxo-api")
     folga = linha_tempo.get("folga_s")
     if _inteiro(folga) and folga < 0:
         pontos.append(_ponto("warn", f"Rotina terminou depois do prazo ({linha_tempo.get('folga_texto')})",
                              "linha-tempo", "atraso_prazo"))
-    if saude_visao.get("disponivel") is True:
-        for c in saude_visao.get("cartoes") or []:
-            c = _dic(c)
-            farol, id_ = c.get("farol"), c.get("id")
-            if not isinstance(id_, str):
-                continue
-            texto = f"{c.get('titulo')} ({c.get('numero')})"
-            if farol in ("warn", "bad"):
-                pontos.append(_ponto(farol, texto, f"saude-c-{id_}", f"saude_{id_}"))
-            elif farol == "idle":
-                pontos.append(_ponto("warn", texto, f"saude-c-{id_}", "saude_sem_dados"))
-    else:
+    pontos += _pontos_do_bloco(dia_atipico, "dia-atipico")
+    if saude_visao.get("disponivel") is not True:
         pontos.append(_ponto("warn", "Saúde dos dados: sem diagnóstico", "saude", "saude_sem_diagnostico"))
+    for c in saude_visao.get("cartoes") or []:
+        c = _dic(c)
+        farol, id_ = c.get("farol"), c.get("id")
+        if not isinstance(id_, str):
+            continue
+        texto = f"{c.get('titulo')} ({c.get('numero')})"
+        if farol in ("warn", "bad"):
+            pontos.append(_ponto(farol, texto, f"saude-c-{id_}", f"saude_{id_}"))
+        elif farol == "idle":
+            pontos.append(_ponto("warn", texto, f"saude-c-{id_}", "saude_sem_dados"))
     if hoje.get("erro") or hoje.get("disponivel") is False:
         pontos.append(_ponto("bad", "Calendário da B3 com erro", "historico", "calendario_erro"))
     if testes.get("disponivel") is True:
@@ -372,9 +532,11 @@ def pontos_de_atencao(hoje: object, trava: object, fluxo_dia: object, linha_temp
 
 
 def resumo(hoje: object, trava: object, fluxo_dia: object, linha_tempo: object,
-           saude_visao: object, testes: object) -> dict:
+           saude_visao: object, testes: object, *, api: object = None, banco: object = None,
+           dia_atipico: object = None) -> dict:
     """Frase única do topo ("Tudo certo", "Atenção: N pontos" ou "Falhou: ...") e a lista de pontos."""
-    pontos = pontos_de_atencao(hoje, trava, fluxo_dia, linha_tempo, saude_visao, testes)
+    pontos = pontos_de_atencao(hoje, trava, fluxo_dia, linha_tempo, saude_visao, testes,
+                               api=api, banco=banco, dia_atipico=dia_atipico)
     ruins = [p for p in pontos if p["nivel"] == "bad"]
     atencao = [p for p in pontos if p["nivel"] == "warn"]
     if ruins:

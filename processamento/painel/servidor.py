@@ -7,6 +7,7 @@ O navegador manda só o id da ação; a data da rotina e da carga é calculada a
 from __future__ import annotations
 
 import argparse
+import functools
 import hmac
 import json
 import secrets
@@ -18,7 +19,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 from processamento.calendario import SP
-from processamento.painel import acoes, ajuda, leitores, marcos, relatorios, saude, visao
+from processamento.painel import acoes, ajuda, api, dia, leitores, marcos, mercado, novidades, relatorios, saude, visao
 
 PORTA_PADRAO = 8765
 LIMITE_CORPO = 1024
@@ -78,7 +79,7 @@ def _aviso_rotina(rotina_data: dict, hoje: dict) -> str | None:
 
 
 def estado_botoes(params: dict, trava: dict, hoje: dict, rotina_data: dict, d_carga: date | None,
-                  executor: acoes.Executor, agora: datetime) -> dict:
+                  executor: acoes.Executor, agora: datetime, motivo_publicador: str | None = None) -> dict:
     """Título, comando, data, habilitação, motivo e aviso de cada ação. O primeiro motivo de bloqueio vale."""
     rodando = executor.rodando()
     titulo_atual = executor.estado(None).get("titulo") if rodando else None
@@ -92,7 +93,19 @@ def estado_botoes(params: dict, trava: dict, hoje: dict, rotina_data: dict, d_ca
             motivo = f"Aguarde: {titulo_atual} está rodando"
         elif trava.get("ativa") and acao.usa_banco:
             motivo = MOTIVO_TRAVA
-        if acao_id == "rotina":
+        if acao_id == "dia":
+            data = rotina_data.get("data")
+            if params["teste_final"]["fim"]:
+                motivo = motivo or MOTIVO_PRODUCAO
+            if rotina_data.get("erro"):
+                motivo = motivo or f"Calendário: {rotina_data['erro']}"
+            motivo = motivo or motivo_publicador
+            if data is not None:
+                aviso = (f"Data usada: {data}. Em sequência: rotina (--sem-esperar) → carga completa em "
+                         f"saida_completa/{data}/; publicador do projeto da API (python -m publicador --data {data}), "
+                         "que grava no banco da API. Se a rotina falhar, a carga não roda e o publicador grava só "
+                         "a execução. Não pode ser parado no meio.")
+        elif acao_id == "rotina":
             data = rotina_data.get("data")
             if params["teste_final"]["fim"]:
                 motivo = motivo or MOTIVO_PRODUCAO
@@ -136,7 +149,24 @@ def estado_com_marcos(executor: acoes.Executor, desde: int | None) -> dict:
                                          codigo=completo["codigo"], significado=completo["significado"])}
 
 
-def montar_painel(raiz: Path, executor: acoes.Executor, agora: datetime, caminho_calendario: str | None = None) -> dict:
+def _juntar_saude(saude_base: dict, coer: dict, afet: dict, afetadas_max: int | None) -> dict:
+    """Saúde da tela: cartões do diagnóstico + "Coerência do mercado" (mesmo sem diagnóstico) e linhas afetadas."""
+    saude_v = dict(saude_base)
+    cartoes = list(saude_v.get("cartoes") or [])
+    cartao = coer.get("cartao")
+    if isinstance(cartao, dict):
+        cartoes.append(cartao)
+    saude_v["cartoes"] = cartoes
+    afetadas = dict(afet) if isinstance(afet, dict) and "disponivel" not in afet else {}
+    if coer.get("afetadas"):
+        afetadas["coerencia_mercado"] = coer["afetadas"]
+    saude_v["afetadas"] = afetadas
+    saude_v["afetadas_max"] = afetadas_max
+    return saude_v
+
+
+def montar_painel(raiz: Path, executor: acoes.Executor, agora: datetime, caminho_calendario: str | None = None,
+                  monitor: api.MonitorApi | None = None) -> dict:
     """Situação completa para a página (cada parte isolada: uma leitura quebrada não derruba as outras)."""
     params = leitores.ler_parametros(raiz)
     trava = _seguro(leitores.ler_trava, raiz, params, agora)
@@ -156,14 +186,37 @@ def montar_painel(raiz: Path, executor: acoes.Executor, agora: datetime, caminho
             agora_item.get("status") == "em_andamento" and not trava.get("ativa") and not executor.rodando())}
     completa_item = leitores.ultima_execucao(itens_completas)
     pasta_painel = raiz / params["pasta_logs"] / "painel"
+    painel_p = _seguro(leitores.ler_parametros_painel, raiz)
+    painel_p = painel_p if "disponivel" not in painel_p else {}
+    valida = leitores.ultima_execucao_valida(itens_diarias)
+    d_valida = valida.get("data_referencia") if valida else None
+    dados_dia = _seguro(mercado.ler_dia, raiz, params["pasta_saida"], d_valida)
+    api_sit = (_seguro(monitor.situacao, painel_p, agora) if monitor is not None
+               else {"configurada": False, "erro_config": "Monitor da API ausente."})
+    api_v = _seguro(visao.bloco_api, api_sit, painel_p.get("api_tempo_limite_s"))
+    banco_v = _seguro(visao.bloco_banco, api_sit, d_valida, dados_dia.get("data_pregao"))
+    atipico_v = _seguro(mercado.dia_atipico, dados_dia, {
+        "retorno_abs": painel_p.get("retorno_dia_abs"), "min_acoes": painel_p.get("dia_atipico_min_acoes"),
+        "ibov_amplo": painel_p.get("dia_atipico_ibov_amplo"), "max": painel_p.get("afetadas_max")})
+    coer = _seguro(mercado.cartao_coerencia, dados_dia, {
+        "ivvb11_min": painel_p.get("coerencia_ivvb11_min_abs"), "dif_min": painel_p.get("coerencia_ibov_mediana_dif")})
+    docs_md = raiz / "docs" / "diagnostico_banco.md"
+    novid = _seguro(novidades.novidades, docs_md, pasta_painel)
+    afet = _seguro(saude.afetadas_saude, docs_md)
+    pub = _seguro(dia.verificar_publicador, raiz, painel_p)
+    motivo_pub = pub.get("motivo") if isinstance(pub, dict) else "erro ao conferir o projeto da API"
     testes = _seguro(relatorios.ler_ultimo_pytest, pasta_painel)
     fluxo_v = _seguro(visao.fluxo, agora_item, completa_item)
     linha_v = _seguro(visao.linha_do_tempo, agora_item, leitores.ler_prazo_rotina(raiz), caminho_calendario)
-    saude_v = _seguro(saude.cartoes_saude, raiz / "docs" / "diagnostico_banco.md")
+    saude_v = _juntar_saude(_seguro(saude.cartoes_saude, docs_md), coer, afet, painel_p.get("afetadas_max"))
     duracoes = _seguro(relatorios.duracoes_painel, pasta_painel, list(acoes.ACOES))
     valores_ajuda = {**_seguro(leitores.ler_valores_ajuda, raiz), "abertura": visao.hora_marco(linha_v, "abertura")}
     hoje_iso = agora.astimezone(SP).date().isoformat()
     data_ultima = fluxo_v.get("data") if isinstance(fluxo_v, dict) and fluxo_v.get("disponivel") else None
+    botoes_v = _seguro(functools.partial(estado_botoes, motivo_publicador=motivo_pub),
+                       params, trava, hoje, rotina_data, d_carga, executor, agora)
+    resumo_v = _seguro(functools.partial(visao.resumo, api=api_v, banco=banco_v, dia_atipico=atipico_v),
+                       hoje, trava, fluxo_v, linha_v, saude_v, testes)
     return {
         "gerado_em": agora.isoformat(timespec="seconds"),
         "hoje": hoje,
@@ -171,11 +224,11 @@ def montar_painel(raiz: Path, executor: acoes.Executor, agora: datetime, caminho
         "agora": agora_item,
         "historico": {"diarias": diarias, "completas": completas},
         "etapas": _seguro(relatorios.ler_logs_rotina, raiz / params["pasta_logs"]),
-        "saude": _seguro(relatorios.ler_diagnostico, raiz / "docs" / "diagnostico_banco.md"),
+        "saude": _seguro(relatorios.ler_diagnostico, docs_md),
         "experimento": _seguro(relatorios.ler_experimento, raiz, params),
         "testes": testes,
         "acao": _seguro(estado_com_marcos, executor, None),
-        "botoes": _seguro(estado_botoes, params, trava, hoje, rotina_data, d_carga, executor, agora),
+        "botoes": botoes_v,
         "data_rotina": rotina_data,
         "visao": {
             "fluxo": fluxo_v,
@@ -183,11 +236,16 @@ def montar_painel(raiz: Path, executor: acoes.Executor, agora: datetime, caminho
             "saude": saude_v,
             "calendario": _seguro(visao.calendario_meses, itens_diarias, itens_completas,
                                   agora.astimezone(SP).date().isoformat(), caminho_calendario),
-            "resumo": _seguro(visao.resumo, hoje, trava, fluxo_v, linha_v, saude_v, testes),
+            "resumo": resumo_v,
             "tempos": _seguro(visao.tempos_acoes, duracoes, agora_item, completa_item),
             "ajuda": _seguro(ajuda.montar_ajuda, valores_ajuda),
             "dia": _seguro(visao.frase_dia, hoje_iso, data_ultima, caminho_calendario),
             "glossario": [list(par) for par in ajuda.GLOSSARIO],
+            "api": api_v,
+            "banco": banco_v,
+            "coleta_etapas": _seguro(visao.etapas_coleta, agora_item),
+            "novidades": novid,
+            "dia_atipico": atipico_v,
         },
     }
 
@@ -219,6 +277,7 @@ class _Servidor(ThreadingHTTPServer):
     montar_comando: Callable[..., list[str] | None]
     caminho_calendario: str | None
     executor: acoes.Executor
+    monitor: api.MonitorApi
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -264,7 +323,7 @@ class _Handler(BaseHTTPRequestHandler):
             corpo = srv.pagina.replace(PLACEHOLDER_TOKEN, srv.token).encode("utf-8")
             self._enviar(200, "text/html; charset=utf-8", corpo, {"Content-Security-Policy": CSP_PAGINA})
         elif caminho == "/api/painel":
-            dados = montar_painel(srv.raiz, srv.executor, srv.relogio(), srv.caminho_calendario)
+            dados = montar_painel(srv.raiz, srv.executor, srv.relogio(), srv.caminho_calendario, srv.monitor)
             self._json(200, dados)
         elif caminho == "/api/acao":
             self._json(200, estado_com_marcos(srv.executor, _desde(partes.query)))
@@ -324,7 +383,8 @@ class _Handler(BaseHTTPRequestHandler):
         if not isinstance(acao_id, str) or acao_id not in acoes.ACOES:
             self._json(400, {"erro": "ação desconhecida"})
             return
-        botoes = montar_painel(srv.raiz, srv.executor, srv.relogio(), srv.caminho_calendario).get("botoes")
+        botoes = montar_painel(srv.raiz, srv.executor, srv.relogio(), srv.caminho_calendario,
+                               srv.monitor).get("botoes")
         botoes = botoes if isinstance(botoes, dict) else {}
         botao = botoes.get(acao_id)
         if not isinstance(botao, dict) or botao.get("habilitado") is not True:
@@ -347,13 +407,18 @@ def criar_servidor(raiz: Path = leitores.RAIZ_PADRAO, porta: int = PORTA_PADRAO,
                    executor: acoes.Executor | None = None,
                    montar_comando: Callable[..., list[str] | None] = acoes.montar_comando,
                    relogio: Callable[[], datetime] | None = None,
-                   caminho_calendario: str | None = None) -> _Servidor:
-    """Cria o servidor (ainda não atende). Porta 0 escolhe uma livre; a porta real fica em `srv.porta`."""
+                   caminho_calendario: str | None = None,
+                   consultar_api: Callable[..., dict] | None = None) -> _Servidor:
+    """Cria o servidor (ainda não atende). Porta 0 escolhe uma livre; a porta real fica em `srv.porta`.
+
+    `consultar_api` substitui a consulta HTTP à API (usado nos testes; sem ele, a consulta real só roda se
+    `painel.api_url` estiver configurada).
+    """
     raiz = Path(raiz)
     relogio = relogio or (lambda: datetime.now(SP))
     pagina = (Path(__file__).parent / "pagina.html").read_text(encoding="utf-8")
+    pasta_logs = leitores.ler_parametros(raiz)["pasta_logs"]
     if executor is None:
-        pasta_logs = leitores.ler_parametros(raiz)["pasta_logs"]
         executor = acoes.Executor(raiz, raiz / pasta_logs / "painel", relogio=relogio)
     srv = _Servidor(("127.0.0.1", porta), _Handler)
     srv.raiz = raiz
@@ -364,6 +429,7 @@ def criar_servidor(raiz: Path = leitores.RAIZ_PADRAO, porta: int = PORTA_PADRAO,
     srv.montar_comando = montar_comando
     srv.caminho_calendario = caminho_calendario
     srv.executor = executor
+    srv.monitor = api.MonitorApi(raiz / pasta_logs / "painel", consultar=consultar_api or api.consultar_saude)
     return srv
 
 

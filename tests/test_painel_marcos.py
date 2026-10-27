@@ -143,3 +143,32 @@ def test_t15_configuracao_invalida_na_rotina():
     r = marcos_acao("rotina", linhas, rodando=False, codigo=2, significado="configuração (banco, parâmetros ou calendário)")
     assert estados(r) == ["erro", "pulada", "pulada", "pulada", "erro"]
     assert r[0]["detalhe"] == "Configuração inválida: rotina.prazo"
+
+
+def test_dia_rodando_so_com_a_rotina_iniciada():
+    r = marcos_acao("dia", ["# dia: etapa=rotina inicio=10:00:00"], rodando=True, codigo=None, significado=None)
+    assert estados(r) == ["agora", "espera", "espera", "espera"]
+    assert [e["id"] for e in r] == ["rotina", "carga", "publicador", "fim"]
+
+
+def test_dia_falhou_so_execucao_termina_com_marcos_certos():
+    linhas = [
+        "# dia: etapa=rotina inicio=10:00:00",
+        "# dia: etapa=rotina fim codigo=4 detalhe=status falhou",
+        "# dia: etapa=carga pulada motivo=a rotina falhou",
+        "# dia: etapa=publicador inicio=10:00:05",
+        "# dia: etapa=publicador fim codigo=0 detalhe=só a execução",
+    ]
+    r = marcos_acao("dia", linhas, rodando=False, codigo=0, significado="publicado: completo, ou só a execução")
+    assert estados(r) == ["erro", "pulada", "concluida", "concluida"]
+    assert r[0]["detalhe"] == "status falhou"
+    assert r[1]["detalhe"] == "a rotina falhou"
+    assert r[2]["detalhe"] == "só a execução"
+
+
+def test_dia_parado_no_meio_marca_etapa_atual_como_erro():
+    linhas = ["# dia: etapa=rotina inicio=10:00:00", "# dia: etapa=rotina fim codigo=0 detalhe=status ok",
+              "# dia: etapa=carga inicio=10:01:00"]
+    r = marcos_acao("dia", linhas, rodando=False, codigo=1, significado="parado pelo painel")
+    assert estados(r) == ["concluida", "erro", "pulada", "erro"]
+    assert r[3]["detalhe"] == "parado pelo painel"

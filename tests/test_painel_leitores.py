@@ -14,6 +14,8 @@ from fabrica_painel import montar_raiz
 from processamento.calendario import SP
 from processamento.painel import leitores
 
+REPO = Path(__file__).resolve().parents[1]
+
 
 def test_duracao_segundos_valores_do_plano():
     assert leitores.duracao_segundos("2026-10-24T22:46:25-03:00", "2026-10-24T22:48:23-03:00") == 118
@@ -289,6 +291,8 @@ def test_ler_valores_ajuda_da_fixture(tmp_path):
         "prazo": "09:45", "prazo_tardio": "12:00", "inicio_consulta": "08:00", "intervalo": "5",
         "limite_historico": "10:00", "corte_noite": "08:00", "retorno_min": "-75%", "retorno_max": "+100%",
         "defasagem": "5", "pvp_min": "0,05", "sorteios": "10.000", "teste_final_inicio": "23/06/2026",
+        "tempo_limite_api": "2 s", "atipico_min_acoes": "5", "atipico_retorno": "30%", "atipico_ibov": "5%",
+        "coerencia_ivvb11": "3%", "coerencia_dif": "2%", "etapas_conferidas": "precos, noticias, enriquecimento",
     }
 
 
@@ -306,3 +310,63 @@ def test_ler_valores_ajuda_invalidos_e_ausente(tmp_path):
     assert v["prazo"] == "09:45"
     caminho.unlink()
     assert leitores.ler_valores_ajuda(raiz) == dict.fromkeys(leitores.CHAVES_AJUDA)
+
+
+def test_ler_parametros_painel_da_fixture(tmp_path):
+    raiz = montar_raiz(tmp_path)
+    p = leitores.ler_parametros_painel(raiz)
+    assert p["api_url"] is None
+    assert p["dir_api"] is None
+    assert p["api_timeout_s"] == 5
+    assert p["api_tempo_limite_s"] == 2.0
+    assert p["retorno_dia_abs"] == 0.30
+    assert p["afetadas_max"] == 5
+
+
+def test_ler_parametros_painel_real_so_leitura():
+    p = leitores.ler_parametros_painel(REPO)
+    assert p["api_url"] == "https://api-processamento-tcc-production.up.railway.app"
+    assert p["dir_api"] == "../api-tcc"
+    assert p["retorno_dia_abs"] == 0.30
+    assert p["dia_atipico_ibov_amplo"] == 0.05
+
+
+def test_ler_parametros_painel_invalidos_viram_none(tmp_path):
+    raiz = montar_raiz(tmp_path)
+    caminho = raiz / "processamento" / "config" / "painel.yaml"
+    caminho.write_text('api_medicoes: true\napi_timeout_s: "x"\n', encoding="utf-8")
+    p = leitores.ler_parametros_painel(raiz)
+    assert p["api_medicoes"] is None
+    assert p["api_timeout_s"] is None
+    assert p["retorno_dia_abs"] == 0.30  # vem do parametros.yaml, não do painel.yaml
+
+
+def test_ler_parametros_painel_sem_painel_yaml(tmp_path):
+    raiz = montar_raiz(tmp_path)
+    (raiz / "processamento" / "config" / "painel.yaml").unlink()
+    p = leitores.ler_parametros_painel(raiz)
+    assert all(p[c] is None for c in leitores.PARAMETROS_PAINEL if c != "retorno_dia_abs")
+    assert p["retorno_dia_abs"] == 0.30
+    assert leitores.ler_valores_ajuda(raiz)["tempo_limite_api"] is None
+
+
+def test_parametros_yaml_real_continua_valido_para_o_calendario():
+    """O bloco do painel não pode ir para o parametros.yaml: o calendário rejeita chave de topo desconhecida."""
+    from processamento import calendario
+    dados = calendario.carregar_parametros(str(REPO / "processamento" / "config" / "parametros.yaml"))
+    assert "painel" not in dados
+
+
+def test_ultima_execucao_valida_ignora_falhou():
+    itens = [
+        {"legivel": True, "status": "ok", "gerado_em": "2026-10-27T09:00:00-03:00"},
+        {"legivel": True, "status": "falhou", "gerado_em": "2026-10-27T10:00:00-03:00"},
+    ]
+    assert leitores.ultima_execucao_valida(itens) is itens[0]
+    assert leitores.ultima_execucao_valida([]) is None
+
+
+def test_resumir_execucao_consulta_hhmm():
+    dados = {"registros": [{"status": "ok", "coleta_status": {"ultima_consulta_em": "2026-10-27T10:49:32-03:00"}}]}
+    item = leitores.resumir_execucao(dados, "2026-10-27", "rotina", "saida/2026-10-27/execucao.json")
+    assert item["coleta"]["consulta_hhmm"] == "10:49"

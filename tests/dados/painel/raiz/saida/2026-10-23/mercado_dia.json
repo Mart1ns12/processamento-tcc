@@ -1,0 +1,38 @@
+{
+ "pacote": "mercado_dia",
+ "versao_contrato": "1.0",
+ "chave": [
+  "data_referencia"
+ ],
+ "registros": [
+  {
+   "data_referencia": "2026-10-22",
+   "IBOV": {
+    "variacao_dia": {
+     "valor": -0.011501489140172905,
+     "status": "ok"
+    }
+   },
+   "USDBRL": {
+    "variacao_dia": {
+     "valor": 0.0025713008367840295,
+     "status": "ok"
+    }
+   },
+   "indices": {
+    "IVVB11": {
+     "d1": {
+      "valor": -0.008967110572148163,
+      "status": "ok"
+     }
+    },
+    "SMLL": {
+     "d1": {
+      "valor": -0.01395548922579748,
+      "status": "ok"
+     }
+    }
+   }
+  }
+ ]
+}

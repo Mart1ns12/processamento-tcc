@@ -1,6 +1,6 @@
 # Diagnóstico do banco da coleta (só leitura)
 
-- Gerado em: 2026-10-26 11:50 (America/Sao_Paulo)
+- Gerado em: 2026-10-27 10:44 (America/Sao_Paulo)
 - Banco: tcc_scraper
 - MySQL: 8.0.46-0ubuntu0.24.04.4
 - Comando: `python -m processamento.diagnostico`
@@ -9,10 +9,7 @@
 
 ## Divergências × especificação
 
-| # | Tema | Tabela | Detalhe |
-|---|---|---|---|
-| 1 | periodo | v1-balancos | ITR com período 12m: 1 linhas |
-| 2 | periodo | v1-balancos | ITR com período outro: 2 linhas |
+Nenhuma divergência encontrada.
 
 ## 1. Existência das tabelas
 
@@ -157,30 +154,30 @@
 
 ## 3. Resumo das tabelas
 
-- 247574 linhas = 195441 artigos; uma linha por par artigo×ticker
+- 267980 linhas = 211301 artigos; uma linha por par artigo×ticker
 
 ### Período e entidades
 
 | tabela | linhas | inicio | fim | entidades | coluna_entidade |
 |---|---|---|---|---|---|
-| v1-noticias | 247574 | 2023-01-01 | 2026-10-23 | 88 | ticker |
-| v1-precos | 143596 | 2019-12-30 | 2026-10-26 | 89 | ticker |
+| v1-noticias | 267980 | 2023-01-01 | 2026-10-27 | 88 | ticker |
+| v1-precos | 143686 | 2019-12-30 | 2026-10-27 | 89 | ticker |
 | v1-cadastro | 88 | NULL | NULL | 88 | ticker |
 | v1-mudancas_ticker | 10 | 2025-05-02 | 2026-06-08 | 10 | ticker_antigo |
-| v1-balancos | 2688 | 2021-03-31 | 2026-06-30 | 85 | cnpj |
-| v1-acoes_emitidas | 1847 | 2021-03-31 | 2026-06-30 | 85 | cnpj |
+| v1-balancos | 2694 | 2021-03-31 | 2026-09-30 | 85 | cnpj |
+| v1-acoes_emitidas | 1850 | 2021-03-31 | 2026-09-30 | 85 | cnpj |
 | v1-proventos | 8392 | 1995-12-28 | 2026-09-30 | 148 | ticker |
-| v1-indices | 5124 | 2021-01-01 | 2026-10-23 | 5 | indice |
+| v1-indices | 5128 | 2021-01-01 | 2026-10-26 | 5 | indice |
 
 ### Índices
 
 | indice | n | inicio | fim |
 |---|---|---|---|
-| CDI | 1458 | 2021-01-04 | 2026-10-22 |
-| IDIV | 1199 | 2021-01-04 | 2026-10-23 |
-| IFIX | 1199 | 2021-01-04 | 2026-10-23 |
+| CDI | 1459 | 2021-01-04 | 2026-10-23 |
+| IDIV | 1200 | 2021-01-04 | 2026-10-26 |
+| IFIX | 1200 | 2021-01-04 | 2026-10-26 |
 | IPCA | 69 | 2021-01-01 | 2026-09-01 |
-| SMLL | 1199 | 2021-01-04 | 2026-10-23 |
+| SMLL | 1200 | 2021-01-04 | 2026-10-26 |
 
 ## 4. Duplicatas
 
@@ -201,20 +198,20 @@
 
 | verificação | grupos | linhas_extras |
 |---|---|---|
-| mesma matéria (ticker, data, título) | 5212 | 5856 |
+| mesma matéria (ticker, data, título) | 5336 | 6020 |
 | mesmo link (ticker, link) | 239 | 239 |
 
 ## 5. Notícias (v1-noticias)
 
-- 38696 notícias do Google News sem hora, marcadas 'só data' pela coleta (raw_articles.published_precision = 'date'): 2023: 11429, 2024: 27232, 2025: 35
+- 50403 notícias do Google News sem hora, marcadas 'só data' pela coleta (raw_articles.published_precision = 'date'): 2023: 21839, 2024: 28507, 2025: 37, 2026: 20
 - formato classificado por grupo (tamanho + últimos 6 caracteres) usando os exemplos mínimo e máximo
 
 ### Probabilidades do FinBERT
 
 | veredito | linhas |
 |---|---|
-| ok | 234326 |
-| sem_prob | 13248 |
+| ok | 267980 |
+| sem_prob | 0 |
 | parcial | 0 |
 | fora_intervalo | 0 |
 | soma_errada | 0 |
@@ -241,29 +238,29 @@
 
 | ano | total | hora_real | pct_hora_real | so_data_n1a | pct_so_data_n1a | sem_hora | pct_sem_hora |
 |---|---|---|---|---|---|---|---|
-| 2023 | 11789 | 360 | 3.1 | 0 | 0 | 11429 | 96.9 |
-| 2024 | 33904 | 3011 | 8.9 | 15 | 0 | 30878 | 91.1 |
-| 2025 | 32201 | 685 | 2.1 | 29932 | 93 | 1584 | 4.9 |
-| 2026 | 117547 | 13144 | 11.2 | 101689 | 86.5 | 2714 | 2.3 |
+| 2023 | 24067 | 2221 | 9.2 | 7 | 0 | 21839 | 90.7 |
+| 2024 | 35361 | 3193 | 9 | 15 | 0 | 32153 | 90.9 |
+| 2025 | 32203 | 685 | 2.1 | 29932 | 92.9 | 1586 | 4.9 |
+| 2026 | 119670 | 15184 | 12.7 | 101689 | 85 | 2797 | 2.3 |
 
 ### Hora da publicação, por ano e origem (artigos distintos)
 
 | ano | origem | total | hora_real | pct_hora_real | so_data_n1a | pct_so_data_n1a | sem_hora | pct_sem_hora |
 |---|---|---|---|---|---|---|---|---|
-| 2023 | google_news | 11789 | 360 | 3.1 | 0 | 0 | 11429 | 96.9 |
+| 2023 | google_news | 24067 | 2221 | 9.2 | 7 | 0 | 21839 | 90.7 |
 | 2024 | cvm_ipe | 3646 | 0 | 0 | 0 | 0 | 3646 | 100 |
-| 2024 | google_news | 30258 | 3011 | 10 | 15 | 0 | 27232 | 90 |
+| 2024 | google_news | 31715 | 3193 | 10.1 | 15 | 0 | 28507 | 89.9 |
 | 2025 | cvm_ipe | 1549 | 0 | 0 | 0 | 0 | 1549 | 100 |
-| 2025 | google_news | 30652 | 685 | 2.2 | 29932 | 97.7 | 35 | 0.1 |
-| 2026 | cvm_ipe | 2714 | 0 | 0 | 0 | 0 | 2714 | 100 |
-| 2026 | google_news | 114833 | 13144 | 11.4 | 101689 | 88.6 | 0 | 0 |
+| 2025 | google_news | 30654 | 685 | 2.2 | 29932 | 97.6 | 37 | 0.1 |
+| 2026 | cvm_ipe | 2777 | 0 | 0 | 0 | 0 | 2777 | 100 |
+| 2026 | google_news | 116893 | 15184 | 13 | 101689 | 87 | 20 | 0 |
 
 ### Formatos de data/hora
 
 | coluna | tam | fim | n | exemplo_min | exemplo_max | classe |
 |---|---|---|---|---|---|---|
-| data_hora_publicacao | 25 | -03:00 | 193686 | 2023-01-02T10:31:07-03:00 | 2026-10-23T08:04:19-03:00 | iso_com_fuso |
-| data_hora_coleta | 25 | -03:00 | 247574 | 2026-09-07T17:38:43-03:00 | 2026-10-25T23:25:10-03:00 | iso_com_fuso |
+| data_hora_publicacao | 25 | -03:00 | 199521 | 2023-01-01T11:56:58-03:00 | 2026-10-27T08:03:29-03:00 | iso_com_fuso |
+| data_hora_coleta | 25 | -03:00 | 267980 | 2026-09-07T17:38:43-03:00 | 2026-10-27T08:08:01-03:00 | iso_com_fuso |
 
 ### Fuso: data_hora_publicacao × raw_articles.published_at
 
@@ -278,29 +275,29 @@
 
 | ano | lang | pares | artigos |
 |---|---|---|---|
-| 2023 | en | 2295 | 2248 |
-| 2023 | pt | 10942 | 9541 |
-| 2024 | en | 5234 | 4620 |
-| 2024 | pt | 35666 | 29284 |
+| 2023 | en | 3867 | 3428 |
+| 2023 | pt | 25135 | 20639 |
+| 2024 | en | 5261 | 4644 |
+| 2024 | pt | 37356 | 30717 |
 | 2025 | en | 4869 | 4166 |
-| 2025 | pt | 35488 | 28035 |
-| 2026 | en | 17420 | 14341 |
-| 2026 | pt | 135660 | 103206 |
+| 2025 | pt | 35490 | 28037 |
+| 2026 | en | 17911 | 14745 |
+| 2026 | pt | 138091 | 104925 |
 
 ### Modelo do FinBERT por idioma
 
 | lang | model | text_source | n |
 |---|---|---|---|
-| en | ProsusAI/finbert | title | 27504 |
-| pt | lucas-leme/FinBERT-PT-BR | title | 182674 |
-| pt | lucas-leme/FinBERT-PT-BR | body | 24133 |
+| pt | lucas-leme/FinBERT-PT-BR | title | 211662 |
+| en | ProsusAI/finbert | title | 31893 |
+| pt | lucas-leme/FinBERT-PT-BR | body | 24410 |
 | en | ProsusAI/finbert | body | 15 |
 
 ### Formato do id
 
 | ini | tam | n | exemplo_min | exemplo_max |
 |---|---|---|---|---|
-| n | 7 | 247574 | n005084 | n368118 |
+| n | 7 | 267980 | n005084 | n393834 |
 
 ## 6. Valores distintos
 
@@ -308,28 +305,28 @@
 
 | tabela | coluna | valor | n | permitido |
 |---|---|---|---|---|
-| v1-noticias | origem | google_news | 239237 | sim |
-| v1-noticias | origem | cvm_ipe | 8337 | sim |
-| v1-noticias | papel | NULL | 215318 | — |
-| v1-noticias | papel | protagonista | 17614 | sim |
-| v1-noticias | papel | mencao | 6400 | sim |
+| v1-noticias | origem | google_news | 259577 | sim |
+| v1-noticias | origem | cvm_ipe | 8403 | sim |
+| v1-noticias | papel | NULL | 235325 | — |
+| v1-noticias | papel | protagonista | 17689 | sim |
+| v1-noticias | papel | mencao | 6724 | sim |
 | v1-noticias | papel | errada | 5505 | sim |
 | v1-noticias | papel | citada_com_fato | 2692 | sim |
 | v1-noticias | papel | matriz_estrangeira | 45 | sim |
-| v1-noticias | tipo_conteudo | NULL | 215318 | — |
-| v1-noticias | tipo_conteudo | reportagem | 22348 | sim |
+| v1-noticias | tipo_conteudo | NULL | 235325 | — |
+| v1-noticias | tipo_conteudo | reportagem | 22423 | sim |
 | v1-noticias | tipo_conteudo | outro | 4918 | sim |
-| v1-noticias | tipo_conteudo | resumo_mercado | 3072 | sim |
+| v1-noticias | tipo_conteudo | resumo_mercado | 3392 | sim |
 | v1-noticias | tipo_conteudo | lista | 915 | sim |
 | v1-noticias | tipo_conteudo | opiniao | 696 | sim |
 | v1-noticias | tipo_conteudo | agenda | 224 | sim |
-| v1-noticias | tipo_conteudo | podcast_video | 72 | sim |
+| v1-noticias | tipo_conteudo | podcast_video | 76 | sim |
 | v1-noticias | tipo_conteudo | patrocinado | 11 | sim |
-| v1-noticias | evento | NULL | 215318 | — |
-| v1-noticias | evento | outro | 10741 | sim |
+| v1-noticias | evento | NULL | 235325 | — |
+| v1-noticias | evento | outro | 10745 | sim |
 | v1-noticias | evento | operacional | 8210 | sim |
-| v1-noticias | evento | macro | 2826 | sim |
-| v1-noticias | evento | fato_relevante | 2563 | sim |
+| v1-noticias | evento | macro | 3146 | sim |
+| v1-noticias | evento | fato_relevante | 2638 | sim |
 | v1-noticias | evento | governanca | 1796 | sim |
 | v1-noticias | evento | recomendacao | 1403 | sim |
 | v1-noticias | evento | resultado | 1365 | sim |
@@ -343,20 +340,19 @@
 | v1-cadastro | tipo_acao | PN | 14 | sim |
 | v1-cadastro | tipo_acao | UNIT | 6 | sim |
 | v1-cadastro | tipo_acao | BDR | 1 | sim |
-| v1-balancos | tipo_documento | ITR | 2275 | sim |
+| v1-balancos | tipo_documento | ITR | 2281 | sim |
 | v1-balancos | tipo_documento | DFP | 413 | sim |
 | v1-proventos | tipo | JCP | 4592 | sim |
 | v1-proventos | tipo | DIVIDENDO | 3800 | sim |
-| v1-indices | indice | CDI | 1458 | sim |
-| v1-indices | indice | IDIV | 1199 | sim |
-| v1-indices | indice | IFIX | 1199 | sim |
-| v1-indices | indice | SMLL | 1199 | sim |
+| v1-indices | indice | CDI | 1459 | sim |
+| v1-indices | indice | IDIV | 1200 | sim |
+| v1-indices | indice | IFIX | 1200 | sim |
+| v1-indices | indice | SMLL | 1200 | sim |
 | v1-indices | indice | IPCA | 69 | sim |
 
 ## 7. Preços (v1-precos)
 
 - 82 dias úteis sem pregão no IBOV (inclui feriados)
-- AZUL3: 1 pregões faltando (pode ser suspensão)
 - IVVB11: 1 pregões faltando (pode ser suspensão)
 
 ### Pregões por ano (IBOV)
@@ -370,7 +366,7 @@
 | 2023 | 248 |
 | 2024 | 251 |
 | 2025 | 250 |
-| 2026 | 203 |
+| 2026 | 204 |
 
 ### Dias úteis sem pregão (informativo, inclui feriados)
 
@@ -463,29 +459,29 @@
 
 | ticker | primeira | ultima | n_faltando | n_fora_do_pregao | exemplos (5 primeiros) |
 |---|---|---|---|---|---|
-| AZUL3 | 2026-01-13 | 2026-10-23 | 1 | 0 | 2026-01-30 |
-| IVVB11 | 2019-12-30 | 2026-10-23 | 1 | 0 | 2025-10-24 |
+| IVVB11 | 2019-12-30 | 2026-10-26 | 1 | 0 | 2025-10-24 |
 
 ### Séries macro
 
 | ticker | linhas | com_volume | inicio | fim |
 |---|---|---|---|---|
-| BRENT | 1718 | 0 | 2019-12-30 | 2026-10-26 |
-| IBOV | 1698 | 0 | 2019-12-30 | 2026-10-23 |
-| IVVB11 | 1697 | 1677 | 2019-12-30 | 2026-10-23 |
-| USDBRL | 1778 | 0 | 2019-12-30 | 2026-10-26 |
+| BRENT | 1719 | 0 | 2019-12-30 | 2026-10-27 |
+| IBOV | 1699 | 0 | 2019-12-30 | 2026-10-26 |
+| IVVB11 | 1698 | 1678 | 2019-12-30 | 2026-10-26 |
+| USDBRL | 1779 | 0 | 2019-12-30 | 2026-10-27 |
 
 ## 8. Balanços (v1-balancos)
 
-- receita_liquida: 2653 de 2688 valores são múltiplos de 1000 (informativo)
-- patrimonio_liquido: 2591 de 2627 valores são múltiplos de 1000 (informativo)
+- receita_liquida: 2661 de 2694 valores são múltiplos de 1000 (informativo)
+- patrimonio_liquido: 2598 de 2631 valores são múltiplos de 1000 (informativo)
+- 3 linhas de balanço com período inválido, descartadas pelo processamento (seção 6): 03342704000130 ITR 2021-03-01→2021-03-31 (31 dias); 16590234000176 ITR 2021-01-01→2021-12-31 (365 dias); 92754738000162 ITR 2021-03-01→2021-03-31 (31 dias)
 
 ### Escala (ordem de grandeza)
 
 | coluna | veredito | valores |
 |---|---|---|
-| receita_liquida | reais | 2620 |
-| patrimonio_liquido | reais | 2620 |
+| receita_liquida | reais | 2626 |
+| patrimonio_liquido | reais | 2624 |
 
 ### 5 maiores receitas (DFP), com nome
 
@@ -503,25 +499,24 @@
 |---|---|---|
 | DFP | 12m | 413 |
 | ITR | 12m | 1 |
-| ITR | 3m | 1380 |
+| ITR | 3m | 1383 |
 | ITR | 6m | 486 |
-| ITR | 9m | 406 |
+| ITR | 9m | 409 |
 | ITR | outro | 2 |
 
 ### Datas de entrega
 
 | total | sem_entrega | entrega_antes_do_fim |
 |---|---|---|
-| 2688 | 0 | 0 |
+| 2694 | 0 | 0 |
 
 ## 9. Tickers e CNPJs
 
 - 28 classes ligadas à empresa pela raiz (estão no other_codes): BPAC3 → BPAC11, BPAC5 → BPAC11, BRAP3 → BRAP4, BRKM3 → BRKM5, BRKM6 → BRKM5, CMIG3 → CMIG4, CPLE6 → CPLE3, CYRE4 → CYRE3, ENGI3 → ENGI11, ENGI4 → ENGI11, GGBR3 → GGBR4, GOAU3 → GOAU4, IGTI3 → IGTI11, IGTI4 → IGTI11, ISAE3 → ISAE4, ITSA3 → ITSA4, ITUB3 → ITUB4, KLBN3 → KLBN11, KLBN4 → KLBN11, POMO3 → POMO4, RAPT3 → RAPT4, RENT4 → RENT3, SANB3 → SANB11, SANB4 → SANB11, TAEE3 → TAEE11, TAEE4 → TAEE11, USIM3 → USIM5, USIM6 → USIM5
 - 34 classes extintas (fora do other_codes): contam no histórico de proventos e no payout, ligadas pela raiz; units (final 11) ficam de fora do payout: AXIA5, AXIA6, BBAS4, COGN11, COGN4, CPLE11, CPLE4, CPLE5, CSAN11, EGIE5, EGIE6, EMBJ4, EMBJ5, EQTL11, EQTL4, LREN4, PCAR4, PCAR5, PCAR6, RADL5, RADL6, RAIL11, RAIL4, SUZB5, SUZB6, UGPA4, USIM4, VALE4, VALE5, VBBR4, VIVT4, WEGE4, YDUQ11, YDUQ4
-- período analisado (pregões do IBOV): 2019-12-30 a 2026-10-23
+- período analisado (pregões do IBOV): 2019-12-30 a 2026-10-26
 - v1-proventos: 4 tickers do cadastro sem linhas (informativo)
 - excluídos por decisão (config/exclusoes.yaml): CRFB3, SRNA3, STBP11, STBP3, STBP4
-- exclusão a rever: 03847461000192 tem balanço
 - exclusão a rever: 06057223000171 tem balanço
 
 ### Comparação de conjuntos
@@ -576,43 +571,22 @@
 
 ## 10. Quantidade de ações suspeita
 
-- quantidade de ações suspeita (P/VP < 0,05; v1-acoes_emitidas provavelmente em milhares) em 19 empresas em 2026-10-23: valor de mercado, P/L, P/VP e payout = indisponivel (seção 6)
+- quantidade de ações suspeita (P/VP < 0,05; v1-acoes_emitidas provavelmente em milhares) em 1 empresas em 2026-10-26: valor de mercado, P/L, P/VP e payout = indisponivel (seção 6)
 
 ### Empresas com quantidade de ações suspeita
 
 | tickers | cnpj | data_referencia | acoes | pvp |
 |---|---|---|---|---|
-| AXIA3 | 00001180000126 | 2026-06-30 | 2943220 | 0.0014 |
-| ENEV3 | 04423567000121 | 2026-06-30 | 1937030 | 0.0028 |
-| ABEV3 | 07526557000100 | 2026-06-30 | 15763665 | 0.003 |
-| EMBJ3 | 07689002000189 | 2026-06-30 | 740465 | 0.0033 |
-| TAEE11 | 07859971000130 | 2026-06-30 | 1033497 | 0.0019 |
-| MRVE3 | 08343492000120 | 2026-06-30 | 562836 | 0.0009 |
-| YDUQ3 | 08807432000110 | 2026-06-30 | 274089 | 0.0013 |
-| CMIG4 | 17155730000164 | 2026-06-30 | 2861782 | 0.0011 |
-| AURE3 | 28594234000123 | 2026-06-30 | 1050378 | 0.0013 |
-| VALE3 | 33592510000154 | 2026-06-30 | 4255763 | 0.0013 |
-| VBBR3 | 34274233000102 | 2026-06-30 | 1198563 | 0.0018 |
-| PCAR3 | 47508411000156 | 2026-06-30 | 492577 | 0.0036 |
-| ITUB4 | 60872504000123 | 2026-06-30 | 11026869 | 0.0023 |
-| ITSA4 | 61532644000115 | 2026-06-30 | 11213687 | 0.0017 |
-| NATU3 | 71673990000177 | 2026-06-30 | 1374558 | 0.0009 |
-| CYRE3 | 73178600000118 | 2026-06-30 | 453446 | 0.0013 |
-| RAPT4 | 89086144000116 | 2026-06-30 | 349725 | 0.0006 |
-| SANB11 | 90400888000142 | 2026-06-30 | 7498531 | 0.0008 |
-| LREN3 | 92754738000162 | 2026-06-30 | 1006845 | 0.0014 |
+| HAPV3 | 05197443000138 | 2026-06-30 | 502630884 | 0.0416 |
 
 ## 11. Retornos diários suspeitos
 
-- 5 retornos diários suspeitos em 3 tickers (fechamento_ajustado contra o último pregão com preço, abaixo de -75% ou acima de 100%): saem das séries e das medianas do setor; o preço não é corrigido (seção 6)
+- 2 retornos diários suspeitos em 2 tickers (fechamento_ajustado contra o último pregão com preço, abaixo de -75% ou acima de 100%): saem das séries e das medianas do setor; o preço não é corrigido (seção 6)
 
 ### Retornos diários suspeitos
 
 | ticker | data | aj_anterior | aj | retorno_aj | retorno_fech |
 |---|---|---|---|---|---|
-| AZUL3 | 2026-02-10 | 7.42 | 341.25 | 44.9906 | 44.9906 |
-| AZUL3 | 2026-04-09 | 217 | 3.060e+07 | 141012.1244 | 141012.1244 |
-| AZUL3 | 2026-04-20 | 3.225e+07 | 30.54 | -1 | -1 |
 | PCAR3 | 2021-03-01 | 10.2961 | 21.857 | 1.1228 | 1.1228 |
 | UGPA3 | 2021-06-28 | 7.0026 | 15.3592 | 1.1933 | 1.1933 |
 
@@ -631,7 +605,7 @@
 
 ## 13. Vazios e zeros
 
-- `v1-noticias.titulo`: 1 textos vazios ('') (a leitura trata como vazio); ids (até 10): n326413
+- `v1-noticias.titulo`: 2 textos vazios ('') (a leitura trata como vazio); ids (até 10): n326413, n380792
 - `v1-mudancas_ticker.data_mudanca` preenchida em 10 de 10 linhas
 - demais colunas 100% preenchidas
 
@@ -639,39 +613,37 @@
 
 | tabela | coluna | total | nulos | pct_nulo | situacao | textos_vazios | zeros |
 |---|---|---|---|---|---|---|---|
-| v1-noticias | data_hora_publicacao | 247574 | 53888 | 21.8 | parcial | 0 | 0 |
-| v1-noticias | titulo | 247574 | 0 | 0 | cheia | 1 | 0 |
-| v1-noticias | prob_positivo | 247574 | 13248 | 5.4 | parcial | 0 | 0 |
-| v1-noticias | prob_neutro | 247574 | 13248 | 5.4 | parcial | 0 | 0 |
-| v1-noticias | prob_negativo | 247574 | 13248 | 5.4 | parcial | 0 | 0 |
-| v1-noticias | papel | 247574 | 215318 | 87 | parcial | 0 | 0 |
-| v1-noticias | tipo_conteudo | 247574 | 215318 | 87 | parcial | 0 | 0 |
-| v1-noticias | evento | 247574 | 215318 | 87 | parcial | 0 | 0 |
-| v1-noticias | qualidade | 247574 | 215318 | 87 | parcial | 0 | 3833 |
-| v1-precos | abertura | 143596 | 482 | 0.3 | parcial | 0 | 0 |
-| v1-precos | volume | 143596 | 5281 | 3.7 | parcial | 0 | 0 |
+| v1-noticias | data_hora_publicacao | 267980 | 68459 | 25.5 | parcial | 0 | 0 |
+| v1-noticias | titulo | 267980 | 0 | 0 | cheia | 2 | 0 |
+| v1-noticias | papel | 267980 | 235325 | 87.8 | parcial | 0 | 0 |
+| v1-noticias | tipo_conteudo | 267980 | 235325 | 87.8 | parcial | 0 | 0 |
+| v1-noticias | evento | 267980 | 235325 | 87.8 | parcial | 0 | 0 |
+| v1-noticias | qualidade | 267980 | 235325 | 87.8 | parcial | 0 | 3837 |
+| v1-precos | abertura | 143686 | 482 | 0.3 | parcial | 0 | 0 |
+| v1-precos | volume | 143686 | 5281 | 3.7 | parcial | 0 | 0 |
 | v1-cadastro | cnpj | 88 | 1 | 1.1 | parcial | 0 | 0 |
 | v1-cadastro | setor | 88 | 1 | 1.1 | parcial | 0 | 0 |
 | v1-cadastro | subsetor | 88 | 1 | 1.1 | parcial | 0 | 0 |
 | v1-cadastro | unit_qtd_on | 88 | 82 | 93.2 | parcial | 0 | 0 |
 | v1-cadastro | unit_qtd_pn | 88 | 82 | 93.2 | parcial | 0 | 0 |
 | v1-mudancas_ticker | data_mudanca | 10 | 0 | 0 | cheia | 0 | 0 |
-| v1-balancos | receita_liquida | 2688 | 0 | 0 | cheia | 0 | 68 |
-| v1-balancos | lucro_bruto | 2688 | 249 | 9.3 | parcial | 0 | 35 |
-| v1-balancos | lucro_liquido | 2688 | 127 | 4.7 | parcial | 0 | 9 |
-| v1-balancos | patrimonio_liquido | 2688 | 61 | 2.3 | parcial | 0 | 7 |
-| v1-balancos | ebit | 2688 | 249 | 9.3 | parcial | 0 | 9 |
-| v1-balancos | depreciacao_amortizacao | 2688 | 292 | 10.9 | parcial | 0 | 7 |
-| v1-balancos | emprestimos_curto_prazo | 2688 | 249 | 9.3 | parcial | 0 | 170 |
-| v1-balancos | emprestimos_longo_prazo | 2688 | 249 | 9.3 | parcial | 0 | 178 |
-| v1-balancos | caixa | 2688 | 249 | 9.3 | parcial | 0 | 7 |
-| v1-balancos | aplicacoes_financeiras | 2688 | 249 | 9.3 | parcial | 0 | 551 |
-| v1-acoes_emitidas | qtd_pn | 1847 | 0 | 0 | cheia | 0 | 1306 |
+| v1-balancos | receita_liquida | 2694 | 0 | 0 | cheia | 0 | 68 |
+| v1-balancos | lucro_bruto | 2694 | 251 | 9.3 | parcial | 0 | 35 |
+| v1-balancos | lucro_liquido | 2694 | 129 | 4.8 | parcial | 0 | 9 |
+| v1-balancos | patrimonio_liquido | 2694 | 63 | 2.3 | parcial | 0 | 7 |
+| v1-balancos | ebit | 2694 | 251 | 9.3 | parcial | 0 | 9 |
+| v1-balancos | depreciacao_amortizacao | 2694 | 293 | 10.9 | parcial | 0 | 7 |
+| v1-balancos | emprestimos_curto_prazo | 2694 | 251 | 9.3 | parcial | 0 | 154 |
+| v1-balancos | emprestimos_longo_prazo | 2694 | 251 | 9.3 | parcial | 0 | 165 |
+| v1-balancos | caixa | 2694 | 251 | 9.3 | parcial | 0 | 7 |
+| v1-balancos | aplicacoes_financeiras | 2694 | 251 | 9.3 | parcial | 0 | 551 |
+| v1-acoes_emitidas | qtd_pn | 1850 | 0 | 0 | cheia | 0 | 1308 |
 | v1-proventos | data_pagamento | 8392 | 8023 | 95.6 | parcial | 0 | 0 |
 
 ## 14. Painel de execuções (v1-painel_execucoes e v1-painel_etapas)
 
 - daily cron fora da agenda (11h/21h UTC): 0h: 1, 3h: 1 execuções
+- daily manual: 1 execuções (23h: 1)
 - etapas de execuções manuais (fora do daily): build_entrega, corrigir_horas, cvm_itr_dfp
 - v1-composicao_ibov: colunas faltando nenhum; extras nenhum
 - v1-composicao_ibov: 137 linhas, data_inicio de 2021-01-01 a 2026-09-08, 76 vigentes (data_fim vazia); datas sem vigência usam composicao_atual (seção 3.5)
@@ -682,7 +654,7 @@
 |---|---|---|---|---|
 | coletar | concluida | 2 | 2026-10-22 21:56:25.015448 | 2026-10-25 09:47:36.095094 |
 | daily | concluida | 3 | 2026-10-21 21:30:04.283650 | 2026-10-23 11:00:01.489947 |
-| daily | parcial | 2 | 2026-10-21 00:46:43.367434 | 2026-10-26 03:02:56.145503 |
+| daily | parcial | 4 | 2026-10-21 00:46:43.367434 | 2026-10-27 11:00:01.546246 |
 | etapa | concluida | 1 | 2026-10-20 14:45:13.211003 | 2026-10-20 14:45:13.211003 |
 
 ### Hora de início do daily (UTC)
@@ -691,8 +663,9 @@
 |---|---|---|
 | cron | 0 | 1 |
 | cron | 3 | 1 |
-| cron | 11 | 2 |
+| cron | 11 | 3 |
 | cron | 21 | 1 |
+| manual | 23 | 1 |
 
 ### Etapas do painel
 
@@ -700,29 +673,29 @@
 |---|---|---|---|
 | corrigir_horas | 1 | concluida | 1 |
 | cvm_itr_dfp | 1 | concluida | 1 |
-| precos | 1 | concluida | 6 |
-| macro | 2 | concluida | 5 |
+| precos | 1 | concluida | 8 |
+| macro | 2 | concluida | 7 |
 | build_entrega | 2 | concluida | 1 |
-| noticias | 3 | concluida | 4 |
+| noticias | 3 | concluida | 6 |
 | noticias | 3 | falhou | 1 |
-| ipe | 4 | concluida | 4 |
+| ipe | 4 | concluida | 6 |
 | ipe | 4 | pulada | 1 |
-| enriquecimento | 5 | concluida | 3 |
+| enriquecimento | 5 | concluida | 5 |
 | enriquecimento | 5 | falhou | 1 |
 | enriquecimento | 5 | pulada | 1 |
-| juiza | 6 | concluida | 4 |
+| juiza | 6 | concluida | 6 |
 | juiza | 6 | pulada | 1 |
-| cadastro | 7 | concluida | 4 |
+| cadastro | 7 | concluida | 6 |
 | cadastro | 7 | pulada | 1 |
-| entrega | 8 | concluida | 5 |
+| entrega | 8 | concluida | 7 |
 | analise | 9 | concluida | 4 |
-| analise | 9 | falhou | 1 |
+| analise | 9 | falhou | 3 |
 
 ## 15. Histórico novo: composição, corrigir_horas e cobertura do experimento
 
 - Composição do Ibovespa: 48 de 136 tickers sem nenhum preço em v1-precos (7 código antigo de empresa do cadastro, 41 fora do cadastro); 28 estiveram no índice em 2024 ou depois. O preço é procurado com a união das mudanças de ticker (o código antigo vale pelo atual).
 - corrigir_horas: execução mais recente 2026-10-23-coletar-135621 (status concluida), etapa concluida; iniciada em 2026-10-25 06:47, finalizada em 2026-10-25 06:48 (horário de São Paulo)
-- Cobertura do experimento (universo com a composição, motivo ok): 117435 linhas em 1698 pregões, de 2019-12-30 a 2026-10-23.
+- Cobertura do experimento (universo com a composição, motivo ok): 117505 linhas em 1699 pregões, de 2019-12-30 a 2026-10-26.
 
 ### Composição do Ibovespa: tickers sem nenhum preço em v1-precos
 
@@ -788,4 +761,4 @@
 | 2023 | 248 | 16693 | 66 | 67 | 69 | composicao_historica |
 | 2024 | 251 | 18005 | 70 | 71 | 75 | composicao_historica |
 | 2025 | 250 | 19189 | 75 | 77 | 77 | composicao_historica |
-| 2026 | 203 | 14889 | 70 | 73 | 77 | composicao_historica |
+| 2026 | 204 | 14959 | 70 | 73 | 77 | composicao_historica |

@@ -24,3 +24,6 @@ rotina:
   prazo_tardio: "12:00"
   inicio_consulta: "08:00"
   intervalo_minutos: 5
+  etapas_conferidas: ["precos", "noticias", "enriquecimento"]
+  checagem:
+    retorno_maximo_abs: 0.30

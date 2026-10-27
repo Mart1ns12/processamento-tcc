@@ -1,0 +1,15 @@
+# Painel de operação (processamento/painel). Só o painel lê este arquivo; a rotina e o calendário não.
+# Fica fora do parametros.yaml porque o calendário só aceita lá as chaves de topo conhecidas.
+# O limite do retorno do dia (dia atípico) vem do parametros.yaml: rotina.checagem.retorno_maximo_abs.
+# URLs e caminhos ENTRE ASPAS.
+api_url: "https://api-processamento-tcc-production.up.railway.app"  # base da API publicada; o painel consulta só /v1/saude (pública, sem chave)
+api_timeout_s: 5                 # espera máxima da consulta; passou disso = "sem resposta"
+api_intervalo_s: 60              # no máximo uma consulta a cada N segundos (a página atualiza a cada 30 s)
+api_tempo_limite_s: 2.0          # média do tempo de resposta acima disto = amarelo
+api_medicoes: 10                 # medições guardadas em logs/painel/api_tempos.log
+dir_api: "../api-tcc"            # pasta do projeto da API (relativa à raiz do processamento); o publicador roda com o .venv de lá
+dia_atipico_min_acoes: 5         # dia atípico: pelo menos N ações com |retorno do dia| acima de rotina.checagem.retorno_maximo_abs
+dia_atipico_ibov_amplo: 0.05     # |variação do Ibovespa| acima disto = movimento amplo (provável evento real)
+coerencia_ivvb11_min_abs: 0.03   # dólar × IVVB11 em sentidos opostos e |IVVB11| acima disto = suspeito
+coerencia_ibov_mediana_dif: 0.02 # Ibovespa × mediana das ações em sentidos opostos e diferença acima disto = suspeito
+afetadas_max: 5                  # itens mostrados por cartão antes de "e mais N"

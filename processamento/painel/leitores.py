@@ -135,7 +135,9 @@ def ler_prazo_rotina(raiz: Path) -> str | None:
 
 
 CHAVES_AJUDA = ("prazo", "prazo_tardio", "inicio_consulta", "intervalo", "limite_historico", "corte_noite",
-                "retorno_min", "retorno_max", "defasagem", "pvp_min", "sorteios", "teste_final_inicio")
+                "retorno_min", "retorno_max", "defasagem", "pvp_min", "sorteios", "teste_final_inicio",
+                "tempo_limite_api", "atipico_min_acoes", "atipico_retorno", "atipico_ibov", "coerencia_ivvb11",
+                "coerencia_dif", "etapas_conferidas")
 
 
 def _inteiro(v: object) -> bool:
@@ -166,6 +168,11 @@ def ler_valores_ajuda(raiz: Path) -> dict[str, str | None]:
     rmin, rmax = fase1.get("retorno_suspeito_min"), fase1.get("retorno_suspeito_max")
     intervalo, defas = rotina.get("intervalo_minutos"), fase1.get("base_defasagem_max_pregoes")
     pvp, sorteios = fund.get("pvp_minimo_plausivel"), treino.get("acaso_sorteios")
+    painel, checagem = _ler_painel_yaml(raiz), _secao(rotina, "checagem")
+    tempo_lim, n_min = painel.get("api_tempo_limite_s"), painel.get("dia_atipico_min_acoes")
+    ret_abs, ibov_amp = checagem.get("retorno_maximo_abs"), painel.get("dia_atipico_ibov_amplo")
+    ivvb_min, dif_min = painel.get("coerencia_ivvb11_min_abs"), painel.get("coerencia_ibov_mediana_dif")
+    etapas = rotina.get("etapas_conferidas")
     inicio = teste.get("inicio")
     if isinstance(inicio, date):
         inicio = inicio.isoformat()
@@ -186,7 +193,74 @@ def ler_valores_ajuda(raiz: Path) -> dict[str, str | None]:
         "pvp_min": f"{pvp:g}".replace(".", ",") if _numero(pvp) else None,
         "sorteios": f"{sorteios:,}".replace(",", ".") if _inteiro(sorteios) else None,
         "teste_final_inicio": tf,
+        "tempo_limite_api": f"{tempo_lim:g}".replace(".", ",") + " s" if _numero(tempo_lim) else None,
+        "atipico_min_acoes": str(n_min) if _inteiro(n_min) else None,
+        "atipico_retorno": _percentual(ret_abs),
+        "atipico_ibov": _percentual(ibov_amp),
+        "coerencia_ivvb11": _percentual(ivvb_min),
+        "coerencia_dif": _percentual(dif_min),
+        "etapas_conferidas": ", ".join(etapas) if _lista_de_textos(etapas) else None,
     }
+
+
+def _percentual(v: object) -> str | None:
+    """Fração do parametro em percentual, sem sinal ("0.3" vira "30%"); None se não for número."""
+    return f"{v * 100:g}".replace(".", ",") + "%" if _numero(v) else None
+
+
+def _lista_de_textos(v: object) -> bool:
+    return isinstance(v, list) and bool(v) and all(isinstance(e, str) for e in v)
+
+
+def _nao_vazio(v: object) -> bool:
+    return isinstance(v, str) and v.strip() != ""
+
+
+def _positivo(v: object) -> bool:
+    return _numero(v) and v > 0
+
+
+def _nao_negativo(v: object) -> bool:
+    return _numero(v) and v >= 0
+
+
+def _inteiro_positivo(v: object) -> bool:
+    return _inteiro(v) and v > 0
+
+
+def _ler_painel_yaml(raiz: Path) -> dict:
+    """Conteúdo do `processamento/config/painel.yaml` (só o painel lê); {} se faltar ou estiver quebrado."""
+    caminho = Path(raiz) / "processamento" / "config" / "painel.yaml"
+    try:
+        dados = yaml.safe_load(caminho.read_text(encoding="utf-8"))
+    except (OSError, ValueError, yaml.YAMLError):
+        return {}
+    return dados if isinstance(dados, dict) else {}
+
+
+# Parâmetros do painel (`painel.yaml` e `rotina.checagem.retorno_maximo_abs` do parametros.yaml) e o validador de cada um.
+PARAMETROS_PAINEL = {
+    "api_url": _nao_vazio, "api_timeout_s": _positivo, "api_intervalo_s": _nao_negativo,
+    "api_tempo_limite_s": _positivo, "api_medicoes": _inteiro_positivo, "dir_api": _nao_vazio,
+    "dia_atipico_min_acoes": _inteiro_positivo, "dia_atipico_ibov_amplo": _positivo,
+    "coerencia_ivvb11_min_abs": _positivo, "coerencia_ibov_mediana_dif": _positivo,
+    "afetadas_max": _inteiro_positivo, "retorno_dia_abs": _positivo,
+}
+
+
+def ler_parametros_painel(raiz: Path) -> dict:
+    """Parâmetros do painel, validados; valor que falta ou é inválido vira None (nunca há padrão escrito no código)."""
+    caminho = Path(raiz) / "processamento" / "config" / "parametros.yaml"
+    try:
+        dados = yaml.safe_load(caminho.read_text(encoding="utf-8"))
+    except (OSError, ValueError, yaml.YAMLError):
+        dados = {}
+    if not isinstance(dados, dict):
+        dados = {}
+    brutos = {**_ler_painel_yaml(raiz),
+              "retorno_dia_abs": _secao(_secao(dados, "rotina"), "checagem").get("retorno_maximo_abs")}
+    return {chave: (brutos.get(chave) if valida(brutos.get(chave)) else None)
+            for chave, valida in PARAMETROS_PAINEL.items()}
 
 
 def _secao(dados: dict, chave: str) -> dict:
@@ -267,6 +341,7 @@ def _resumir_coleta(coleta: dict) -> dict:
             "finalizada_em": coleta.get("finalizada_em"),
             "entrega_concluida_em": coleta.get("entrega_concluida_em"),
             "entrega_hhmm": _hhmm_sp(coleta.get("entrega_concluida_em")),
+            "consulta_hhmm": _hhmm_sp(coleta.get("ultima_consulta_em")),
             "etapas": etapas if isinstance(etapas, dict) else None}
 
 
@@ -350,6 +425,11 @@ def ultima_execucao(itens: list[dict]) -> dict | None:
         if melhor_instante is None or instante > melhor_instante:
             melhor, melhor_instante = item, instante
     return melhor
+
+
+def ultima_execucao_valida(itens: list[dict]) -> dict | None:
+    """Última execução legível com status ok ou parcial (ignora falhou e em andamento); None se não houver."""
+    return ultima_execucao([i for i in itens if i.get("legivel") and i.get("status") in ("ok", "parcial")])
 
 
 def d_mais_recente(raiz: Path, pasta_saida: str) -> date | None:
