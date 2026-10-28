@@ -340,7 +340,10 @@ def secao_duplicatas(ler, mapa, existentes):
 
 
 def secao_distintos(ler, mapa, existentes):
-    """Valores distintos das colunas com lista permitida; valor fora da lista vira divergência."""
+    """Valores distintos das colunas com lista permitida; valor fora da lista vira divergência.
+
+    Origem em `origens_ignoradas` (aceita, mas descartada pela leitura) vira nota com a contagem.
+    """
     secao = r.nova_secao("Valores distintos")
     linhas = []
 
@@ -360,6 +363,11 @@ def secao_distintos(ler, mapa, existentes):
                     rotulo, permitido = valor, ("sim" if valor in permitidos else "não")
                 linhas.append([nome, real, rotulo, n, permitido])
                 valores.append(valor)
+                if coluna == "origem" and valor in (cfg.get("origens_ignoradas") or []):
+                    secao["notas"].append(
+                        f"{nome}.{real} = {valor}: {n} linhas ignoradas pela leitura "
+                        "(origens_ignoradas; fonte nova, aguardando definição)"
+                    )
             fora = r.valores_fora_da_lista(valores, permitidos)
             if fora:
                 secao["divergencias"].append(

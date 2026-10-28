@@ -10,7 +10,7 @@ leitor `ler` (conexão somente leitura, ou um leitor de teste). Cortes:
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 
 import pandas as pd
@@ -41,6 +41,7 @@ class Insumos:
     noticias: pd.DataFrame
     composicao: pd.DataFrame | None
     exclusoes: Exclusoes
+    noticias_ignoradas: dict[str, int] = field(default_factory=dict)   # origem -> notícias descartadas
 
 
 def ler_insumos(d: date, ler: Callable[..., pd.DataFrame], existe_composicao: bool | None = None) -> Insumos:
@@ -53,6 +54,7 @@ def ler_insumos(d: date, ler: Callable[..., pd.DataFrame], existe_composicao: bo
     if t >= d:
         raise ErroSaida(f"o último pregão lido ({t}) não é anterior a {d}")
     mudancas = fontes.ler_mudancas(ler)
+    noticias = fontes.ler_noticias(ate=calendario.corte_manha(d), ler=ler)
     return Insumos(
         d=d,
         t=t,
@@ -64,9 +66,10 @@ def ler_insumos(d: date, ler: Callable[..., pd.DataFrame], existe_composicao: bo
         acoes_emitidas=fontes.ler_tabela("acoes_emitidas", ler=ler),
         proventos=fontes.ler_tabela("proventos", ate=t, ler=ler, unir_mudancas=False),
         indices=fontes.ler_tabela("indices", ate=t, ler=ler),
-        noticias=fontes.ler_noticias(ate=calendario.corte_manha(d), ler=ler),
+        noticias=noticias,
         composicao=fontes.ler_composicao(ler=ler, existe=existe_composicao),
         exclusoes=carregar_exclusoes(),
+        noticias_ignoradas=dict(noticias.attrs.get("origens_ignoradas", {})),
     )
 
 

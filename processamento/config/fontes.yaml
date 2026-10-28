@@ -11,8 +11,11 @@ tabelas:
     textos_vazios_nota: [titulo]   # texto vazio no título vira nota com até 10 ids (a leitura já trata como vazio); nas outras colunas é divergência
     coluna_data: data_publicacao
     coluna_entidade: ticker
+    # Temporário (28/10/2026): origens aceitas na leitura mas descartadas logo depois (fonte nova, aguardando
+    # definição da coleta). Aviso no execucao.json e nota no diagnóstico. Lista vazia = todas entram.
+    origens_ignoradas: [wordpress]
     valores_permitidos:
-      origem: [google_news, cvm_ipe]
+      origem: [google_news, cvm_ipe, wordpress]
       papel: [protagonista, citada_com_fato, mencao, errada, matriz_estrangeira]
       tipo_conteudo: [reportagem, opiniao, lista, agenda, resumo_mercado, podcast_video, newsletter, patrocinado, outro]
       evento: [resultado, dividendo_jcp, fato_relevante, fusao_aquisicao, guidance, recomendacao, regulatorio, operacional, governanca, juridico, mudanca_ticker, macro, outro]

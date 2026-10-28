@@ -439,6 +439,8 @@ def ler_noticias(
     `momento_ref` é `data_hora_publicacao`; sem ela, 23:59:59 do dia de `data_publicacao`.
     Notícias "só data" (meia-noite do Pacífico) passam por `aplicar_regra_so_data` antes de
     qualquer filtro; `precisao_hora` diz de onde veio cada horário.
+    As origens de `origens_ignoradas()` passam pela conferência e saem no fim; a contagem por
+    origem (dentro da janela) fica em `df.attrs["origens_ignoradas"]`.
     O filtro grosso vai ao SQL pela data; o filtro fino é feito em `momento_ref`.
     `ate` precisa ter fuso horário.
     """
@@ -465,7 +467,16 @@ def ler_noticias(
         df = df[df["momento_ref"] <= ate_sp]
     if desde is not None:
         df = df[df["momento_ref"] >= pd.Timestamp(desde).tz_localize(SP)]
-    return df.sort_values(["momento_ref", "id", "ticker"]).reset_index(drop=True)
+    ignorar = df["origem"].isin(origens_ignoradas())
+    contagem = {str(o): int(n) for o, n in df.loc[ignorar, "origem"].value_counts().sort_index().items()}
+    df = df[~ignorar].sort_values(["momento_ref", "id", "ticker"]).reset_index(drop=True)
+    df.attrs["origens_ignoradas"] = contagem
+    return df
+
+
+def origens_ignoradas() -> list[str]:
+    """Origens de `v1-noticias` descartadas por `ler_noticias` (`origens_ignoradas` do mapa; vazia = nenhuma)."""
+    return [str(o) for o in (_entrada("noticias").get("origens_ignoradas") or [])]
 
 
 def meia_noite_pacifico(instantes: pd.Series) -> pd.Series:

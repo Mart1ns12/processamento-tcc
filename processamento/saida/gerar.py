@@ -40,7 +40,8 @@ AVISO_SEM_MODELO = "sem arquivo de modelo em {pasta}: experimento_top não gerad
 AVISO_RETREINO = "Retreino de {mes} falhou ({tipo}): usando o modelo anterior."
 AVISO_SEM_PROBABILIDADE = ("{k} notícias sem probabilidade do FinBERT na janela do dataset: tratadas como ausentes "
                            "(não neutras).")
-AVISO_CHECAGEM = "falha na checagem diária ({tipo}): avisos de checagem não gerados."
+AVISO_ORIGEM_IGNORADA = "{n} notícias da origem {origem} ignoradas (fonte nova, aguardando definição)"
+AVISO_CHECAGEM ="falha na checagem diária ({tipo}): avisos de checagem não gerados."
 AVISO_SUSPEITOS_FALHA = "falha na checagem de retornos suspeitos ({tipo}): aviso não gerado."
 AVISO_COMPLETO = ("Carga completa: pacotes inteiros, sem o envio incremental; o estado do envio e os registros "
                   "do experimento não foram alterados.")
@@ -173,6 +174,7 @@ def gerar(d: date, *, ler=None, pasta_saida: Path | None = None, pasta_modelos: 
     aviso = aviso_composicao(ins.cal, ins.composicao)
     if aviso is not None:
         avisos.append(aviso)
+    avisos.extend(AVISO_ORIGEM_IGNORADA.format(n=n, origem=o) for o, n in ins.noticias_ignoradas.items() if n)
 
     params_precos = carregar_parametros_precos()
     params_fund = carregar_parametros_fundamentos()
