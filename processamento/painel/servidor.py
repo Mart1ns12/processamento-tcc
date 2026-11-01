@@ -121,6 +121,8 @@ def estado_botoes(params: dict, trava: dict, hoje: dict, rotina_data: dict, d_ca
                          "não mexe no envio diário nem nos registros.")
         elif acao_id == "diagnostico":
             aviso = "Só lê o banco; reescreve docs/diagnostico_banco.md."
+        elif acao_id == "wordpress":
+            aviso = "Só lê o banco; reescreve docs/validacao_wordpress.md."
         elif acao_id == "testes":
             aviso = "Não usa o banco; leva alguns minutos."
         argv = acoes.montar_comando(acao_id, d_rotina=d_rotina, d_carga=d_carga)
@@ -331,6 +333,13 @@ class _Handler(BaseHTTPRequestHandler):
             arquivo = relatorios.caminho_ultimo_relatorio(srv.raiz)
             if arquivo is None or not arquivo.is_file():
                 self._json(404, {"erro": "sem relatório"})
+                return
+            texto = arquivo.read_text(encoding="utf-8", errors="replace")
+            self._enviar(200, "text/plain; charset=utf-8", texto.encode("utf-8"))
+        elif caminho == "/api/validacao-wordpress":
+            arquivo = srv.raiz / "docs" / "validacao_wordpress.md"
+            if not arquivo.is_file():
+                self._json(404, {"erro": "docs/validacao_wordpress.md não encontrado (rode a validação)"})
                 return
             texto = arquivo.read_text(encoding="utf-8", errors="replace")
             self._enviar(200, "text/plain; charset=utf-8", texto.encode("utf-8"))

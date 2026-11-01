@@ -11,7 +11,7 @@ IDS = {"resumo", "fluxo", "coleta", "processamento", "interface", "pacotes", "co
        "saude_quantidade_acoes", "saude_retornos", "saude_lacunas", "saude_horario_noticias",
        "saude_cobertura", "experimento", "teste_funcionamento", "cadeado", "modelo", "top5_retido",
        "chance", "modelo_sombra", "grafico", "faixa_acaso", "historico", "testes", "acao_rotina",
-       "acao_carga", "acao_diagnostico", "acao_testes", "api", "banco_api", "tempo_api", "novidades",
+       "acao_carga", "acao_diagnostico", "acao_wordpress", "acao_testes", "api", "banco_api", "tempo_api", "novidades",
        "dia_atipico", "etapas_coleta", "saude_coerencia_mercado", "acao_dia"}
 CHAVES_FAZER = {"saude_contrato", "saude_quantidade_acoes", "saude_retornos", "saude_lacunas",
                 "saude_horario_noticias", "saude_cobertura", "saude_sem_dados", "saude_sem_diagnostico",

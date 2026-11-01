@@ -433,14 +433,16 @@ def ler_noticias(
     ate: pd.Timestamp | None = None,
     ler: Callable[..., pd.DataFrame] | None = None,
     unir_mudancas: bool = True,
+    origens_ignoradas: list[str] | None = None,
 ) -> pd.DataFrame:
     """Lê `v1-noticias` na janela (seção 7.2) e devolve também `momento_ref` (horário de São Paulo).
 
     `momento_ref` é `data_hora_publicacao`; sem ela, 23:59:59 do dia de `data_publicacao`.
     Notícias "só data" (meia-noite do Pacífico) passam por `aplicar_regra_so_data` antes de
     qualquer filtro; `precisao_hora` diz de onde veio cada horário.
-    As origens de `origens_ignoradas()` passam pela conferência e saem no fim; a contagem por
-    origem (dentro da janela) fica em `df.attrs["origens_ignoradas"]`.
+    As origens ignoradas saem no fim; a contagem por origem (dentro da janela) fica em
+    `df.attrs["origens_ignoradas"]`. `origens_ignoradas` None usa as de `origens_ignoradas()`
+    (mapa); uma lista dada (inclusive vazia) substitui essa lista.
     O filtro grosso vai ao SQL pela data; o filtro fino é feito em `momento_ref`.
     `ate` precisa ter fuso horário.
     """
@@ -461,22 +463,54 @@ def ler_noticias(
         condicoes.append(f"{coluna_data} >= :desde_menos_1")
         params["desde_menos_1"] = _data_texto(pd.Timestamp(desde) - pd.Timedelta(days=1))
     df = _selecionar(tabela, colunas, condicoes, params or None, ler)
-    df = _tratar(tabela, df, ler, unir_mudancas)
+    return tratar_noticias_lidas(
+        df, desde=desde, ate=ate_sp, ler=ler, unir_mudancas=unir_mudancas, origens_ignoradas=origens_ignoradas
+    )
+
+
+def tratar_noticias_lidas(
+    df: pd.DataFrame,
+    *,
+    desde: date | None = None,
+    ate: pd.Timestamp | None = None,
+    ler: Callable[..., pd.DataFrame] | None = None,
+    unir_mudancas: bool = True,
+    origens_ignoradas: list[str] | None = None,
+) -> pd.DataFrame:
+    """O que `ler_noticias` faz depois do SELECT, sobre um DataFrame já lido (colunas lógicas do mapa).
+
+    Serve para quem já leu `v1-noticias` e não quer ler de novo. O filtro grosso por data do SQL
+    não é refeito aqui: quem chama com `ate`/`desde` deve ter lido só as linhas daquela data.
+    `ler` ainda é usado para as outras tabelas (ex.: mudanças de ticker).
+    """
+    tabela = "noticias"
+    if ate is not None and pd.Timestamp(ate).tzinfo is None:
+        raise ValueError("ate precisa ter fuso horário")
+    if ler is None:
+        ler = _ler_padrao
+    ate_sp = pd.Timestamp(ate).tz_convert(SP) if ate is not None else None
+    df = _tratar(tabela, df.copy(), ler, unir_mudancas)
     df = aplicar_regra_so_data(df)
     if ate_sp is not None:
         df = df[df["momento_ref"] <= ate_sp]
     if desde is not None:
         df = df[df["momento_ref"] >= pd.Timestamp(desde).tz_localize(SP)]
-    ignorar = df["origem"].isin(origens_ignoradas())
+    lista_ignorada = _origens_do_mapa() if origens_ignoradas is None else list(origens_ignoradas)
+    ignorar = df["origem"].isin(lista_ignorada)
     contagem = {str(o): int(n) for o, n in df.loc[ignorar, "origem"].value_counts().sort_index().items()}
     df = df[~ignorar].sort_values(["momento_ref", "id", "ticker"]).reset_index(drop=True)
     df.attrs["origens_ignoradas"] = contagem
     return df
 
 
+def _origens_do_mapa() -> list[str]:
+    """Origens de `origens_ignoradas` do mapa de `v1-noticias` (vazia = nenhuma)."""
+    return [str(o) for o in (_entrada("noticias").get("origens_ignoradas") or [])]
+
+
 def origens_ignoradas() -> list[str]:
     """Origens de `v1-noticias` descartadas por `ler_noticias` (`origens_ignoradas` do mapa; vazia = nenhuma)."""
-    return [str(o) for o in (_entrada("noticias").get("origens_ignoradas") or [])]
+    return _origens_do_mapa()
 
 
 def meia_noite_pacifico(instantes: pd.Series) -> pd.Series:

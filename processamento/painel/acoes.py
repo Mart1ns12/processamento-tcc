@@ -32,6 +32,7 @@ ACOES: dict[str, Acao] = {
     "rotina": Acao("rotina", "Rodar a rotina do dia", True, False),
     "carga": Acao("carga", "Gerar a carga completa", True, False),
     "diagnostico": Acao("diagnostico", "Rodar o diagnóstico do banco", True, False),
+    "wordpress": Acao("wordpress", "Validar a wordpress", True, False),
     "testes": Acao("testes", "Rodar os testes (pytest)", False, True),
 }
 
@@ -60,6 +61,12 @@ SIGNIFICADOS: dict[str, dict[int, str]] = {
     },
     "diagnostico": {
         0: "relatório gerado",
+        2: "configuração do banco incompleta",
+        3: "sessão não é só leitura ou falha de conexão",
+    },
+    "wordpress": {
+        0: "relatório gerado",
+        1: "falha ao ler as tabelas",
         2: "configuração do banco incompleta",
         3: "sessão não é só leitura ou falha de conexão",
     },
@@ -99,6 +106,8 @@ def montar_comando(acao_id: str, *, d_rotina: date | None, d_carga: date | None)
         return [sys.executable, "-m", "processamento.saida", "--data", d_carga.isoformat(), "--completo"]
     if acao_id == "diagnostico":
         return [sys.executable, "-m", "processamento.diagnostico"]
+    if acao_id == "wordpress":
+        return [sys.executable, "-m", "processamento.diagnostico.wordpress"]
     return [sys.executable, "-m", "pytest", "-q"]
 
 

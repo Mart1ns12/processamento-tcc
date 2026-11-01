@@ -423,6 +423,7 @@ ul{margin:4px 0;padding-left:20px}
         <p class="why">Cada botão chama um comando do projeto. Nenhum escreve no banco da coleta.</p>
         <p class="fazer" data-fazer="comandos" hidden></p>
         <div class="actions" id="botoes"></div>
+        <p class="note"><a id="link-validacao" href="/api/validacao-wordpress" target="_blank" rel="noopener">Ver a validação</a></p>
         <div class="run" id="run" hidden>
           <div class="cardhead"><h3 id="run-t"></h3><span class="pill idle" id="run-p"></span></div>
           <p class="note" id="log-status" aria-live="polite"></p>
@@ -481,6 +482,7 @@ const DESCRICAO = new Map([
   ["rotina", "Espera a coleta do dia (aqui com --sem-esperar), calcula os indicadores e grava os pacotes desse pregão."],
   ["carga", "Gera todos os pacotes inteiros, para a interface começar do zero."],
   ["diagnostico", "Confere o banco da coleta contra a especificação e reescreve o relatório."],
+  ["wordpress", "Confere no banco os dados da origem wordpress e reescreve o relatório docs/validacao_wordpress.md."],
   ["testes", "Roda os testes automáticos, sem o banco. Pode ser interrompido."],
   ["dia", "Roda a rotina, a carga completa e o publicador da API, em sequência, e leva os dados do dia até o banco da API."],
 ]);

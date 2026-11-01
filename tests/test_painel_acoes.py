@@ -57,6 +57,12 @@ def test_montar_comando_diagnostico_e_testes():
     ]
 
 
+def test_montar_comando_wordpress_so_com_o_modulo_fixo():
+    assert montar_comando("wordpress", d_rotina=None, d_carga=None) == [
+        sys.executable, "-m", "processamento.diagnostico.wordpress",
+    ]
+
+
 def test_montar_comando_id_desconhecido_levanta_keyerror():
     with pytest.raises(KeyError):
         montar_comando("apagar", d_rotina=None, d_carga=None)
@@ -90,7 +96,7 @@ def test_significado_por_acao_e_codigo():
 
 
 def test_acoes_fixas():
-    assert set(ACOES) == {"dia", "rotina", "carga", "diagnostico", "testes"}
+    assert set(ACOES) == {"dia", "rotina", "carga", "diagnostico", "wordpress", "testes"}
     assert ACOES["testes"].pode_parar is True
     assert ACOES["rotina"].pode_parar is False
 
@@ -195,6 +201,7 @@ def test_executor_parar_sem_nada_rodando(tmp_path):
 def test_executor_recusa_acao_e_comando_invalidos(tmp_path):
     ex = _executor(tmp_path)
     assert ex.iniciar("apagar", [sys.executable, "-c", "pass"]) == (False, "ação desconhecida")
+    assert ex.iniciar("wordpress_livre", [sys.executable, "-c", "pass"]) == (False, "ação desconhecida")
     assert ex.iniciar("testes", ["cmd", "/c", "dir"]) == (False, "comando inválido")
     assert ex.iniciar("testes", "python") == (False, "comando inválido")
     assert ex.iniciar("testes", []) == (False, "comando inválido")
@@ -230,7 +237,7 @@ def test_executor_mantem_so_os_logs_mais_recentes(tmp_path):
 
 
 def test_nenhum_comando_destrava_o_teste_final():
-    assert set(ACOES) == {"dia", "rotina", "carga", "diagnostico", "testes"}
+    assert set(ACOES) == {"dia", "rotina", "carga", "diagnostico", "wordpress", "testes"}
     for acao_id in ACOES:
         argv = montar_comando(acao_id, d_rotina=date(2026, 10, 23), d_carga=date(2026, 10, 23))
         assert argv is not None

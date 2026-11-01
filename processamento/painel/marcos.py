@@ -141,6 +141,11 @@ ETAPAS: dict[str, list[Etapa]] = {
         Etapa("relatorio", "Gravando docs/diagnostico_banco.md", conclui=_relatorio),
         FIM,
     ],
+    "wordpress": [
+        Etapa("leitura", "Lendo o banco da coleta (só leitura) e conferindo a origem wordpress"),
+        Etapa("relatorio", "Gravando docs/validacao_wordpress.md"),
+        FIM,
+    ],
     "testes": [
         Etapa("coleta", "Encontrando os testes", conclui=_testes_encontrados),
         Etapa("execucao", "Rodando os testes (sem o banco)", conclui=_resumo_pytest, progresso=_percentual),
@@ -153,6 +158,7 @@ TERMINAIS: dict[str, Callable[[str], tuple[str, str] | None] | None] = {
     "rotina": _terminal_rotina,
     "carga": _terminal_banco,
     "diagnostico": _terminal_banco,
+    "wordpress": _terminal_banco,
     "testes": None,
 }
 

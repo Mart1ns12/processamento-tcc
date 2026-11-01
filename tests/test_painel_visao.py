@@ -409,6 +409,8 @@ def test_tempos_acoes_prefere_o_log_do_painel():
                   "origem": "execucao"},
         "diagnostico": {"segundos": None, "curto": None, "texto": "Ainda sem medição: pode levar alguns minutos.",
                         "origem": None},
+        "wordpress": {"segundos": None, "curto": None, "texto": "Ainda sem medição: pode levar alguns minutos.",
+                      "origem": None},
         "testes": {"segundos": 295, "curto": "~5 min", "texto": "Da última vez, pelo painel, levou 4 min 55 s.",
                    "origem": "painel"}}
 

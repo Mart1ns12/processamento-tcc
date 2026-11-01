@@ -248,6 +248,8 @@ def test_api_painel_resumo_tempos_e_ajuda(srv):
                   "origem": "execucao"},
         "diagnostico": {"segundos": None, "curto": None, "texto": "Ainda sem medição: pode levar alguns minutos.",
                         "origem": None},
+        "wordpress": {"segundos": None, "curto": None, "texto": "Ainda sem medição: pode levar alguns minutos.",
+                      "origem": None},
         "testes": {"segundos": 96, "curto": "~2 min", "texto": "Da última vez, pelo painel, levou 1 min 36 s.",
                    "origem": "painel"},
         "dia": {"segundos": None, "curto": None, "texto": "Ainda sem medição: pode levar alguns minutos.",
@@ -380,6 +382,38 @@ def test_post_iniciar_nao_aceita_teste_final(srv):
     status, _, corpo = pedir(srv, "POST", "/api/acao/iniciar", {"acao": "teste_final"})
     assert status == 400
     assert _json(corpo) == {"erro": "ação desconhecida"}
+    assert srv.chamadas == []
+
+
+# ---------------------------------------------------------------- validação da wordpress (botão e link fixos)
+
+def test_validacao_wordpress_botao_com_comando_fixo(srv):
+    _, _, corpo = pedir(srv, "GET", "/api/painel")
+    botao = _json(corpo)["botoes"]["wordpress"]
+    assert botao["titulo"] == "Validar a wordpress"
+    assert botao["comando"] == "python -m processamento.diagnostico.wordpress"
+    assert botao["habilitado"] is True
+    assert botao["data"] is None
+
+
+def test_validacao_wordpress_link_serve_so_o_arquivo_fixo(srv):
+    status, _, corpo = pedir(srv, "GET", "/api/validacao-wordpress?arquivo=../.env")
+    assert status == 404
+    assert _json(corpo) == {"erro": "docs/validacao_wordpress.md não encontrado (rode a validação)"}
+    (srv.raiz / "docs").mkdir(exist_ok=True)
+    (srv.raiz / "docs" / "validacao_wordpress.md").write_text("# Validação da wordpress\n", encoding="utf-8")
+    status, cab, corpo = pedir(srv, "GET", "/api/validacao-wordpress")
+    assert status == 200
+    assert cab["content-type"].startswith("text/plain")
+    assert corpo.decode("utf-8") == "# Validação da wordpress\n"
+
+
+def test_wordpress_nao_aceita_comando_livre(srv):
+    for corpo in [{"acao": "processamento.diagnostico.wordpress"}, {"acao": "wordpress; del *"},
+                  {"acao": "wordpress --apagar"}]:
+        status, _, dados = pedir(srv, "POST", "/api/acao/iniciar", corpo)
+        assert status == 400, corpo
+        assert _json(dados) == {"erro": "ação desconhecida"}
     assert srv.chamadas == []
 
 
