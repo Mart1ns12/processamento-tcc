@@ -11,7 +11,8 @@ SEM_CNPJ_CONHECIDOS = {"CRFB3"}
 ETAPAS_COLETA = ["precos", "macro", "noticias", "ipe", "enriquecimento", "juiza", "cadastro", "entrega", "analise"]
 # Etapas de execuções manuais (ex.: tipo 'coletar'); nunca devem aparecer num daily
 # corrigir_horas: execução manual tipo 'coletar' (vista pendente em 23/10/2026); provável correção do horário das notícias pedida à coleta: ao concluir, reavaliar a regra N1-A
-ETAPAS_EXECUCAO_MANUAL = ["cvm_itr_dfp", "build_entrega", "corrigir_horas"]
+# b3_indices: busca os índices B3 IDIV, IFIX e SMLL (vista em 1 execução, com ordem 3, a mesma de noticias no daily). Fora de ETAPAS_COLETA: essa lista alimenta a rotina e o coleta_status do execucao.json, cujo contrato recusa etapa nova
+ETAPAS_EXECUCAO_MANUAL = ["cvm_itr_dfp", "build_entrega", "corrigir_horas", "b3_indices"]
 STATUS_ETAPA ={"pendente", "em_andamento", "concluida", "falhou", "pulada"}
 MODELOS_FINBERT = {"pt": "lucas-leme/FinBERT-PT-BR", "en": "ProsusAI/finbert"}
 IDIOMAS = {"pt", "en"}

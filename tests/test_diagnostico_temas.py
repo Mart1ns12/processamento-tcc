@@ -146,7 +146,7 @@ def test_secao_painel_etapas_manuais_fora_do_daily_viram_nota(mapa):
     secao = secao_painel(_ler_painel_com_manuais([]), mapa,
                          {"v1-painel_execucoes", "v1-painel_etapas"})
     assert secao["divergencias"] == []
-    assert any("build_entrega, corrigir_horas, cvm_itr_dfp" in n for n in secao["notas"])
+    assert any("b3_indices, build_entrega, corrigir_horas, cvm_itr_dfp" in n for n in secao["notas"])
 
 
 def test_secao_painel_etapa_manual_dentro_do_daily_e_divergencia(mapa):
