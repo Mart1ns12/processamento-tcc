@@ -436,7 +436,7 @@ def test_quantidade_suspeita_com_quantidade_em_milhares_lista_a_empresa(mapa, ta
     secao = secao_quantidade_acoes(_ler_sem_banco, mapa, _existentes_quantidade(), Exclusoes(), t=T_QUANTIDADE)
 
     assert secao["notas"] == [
-        "quantidade de ações suspeita (P/VP < 0,05; v1-acoes_emitidas provavelmente em milhares) "
+        "quantidade de ações suspeita (P/VP < 0,05 e P/VP × 1000 <= 20; v1-acoes_emitidas provavelmente em milhares) "
         "em 1 empresas em 2026-03-16: valor de mercado, P/L, P/VP e payout = indisponivel (seção 6)"
     ]
     assert secao["divergencias"] == []

@@ -336,23 +336,54 @@ def _foto_com_pl(pl, pl_status=OK):
 
 def test_quantidade_nao_suspeita_com_pvp_igual_ao_limite():
     # P/VP = 5 ÷ 100 = 0,05 exato: limite estrito, não é suspeito
-    assert quantidade_suspeita((5.0, OK), _foto_com_pl(100.0), 0.05) is False
+    assert quantidade_suspeita((5.0, OK), _foto_com_pl(100.0), 0.05, 1000.0) is False
 
 
 def test_quantidade_suspeita_com_pvp_abaixo_do_limite():
-    assert quantidade_suspeita((4.99, OK), _foto_com_pl(100.0), 0.05) is True
+    assert quantidade_suspeita((4.99, OK), _foto_com_pl(100.0), 0.05, 1000.0) is True
 
 
 def test_quantidade_nao_suspeita_com_pl_negativo():
-    assert quantidade_suspeita((5.0, OK), _foto_com_pl(-10.0), 0.05) is False
+    assert quantidade_suspeita((5.0, OK), _foto_com_pl(-10.0), 0.05, 1000.0) is False
 
 
 def test_quantidade_nao_suspeita_com_pl_indisponivel():
-    assert quantidade_suspeita((5.0, OK), _foto_com_pl(NAN, INDISPONIVEL), 0.05) is False
+    assert quantidade_suspeita((5.0, OK), _foto_com_pl(NAN, INDISPONIVEL), 0.05, 1000.0) is False
 
 
 def test_quantidade_nao_suspeita_sem_valor_de_mercado():
-    assert quantidade_suspeita((NAN, INDISPONIVEL), _foto_com_pl(100.0), 0.05) is False
+    assert quantidade_suspeita((NAN, INDISPONIVEL), _foto_com_pl(100.0), 0.05, 1000.0) is False
+
+
+# Teto de P/VP × 1000 (pvp_maximo_plausivel_x1000 = 20): P/VP < 0,05 sozinho não basta
+HAPV_PL = 48063476000.0
+
+
+def test_quantidade_nao_suspeita_com_pvp_igual_ao_limite_e_teto_20():
+    # P/VP = 5 ÷ 100 = 0,05 exato: limite estrito, não é suspeito (também com o teto)
+    assert quantidade_suspeita((5.0, OK), _foto_com_pl(100.0), 0.05, 20.0) is False
+
+
+def test_hapv3_real_nao_e_suspeita():
+    # 4,20 × 502.630.884 ações: P/VP ≈ 0,0439, × 1000 = 43,9 > 20 (acima do teto)
+    assert quantidade_suspeita((2111049712.8, OK), _foto_com_pl(HAPV_PL), 0.05, 20.0) is False
+
+
+def test_hapv3_real_pvp_sai_ok():
+    r = indicadores_empresa(_foto_com_pl(HAPV_PL), (2111049712.8, OK), (NAN, INDISPONIVEL), False,
+                            pvp_minimo=0.05, pvp_maximo_x1000=20.0)
+    _par(r["pvp.valor"], 2111049712.8 / HAPV_PL, OK)
+
+
+def test_hapv3_em_milhares_e_suspeita():
+    # 4,20 × 502.631 (quantidade em milhares): P/VP ≈ 0,0000439, × 1000 = 0,0439 <= 20
+    assert quantidade_suspeita((2111050.2, OK), _foto_com_pl(HAPV_PL), 0.05, 20.0) is True
+
+
+def test_hapv3_em_milhares_pvp_sai_indisponivel():
+    r = indicadores_empresa(_foto_com_pl(HAPV_PL), (2111050.2, OK), (NAN, INDISPONIVEL), False,
+                            pvp_minimo=0.05, pvp_maximo_x1000=20.0)
+    _par(r["pvp.valor"], None, INDISPONIVEL)
 
 
 def test_indicadores_com_quantidade_suspeita_tira_pl_pvp_e_payout():

@@ -167,6 +167,7 @@ fundamentos:
   anos_payout: 5                # payout_por_ano: últimos N exercícios (DFP) entregues até t
   anos_historico_proventos: 5   # soma por ano: ano de t e os N − 1 anteriores
   pvp_minimo_plausivel: 0.05    # P/VP calculado abaixo disto = quantidade de ações suspeita (v1-acoes_emitidas em milhares em ~25 empresas; seção 10)
+  pvp_maximo_plausivel_x1000: 20.0  # P/VP × 1000 acima disto: multiplicar as ações por 1000 daria P/VP implausível, logo a quantidade não está em milhares
   balanco_idade_max_meses: 15   # balanço de referência com data_fim_periodo + N meses antes de t = velho: P/L, P/VP, ROE, margens, EBITDA, endividamento e payout 12m indisponíveis (seção 6)
 # Fase 2: dataset do experimento (seção 7.3; plano da etapa 5). Volatilidade, volume, beta e
 # setor_excluir vêm do bloco fase1 (mesma conta do painel).

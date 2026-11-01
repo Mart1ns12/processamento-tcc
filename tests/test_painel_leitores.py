@@ -290,7 +290,8 @@ def test_ler_valores_ajuda_da_fixture(tmp_path):
     assert leitores.ler_valores_ajuda(raiz) == {
         "prazo": "09:45", "prazo_tardio": "12:00", "inicio_consulta": "08:00", "intervalo": "5",
         "limite_historico": "10:00", "corte_noite": "08:00", "retorno_min": "-75%", "retorno_max": "+100%",
-        "defasagem": "5", "pvp_min": "0,05", "sorteios": "10.000", "teste_final_inicio": "23/06/2026",
+        "defasagem": "5", "pvp_min": "0,05", "pvp_max_x1000": "20", "sorteios": "10.000",
+        "teste_final_inicio": "23/06/2026",
         "tempo_limite_api": "2 s", "atipico_min_acoes": "5", "atipico_retorno": "30%", "atipico_ibov": "5%",
         "coerencia_ivvb11": "3%", "coerencia_dif": "2%", "etapas_conferidas": "precos, noticias, enriquecimento",
     }
@@ -301,12 +302,15 @@ def test_ler_valores_ajuda_invalidos_e_ausente(tmp_path):
     caminho = raiz / "processamento" / "config" / "parametros.yaml"
     texto = caminho.read_text(encoding="utf-8")
     assert 'prazo_tardio: "12:00"' in texto and "intervalo_minutos: 5" in texto
+    assert "pvp_maximo_plausivel_x1000: 20.0" in texto
     texto = texto.replace('prazo_tardio: "12:00"', "prazo_tardio: 12:00")
     texto = texto.replace("intervalo_minutos: 5", "intervalo_minutos: true")
+    texto = texto.replace("pvp_maximo_plausivel_x1000: 20.0", "pvp_maximo_plausivel_x1000: true")
     caminho.write_text(texto, encoding="utf-8")
     v = leitores.ler_valores_ajuda(raiz)
     assert v["prazo_tardio"] is None
     assert v["intervalo"] is None
+    assert v["pvp_max_x1000"] is None
     assert v["prazo"] == "09:45"
     caminho.unlink()
     assert leitores.ler_valores_ajuda(raiz) == dict.fromkeys(leitores.CHAVES_AJUDA)

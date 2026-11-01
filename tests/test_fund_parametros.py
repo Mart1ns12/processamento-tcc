@@ -39,6 +39,7 @@ def test_yaml_real_traz_o_bloco_fundamentos():
         anos_historico_proventos=5,
         pvp_minimo_plausivel=0.05,
         balanco_idade_max_meses=15,
+        pvp_maximo_plausivel_x1000=20.0,
     )
 
 
@@ -72,6 +73,10 @@ def test_yaml_sem_bloco_fundamentos_levanta_erro(tmp_path):
         (lambda d: d["fundamentos"].__setitem__("pvp_minimo_plausivel", -0.05), "fundamentos.pvp_minimo_plausivel"),
         (lambda d: d["fundamentos"].__setitem__("pvp_minimo_plausivel", True), "fundamentos.pvp_minimo_plausivel"),
         (lambda d: d["fundamentos"].__setitem__("pvp_minimo_plausivel", "0.05"), "fundamentos.pvp_minimo_plausivel"),
+        (lambda d: d["fundamentos"].pop("pvp_maximo_plausivel_x1000"), "faltam chaves"),
+        (lambda d: d["fundamentos"].__setitem__("pvp_maximo_plausivel_x1000", 0), "fundamentos.pvp_maximo_plausivel_x1000"),
+        (lambda d: d["fundamentos"].__setitem__("pvp_maximo_plausivel_x1000", True), "fundamentos.pvp_maximo_plausivel_x1000"),
+        (lambda d: d["fundamentos"].__setitem__("pvp_maximo_plausivel_x1000", "50"), "fundamentos.pvp_maximo_plausivel_x1000"),
         (lambda d: d["fundamentos"].pop("balanco_idade_max_meses"), "faltam chaves"),
         (lambda d: d["fundamentos"].__setitem__("balanco_idade_max_meses", 0), "fundamentos.balanco_idade_max_meses"),
         (lambda d: d["fundamentos"].__setitem__("balanco_idade_max_meses", True), "fundamentos.balanco_idade_max_meses"),

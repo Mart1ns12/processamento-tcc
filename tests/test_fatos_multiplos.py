@@ -188,6 +188,15 @@ def test_quantidade_em_milhares_tira_pl_e_pvp_da_empresa(grades_mil):
             assert pd.isna(grades_mil[chave].valor.loc[t, ticker]), (chave, ticker)
 
 
+def test_teto_vem_dos_parametros_em_multiplos_diarios():
+    # Com teto 0,5 o P/VP × 1000 da AAAA (0,71) passa do teto: não é suspeita, e o P/VP sai ok
+    params = dataclasses.replace(PARAMS, pvp_maximo_plausivel_x1000=0.5)
+    g = multiplos_diarios(DADOS_MIL, CAL, EXCL, params)
+    t = pd.Timestamp("2026-03-16")
+    assert g["pvp"].status.loc[t, "AAAA3"] == OK
+    assert g["pvp"].valor.loc[t, "AAAA3"] == pytest.approx(0.7076923076923077 / 1000, rel=1e-9)
+
+
 @pytest.mark.parametrize("t", ORACULO_DATAS)
 def test_oraculo_igual_com_quantidade_em_milhares(grades_mil, t):
     ref = calcular_fundamentos_no_dia(t, CAL, DADOS_MIL, EXCL, PARAMS, "empresa")

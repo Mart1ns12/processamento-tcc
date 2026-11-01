@@ -50,7 +50,7 @@ LUCRO_NEGATIVO = "lucro_negativo"
 
 _CHAVES_FUNDAMENTOS = {
     "subsetores_financeiros", "meses_janela", "anos_payout", "anos_historico_proventos", "pvp_minimo_plausivel",
-    "balanco_idade_max_meses",
+    "pvp_maximo_plausivel_x1000", "balanco_idade_max_meses",
 }
 
 
@@ -68,6 +68,7 @@ class ParametrosFundamentos:
     anos_historico_proventos: int
     pvp_minimo_plausivel: float
     balanco_idade_max_meses: int = 15
+    pvp_maximo_plausivel_x1000: float = math.inf
 
 
 def _inteiro_positivo(valor: object, onde: str) -> int:
@@ -81,6 +82,13 @@ def _numero_entre_zero_e_um(valor: object, onde: str) -> float:
     """Confere um número com 0 < valor < 1 (bool não conta; NaN é recusado); senão levanta o erro."""
     if isinstance(valor, bool) or not isinstance(valor, (int, float)) or not 0 < valor < 1:
         raise ErroParametrosFundamentos(f"{onde} deve ser um número maior que zero e menor que um (recebeu {valor!r})")
+    return float(valor)
+
+
+def _numero_maior_que_zero(valor: object, onde: str) -> float:
+    """Confere um número > 0 (bool e texto não contam; NaN é recusado); senão levanta o erro."""
+    if isinstance(valor, bool) or not isinstance(valor, (int, float)) or not valor > 0:
+        raise ErroParametrosFundamentos(f"{onde} deve ser um número maior que zero (recebeu {valor!r})")
     return float(valor)
 
 
@@ -113,6 +121,9 @@ def carregar_parametros_fundamentos(caminho: str | None = None) -> ParametrosFun
             bloco["anos_historico_proventos"], "fundamentos.anos_historico_proventos"
         ),
         pvp_minimo_plausivel=_numero_entre_zero_e_um(bloco["pvp_minimo_plausivel"], "fundamentos.pvp_minimo_plausivel"),
+        pvp_maximo_plausivel_x1000=_numero_maior_que_zero(
+            bloco["pvp_maximo_plausivel_x1000"], "fundamentos.pvp_maximo_plausivel_x1000"
+        ),
         balanco_idade_max_meses=_inteiro_positivo(
             bloco["balanco_idade_max_meses"], "fundamentos.balanco_idade_max_meses"
         ),
@@ -205,17 +216,20 @@ def valor_de_mercado(
     return _falha(INDISPONIVEL)
 
 
-def quantidade_suspeita(vm: tuple[float, str], foto: FotoBalanco, limite: float) -> bool:
+def quantidade_suspeita(vm: tuple[float, str], foto: FotoBalanco, limite: float, teto_x1000: float) -> bool:
     """True se a quantidade de ações da empresa parece estar em milhares (seção 10).
 
-    Suspeita quando o valor de mercado e o patrimônio líquido têm status ok, o PL é > 0 e
-    valor de mercado ÷ PL é menor que `limite` (estrito: exatamente igual ao limite não é suspeito).
+    Suspeita quando o valor de mercado e o patrimônio líquido têm status ok, o PL é > 0, valor de mercado ÷ PL
+    é menor que `limite` (estrito: exatamente igual ao limite não é suspeito) e valor de mercado ÷ PL × 1000
+    é menor ou igual a `teto_x1000` (acima disso, multiplicar as ações por 1000 daria P/VP implausível, logo a
+    quantidade não está em milhares).
     """
     valor_mercado, vm_s = vm
     pl, pl_s = foto.estoque["patrimonio_liquido"]
     if vm_s != OK or pl_s != OK or not pl > 0:
         return False
-    return valor_mercado / pl < limite
+    p = valor_mercado / pl
+    return p < limite and p * 1000 <= teto_x1000
 
 
 def balanco_velho(data_fim_periodo, t, meses: int) -> bool:
@@ -247,16 +261,18 @@ def indicadores_empresa(
     pago: tuple[float, str],
     financeiro: bool,
     pvp_minimo: float | None = None,
+    pvp_maximo_x1000: float = math.inf,
 ) -> dict[str, tuple[float, str]]:
     """Indicadores da empresa em t: P/L, P/VP, ROE, payout, margens, EBITDA e endividamento.
 
     Cada indicador devolve (valor, status). A primeira regra que se aplica vence (ordem da
     tabela da F3a do plano). P/L com lucro negativo mantém o valor (vm/L) e o status
     `lucro_negativo`; com lucro zero o valor é NaN.
-    Se `pvp_minimo` não for None e a quantidade de ações for suspeita (`quantidade_suspeita`),
-    valor de mercado e pago viram indisponíveis antes das contas: P/L, P/VP e payout saem indisponíveis.
+    Se `pvp_minimo` não for None e a quantidade de ações for suspeita (`quantidade_suspeita`, com
+    `pvp_maximo_x1000` como teto de P/VP × 1000), valor de mercado e pago viram indisponíveis antes das contas:
+    P/L, P/VP e payout saem indisponíveis.
     """
-    if pvp_minimo is not None and quantidade_suspeita(vm, foto, pvp_minimo):
+    if pvp_minimo is not None and quantidade_suspeita(vm, foto, pvp_minimo, pvp_maximo_x1000):
         vm = _falha(INDISPONIVEL)
         pago = _falha(INDISPONIVEL)
     base = foto.status_base
@@ -514,7 +530,8 @@ def calcular_fundamentos_no_dia(t, cal, dados: DadosFundamentos, exclusoes: Excl
             eh_financeiro(subsetor_de.get(k), params) for k in tickers if cnpj_de.get(k) == cnpj
         )
         por_empresa[cnpj] = indicadores_empresa(foto, vm, pago, financeira_cnpj[cnpj],
-                                                pvp_minimo=params.pvp_minimo_plausivel)
+                                                pvp_minimo=params.pvp_minimo_plausivel,
+                                                pvp_maximo_x1000=params.pvp_maximo_plausivel_x1000)
 
     celulas: dict[str, dict[str, tuple[float, str]]] = {}
     financeira_de: dict[str, bool] = {}
@@ -564,7 +581,7 @@ def _cnpjs_com_quantidade_suspeita(ts: pd.Timestamp, dados: DadosFundamentos, ex
     for cnpj in {cnpj_de[k] for k in tickers if cnpj_de.get(k)}:
         vm = valor_de_mercado(cnpj, fech, dados.cadastro, tickers, acoes_na_data(disp, cnpj, ts))
         foto = foto_balanco(dados.balancos, cnpj, ts, exclusoes)
-        if quantidade_suspeita(vm, foto, params.pvp_minimo_plausivel):
+        if quantidade_suspeita(vm, foto, params.pvp_minimo_plausivel, params.pvp_maximo_plausivel_x1000):
             suspeitas.add(cnpj)
     return suspeitas
 

@@ -12,6 +12,7 @@ fase1:
   base_defasagem_max_pregoes: 5
 fundamentos:
   pvp_minimo_plausivel: 0.05
+  pvp_maximo_plausivel_x1000: 20.0
 saida:
   pasta: "saida"
   publicar_top_provisorio: false

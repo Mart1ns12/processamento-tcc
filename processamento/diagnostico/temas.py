@@ -1100,7 +1100,7 @@ def _data_referencia_usada(disponiveis: pd.DataFrame, cnpj: str, ts: pd.Timestam
 
 
 def _suspeitas_em(ts: pd.Timestamp, precos: pd.DataFrame, cadastro: pd.DataFrame, balancos: pd.DataFrame,
-                  acoes: pd.DataFrame, exclusoes: Exclusoes, limite: float) -> list[dict]:
+                  acoes: pd.DataFrame, exclusoes: Exclusoes, limite: float, teto_x1000: float) -> list[dict]:
     """Empresas do painel com quantidade de ações suspeita em `ts` (mesma conta de `calcular_fundamentos_no_dia`)."""
     tickers = tickers_do_painel(cadastro, exclusoes)
     _, cnpj_de = mapas_cadastro(cadastro)
@@ -1110,7 +1110,7 @@ def _suspeitas_em(ts: pd.Timestamp, precos: pd.DataFrame, cadastro: pd.DataFrame
     for cnpj in sorted({cnpj_de[k] for k in tickers if cnpj_de.get(k)}):
         vm = valor_de_mercado(cnpj, fech, cadastro, tickers, acoes_na_data(disp, cnpj, ts))
         foto = foto_balanco(balancos, cnpj, ts, exclusoes)
-        if not quantidade_suspeita(vm, foto, limite):
+        if not quantidade_suspeita(vm, foto, limite, teto_x1000):
             continue
         qtd_on, qtd_pn, _ = acoes_na_data(disp, cnpj, ts)
         total = qtd_on + qtd_pn
@@ -1126,7 +1126,8 @@ def _suspeitas_em(ts: pd.Timestamp, precos: pd.DataFrame, cadastro: pd.DataFrame
 
 def secao_quantidade_acoes(ler, mapa: dict, existentes: set, exclusoes: Exclusoes | None = None,
                            t=None) -> dict:
-    """Empresas com quantidade de ações suspeita em t (P/VP < `fundamentos.pvp_minimo_plausivel`).
+    """Empresas com quantidade de ações suspeita em t (P/VP < `fundamentos.pvp_minimo_plausivel`
+    e P/VP × 1000 <= `fundamentos.pvp_maximo_plausivel_x1000`).
 
     É nota, não divergência: a quantidade de `v1-acoes_emitidas` provavelmente está em milhares
     (pendência da coleta, seção 10). `t` padrão é o último pregão com preço do IBOV. Lê só pela
@@ -1140,7 +1141,8 @@ def secao_quantidade_acoes(ler, mapa: dict, existentes: set, exclusoes: Exclusoe
         return secao
     if exclusoes is None:
         exclusoes = carregar_exclusoes()
-    limite = carregar_parametros_fundamentos().pvp_minimo_plausivel
+    params_fund = carregar_parametros_fundamentos()
+    limite, teto = params_fund.pvp_minimo_plausivel, params_fund.pvp_maximo_plausivel_x1000
 
     precos = fontes.ler_tabela("precos", ler=ler)
     if t is None:
@@ -1154,13 +1156,15 @@ def secao_quantidade_acoes(ler, mapa: dict, existentes: set, exclusoes: Exclusoe
     balancos = fontes.ler_tabela("balancos", ate=ts.date(), ler=ler)
     acoes = fontes.ler_tabela("acoes_emitidas", ler=ler)
 
-    achados = _suspeitas_em(ts, precos, cadastro, balancos, acoes, exclusoes, limite)
+    achados = _suspeitas_em(ts, precos, cadastro, balancos, acoes, exclusoes, limite, teto)
     if not achados:
         secao["notas"].append(f"nenhuma empresa com quantidade de ações suspeita em {ts.date().isoformat()}")
         return secao
     limite_txt = f"{limite:.2f}".replace(".", ",")
+    teto_txt = f"{teto:g}".replace(".", ",")
     secao["notas"].append(
-        f"quantidade de ações suspeita (P/VP < {limite_txt}; v1-acoes_emitidas provavelmente em milhares) "
+        f"quantidade de ações suspeita (P/VP < {limite_txt} e P/VP × 1000 <= {teto_txt}; "
+        "v1-acoes_emitidas provavelmente em milhares) "
         f"em {len(achados)} empresas em {ts.date().isoformat()}: valor de mercado, P/L, P/VP e payout "
         "= indisponivel (seção 6)")
     adicionar_tabela(
