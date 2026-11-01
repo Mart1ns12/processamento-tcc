@@ -54,7 +54,7 @@ def ler_insumos(d: date, ler: Callable[..., pd.DataFrame], existe_composicao: bo
     if t >= d:
         raise ErroSaida(f"o último pregão lido ({t}) não é anterior a {d}")
     mudancas = fontes.ler_mudancas(ler)
-    noticias = fontes.ler_noticias(ate=calendario.corte_manha(d), ler=ler)
+    noticias = fontes.ler_noticias(ate=calendario.corte_manha(d), ler=ler, com_url_resolvida=True)
     return Insumos(
         d=d,
         t=t,

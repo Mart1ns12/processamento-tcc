@@ -1,6 +1,6 @@
 # Diagnóstico do banco da coleta (só leitura)
 
-- Gerado em: 2026-11-01 15:20 (America/Sao_Paulo)
+- Gerado em: 2026-11-01 17:20 (America/Sao_Paulo)
 - Banco: tcc_scraper
 - MySQL: 8.0.46-0ubuntu0.24.04.4
 - Comando: `python -m processamento.diagnostico`
@@ -9,9 +9,7 @@
 
 ## Divergências × especificação
 
-| # | Tema | Tabela | Detalhe |
-|---|---|---|---|
-| 1 | etapa_desconhecida | v1-painel_etapas | b3_indices |
+Nenhuma divergência encontrada.
 
 ## 1. Existência das tabelas
 
@@ -591,13 +589,7 @@
 
 ## 10. Quantidade de ações suspeita
 
-- quantidade de ações suspeita (P/VP < 0,05; v1-acoes_emitidas provavelmente em milhares) em 1 empresas em 2026-10-30: valor de mercado, P/L, P/VP e payout = indisponivel (seção 6)
-
-### Empresas com quantidade de ações suspeita
-
-| tickers | cnpj | data_referencia | acoes | pvp |
-|---|---|---|---|---|
-| HAPV3 | 05197443000138 | 2026-06-30 | 502630884 | 0.0439 |
+- nenhuma empresa com quantidade de ações suspeita em 2026-10-30
 
 ## 11. Retornos diários suspeitos
 
@@ -656,7 +648,7 @@
 
 - daily cron fora da agenda (11h/21h UTC): 0h: 1, 3h: 1, 19h: 1 execuções
 - daily manual: 1 execuções (23h: 1)
-- etapas de execuções manuais (fora do daily): build_entrega, corrigir_horas, cvm_itr_dfp
+- etapas de execuções manuais (fora do daily): b3_indices, build_entrega, corrigir_horas, cvm_itr_dfp
 - v1-composicao_ibov: colunas faltando nenhum; extras nenhum
 - v1-composicao_ibov: 137 linhas, data_inicio de 2021-01-01 a 2026-09-08, 76 vigentes (data_fim vazia); datas sem vigência usam composicao_atual (seção 3.5)
 

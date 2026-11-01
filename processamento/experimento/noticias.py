@@ -13,6 +13,7 @@ import pandas as pd
 from processamento import calendario, tickers
 from processamento.experimento.parametros import ParametrosExperimento
 from processamento.fatos.fundamentos import normalizar_texto
+from processamento.texto_noticias import chave_url, normalizar_titulo
 
 COLUNAS_PREPARADAS = ["id", "ticker", "empresa", "origem", "momento", "sem_horario", "janela", "pregao_ref", "score"]
 VERSOES = ("todas", "principais", "hora_real_noite")
@@ -62,11 +63,148 @@ def ligar_empresa(noticias: pd.DataFrame, cnpj_de: dict, mudancas: dict) -> pd.D
     return noticias.assign(empresa=noticias["ticker"].map(mapa))
 
 
+ORIGEM_CVM = "cvm_ipe"
+COLUNAS_PARES = [
+    "empresa", "regra", "tambem_url", "id_removido", "origem_removido", "titulo_removido", "data_removido",
+    "ticker_removido", "id_mantido", "origem_mantido", "titulo_mantido", "data_mantido", "ticker_mantido", "dias",
+]
+
+
+def _serie(df: pd.DataFrame, nome: str) -> pd.Series:
+    """Coluna `nome` de df; se não existir, uma coluna de nulos (ausência)."""
+    if nome in df.columns:
+        return df[nome]
+    return pd.Series(None, index=df.index, dtype=object)
+
+
+def _url_util(*valores) -> str | None:
+    """Primeiro valor que é texto não vazio; None se nenhum for."""
+    for valor in valores:
+        if isinstance(valor, str) and valor.strip():
+            return valor
+    return None
+
+
+def remover_entre_origens(df: pd.DataFrame, params: ParametrosExperimento) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Tira as cópias da mesma notícia entre origens diferentes. Devolve (df sem as removidas, pares).
+
+    Candidatas: origem diferente de cvm_ipe. Quem fica, na ordem de prioridade: com probabilidade antes de sem;
+    `precisao_hora == "hora"` antes (sem a coluna, não conta); menor `momento_ref`; menor `id`.
+    Percorre as candidatas nessa ordem e cai a linha que casa com uma linha JÁ MANTIDA de OUTRA origem:
+    - título (só com `deduplicar_titulo`): mesma empresa, mesmo `normalizar_titulo`, com pelo menos
+      `titulo_palavras_min_entre_origens` palavras (no título normalizado) e |data_publicacao| até
+      `janela_dias_entre_origens`;
+    - URL: mesma empresa e mesma `chave_url`, sem janela de data. A URL da linha é `resolved_url` se houver,
+      senão `link`; o mínimo de palavras não vale para URL.
+    Não há fechamento transitivo: compara só com as mantidas. Atribuição: título com Δ=0 é `titulo_mesmo_dia`;
+    título com Δ≠0 é `titulo_janela`; só URL é `url`. `tambem_url` diz se o par também casa por URL.
+    Colunas ausentes valem como nulas (sem título, sem URL, sem precisão, sem probabilidade).
+    `pares` tem uma linha por removida, com as colunas de `COLUNAS_PARES`.
+    """
+    df = df.reset_index(drop=True)
+    if "origem" not in df.columns:
+        raise ValueError("deduplicação entre origens exige a coluna origem")
+    cand = df[df["origem"] != ORIGEM_CVM]
+    if cand.empty:
+        return df, pd.DataFrame(columns=COLUNAS_PARES)
+    usa_titulo = params.deduplicar_titulo
+    janela = params.janela_dias_entre_origens
+    minimo = params.titulo_palavras_min_entre_origens
+
+    if {"prob_positivo", "prob_negativo"} <= set(df.columns):
+        sem_prob = (df["prob_positivo"].isna() | df["prob_negativo"].isna()).astype(int)
+    else:
+        sem_prob = pd.Series(0, index=df.index)
+    if "precisao_hora" in df.columns:
+        nao_hora = df["precisao_hora"].ne("hora").astype(int)
+    else:
+        nao_hora = pd.Series(0, index=df.index)
+
+    tn = _serie(cand, "titulo").map(normalizar_titulo)
+    urls = [_url_util(r, l) for r, l in zip(_serie(cand, "resolved_url"), _serie(cand, "link"))]
+    w = pd.DataFrame(
+        {
+            "pos": cand.index,
+            "empresa": cand["empresa"].to_numpy(),
+            "origem": cand["origem"].to_numpy(),
+            "id": cand["id"].to_numpy(),
+            "ticker": _serie(cand, "ticker").to_numpy(),
+            "titulo": _serie(cand, "titulo").to_numpy(),
+            "data": pd.to_datetime(_serie(cand, "data_publicacao")).to_numpy(),
+            "momento": cand["momento_ref"].to_numpy(),
+            "tn": tn.to_numpy(),
+            "uk": [chave_url(u) if u else None for u in urls],
+            "sem_prob": sem_prob.loc[cand.index].to_numpy(),
+            "nao_hora": nao_hora.loc[cand.index].to_numpy(),
+        }
+    )
+    w["tn_ok"] = w["tn"].map(lambda t: isinstance(t, str) and len(t.split()) >= minimo).astype(bool)
+    # ordinal do dia (int) ou None: object, para o None não virar NaN
+    w["dia"] = pd.Series([d.toordinal() if pd.notna(d) else None for d in w["data"]], index=w.index, dtype=object)
+    # só entram no laço as linhas de grupos com mais de uma origem (título ou URL); as outras ficam
+    grupo = pd.Series(False, index=w.index)
+    if usa_titulo:
+        com_titulo = w[w["tn_ok"]]
+        grupo |= com_titulo.groupby(["empresa", "tn"])["origem"].transform("nunique").reindex(w.index) > 1
+    com_url = w[w["uk"].notna()]
+    grupo |= com_url.groupby(["empresa", "uk"])["origem"].transform("nunique").reindex(w.index) > 1
+    g = w[grupo].sort_values(["sem_prob", "nao_hora", "momento", "id"], kind="mergesort")
+
+    mantidas_t: dict = {}
+    mantidas_u: dict = {}
+    removidas: list = []
+    pares: list[dict] = []
+    for lin in g.to_dict("records"):
+        achado, regra = None, None
+        if usa_titulo and lin["tn_ok"]:
+            for k in mantidas_t.get((lin["empresa"], lin["tn"]), []):
+                if k["origem"] == lin["origem"] or lin["dia"] is None or k["dia"] is None:
+                    continue
+                if abs(lin["dia"] - k["dia"]) <= janela:
+                    achado = k
+                    regra = "titulo_mesmo_dia" if lin["dia"] == k["dia"] else "titulo_janela"
+                    break
+        if achado is None and lin["uk"] is not None:
+            for k in mantidas_u.get((lin["empresa"], lin["uk"]), []):
+                if k["origem"] != lin["origem"]:
+                    achado, regra = k, "url"
+                    break
+        if achado is None:
+            if usa_titulo and lin["tn_ok"]:
+                mantidas_t.setdefault((lin["empresa"], lin["tn"]), []).append(lin)
+            if lin["uk"] is not None:
+                mantidas_u.setdefault((lin["empresa"], lin["uk"]), []).append(lin)
+            continue
+        removidas.append(lin["pos"])
+        tambem_url = lin["uk"] is not None and any(
+            k["origem"] != lin["origem"] for k in mantidas_u.get((lin["empresa"], lin["uk"]), [])
+        )
+        dias = abs(lin["dia"] - achado["dia"]) if lin["dia"] is not None and achado["dia"] is not None else None
+        pares.append({
+            "empresa": lin["empresa"], "regra": regra, "tambem_url": bool(tambem_url),
+            "id_removido": lin["id"], "origem_removido": lin["origem"], "titulo_removido": lin["titulo"],
+            "data_removido": lin["data"], "ticker_removido": lin["ticker"],
+            "id_mantido": achado["id"], "origem_mantido": achado["origem"], "titulo_mantido": achado["titulo"],
+            "data_mantido": achado["data"], "ticker_mantido": achado["ticker"], "dias": dias,
+        })
+    restante = df.drop(index=removidas).reset_index(drop=True)
+    return restante, pd.DataFrame(pares, columns=COLUNAS_PARES)
+
+
 def deduplicar(noticias: pd.DataFrame, params: ParametrosExperimento) -> tuple[pd.DataFrame, dict]:
     """Uma linha por (empresa, id). Com `deduplicar_titulo`, também uma por (empresa, dia, título)
-    entre as notícias que não são de cvm_ipe. Entre as cópias, fica a que tem probabilidade (prob_positivo e
+    entre as notícias que não são de cvm_ipe (com `deduplicar_entre_origens`, a chave tem a origem: só
+    cópias de uma mesma origem). Entre as cópias, fica a que tem probabilidade (prob_positivo e
     prob_negativo não nulos), se houver; depois a de menor momento_ref (empate: menor id). Sem as colunas de
-    probabilidade, só vale o momento_ref."""
+    probabilidade, só vale o momento_ref. Com `deduplicar_entre_origens`, depois tira as cópias entre origens
+    diferentes (`remover_entre_origens`). Contagens: duplicadas_id, duplicadas_titulo, duplicadas_titulo_mesmo_dia,
+    duplicadas_titulo_janela e duplicadas_url (as três últimas são 0 com a regra desligada)."""
+    df, contagens, _ = deduplicar_com_pares(noticias, params)
+    return df, contagens
+
+
+def deduplicar_com_pares(noticias: pd.DataFrame, params: ParametrosExperimento) -> tuple[pd.DataFrame, dict, pd.DataFrame]:
+    """Igual a `deduplicar`, e também devolve os pares removidos entre origens (`remover_entre_origens`)."""
     ordem = ["momento_ref", "id"]
     if {"prob_positivo", "prob_negativo"} <= set(noticias.columns):
         sem_prob = noticias["prob_positivo"].isna() | noticias["prob_negativo"].isna()
@@ -78,8 +216,10 @@ def deduplicar(noticias: pd.DataFrame, params: ParametrosExperimento) -> tuple[p
     duplicadas_titulo = 0
     if params.deduplicar_titulo:
         titulo = df["titulo"].map(normalizar_texto)
-        candidata = (df["origem"] != "cvm_ipe") & titulo.notna()
+        candidata = (df["origem"] != ORIGEM_CVM) & titulo.notna()
         chave = pd.DataFrame({"empresa": df["empresa"], "data": df["data_publicacao"], "titulo": titulo})
+        if params.deduplicar_entre_origens:
+            chave["origem"] = df["origem"]
         idx_candidatas = df.index[candidata]
         repetida = chave.loc[idx_candidatas].duplicated(keep="first").to_numpy()
         descartar = idx_candidatas[repetida]
@@ -87,8 +227,18 @@ def deduplicar(noticias: pd.DataFrame, params: ParametrosExperimento) -> tuple[p
         df = df.drop(index=descartar)
     if "_sem_prob" in df.columns:
         df = df.drop(columns="_sem_prob")
-    contagens = {"duplicadas_id": duplicadas_id, "duplicadas_titulo": duplicadas_titulo}
-    return df.reset_index(drop=True), contagens
+    pares = pd.DataFrame(columns=COLUNAS_PARES)
+    if params.deduplicar_entre_origens:
+        df, pares = remover_entre_origens(df, params)
+    regras = pares["regra"] if not pares.empty else pd.Series([], dtype=object)
+    contagens = {
+        "duplicadas_id": duplicadas_id,
+        "duplicadas_titulo": duplicadas_titulo,
+        "duplicadas_titulo_mesmo_dia": int((regras == "titulo_mesmo_dia").sum()),
+        "duplicadas_titulo_janela": int((regras == "titulo_janela").sum()),
+        "duplicadas_url": int((regras == "url").sum()),
+    }
+    return df.reset_index(drop=True), contagens, pares
 
 
 def classificar_para_modelo(

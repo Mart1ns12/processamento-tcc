@@ -231,7 +231,9 @@ def executar(
         precos=precos,
         cadastro=cadastro,
         noticias=fontes.ler_noticias(
-            ate=calendario.corte_manha(proximo) if proximo is not None else None, ler=ler
+            ate=calendario.corte_manha(proximo) if proximo is not None else None,
+            ler=ler,
+            com_url_resolvida=True,
         ),
         balancos=fontes.ler_tabela("balancos", ate=ate, ler=ler),
         universo=montar_universo(cal, cadastro, precos, carregar_exclusoes(), composicao),

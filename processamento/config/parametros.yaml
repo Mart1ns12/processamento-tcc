@@ -183,6 +183,9 @@ experimento:
   # "manha": janela = 08:00:01 de t até 08:00 do próximo pregão (dia + noite; usada porque ~89% das notícias só têm a data). "fechamento": só a noite (fechamento de t até 08:00), descartando pregão e pré-abertura — usar quando a coleta trouxer o horário real.
   inicio_janela: "manha"
   deduplicar_titulo: true
+  deduplicar_entre_origens: true
+  janela_dias_entre_origens: 1
+  titulo_palavras_min_entre_origens: 5
   principais:
     origens: ["cvm_ipe"]
     tipos_conteudo: ["reportagem"]

@@ -23,6 +23,9 @@ _CHAVES = {
     "sem_horario_na_noite",
     "inicio_janela",
     "deduplicar_titulo",
+    "deduplicar_entre_origens",
+    "janela_dias_entre_origens",
+    "titulo_palavras_min_entre_origens",
     "principais",
 }
 _CHAVES_PRINCIPAIS = {"origens", "tipos_conteudo", "papeis"}
@@ -78,6 +81,9 @@ class ParametrosExperimento:
     sem_horario_na_noite: bool
     inicio_janela: str
     deduplicar_titulo: bool
+    deduplicar_entre_origens: bool
+    janela_dias_entre_origens: int
+    titulo_palavras_min_entre_origens: int
     origens_principais: tuple[str, ...]
     tipos_principais: tuple[str, ...]
     papeis_principais: tuple[str, ...]
@@ -173,6 +179,13 @@ def carregar_parametros_experimento(caminho: str | None = None) -> ParametrosExp
         sem_horario_na_noite=_booleano(bloco["sem_horario_na_noite"], "experimento.sem_horario_na_noite"),
         inicio_janela=_escolha(bloco["inicio_janela"], "experimento.inicio_janela", _INICIOS_JANELA),
         deduplicar_titulo=_booleano(bloco["deduplicar_titulo"], "experimento.deduplicar_titulo"),
+        deduplicar_entre_origens=_booleano(bloco["deduplicar_entre_origens"], "experimento.deduplicar_entre_origens"),
+        janela_dias_entre_origens=_inteiro_nao_negativo(
+            bloco["janela_dias_entre_origens"], "experimento.janela_dias_entre_origens"
+        ),
+        titulo_palavras_min_entre_origens=_inteiro_nao_negativo(
+            bloco["titulo_palavras_min_entre_origens"], "experimento.titulo_palavras_min_entre_origens"
+        ),
         origens_principais=_lista_de_textos(principais["origens"], "experimento.principais.origens"),
         tipos_principais=_lista_de_textos(principais["tipos_conteudo"], "experimento.principais.tipos_conteudo"),
         papeis_principais=_lista_de_textos(principais["papeis"], "experimento.principais.papeis"),

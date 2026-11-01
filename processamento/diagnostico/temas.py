@@ -177,14 +177,16 @@ def _pct(parte: int, total: int):
 
 
 def meia_noite_por_ano_origem(candidatos: pd.DataFrame) -> dict:
-    """{(ano, origem): artigos} com instante = 00:00:00 em Los Angeles (regra N1-A, `fontes.meia_noite_pacifico`).
+    """{(ano, origem): artigos} com instante = 00:00:00 em Los Angeles nas origens de `fontes.origens_so_data()`
+    (regra N1-A: `fontes.meia_noite_pacifico` e a lista de origens).
 
     `candidatos`: ano, origem, instante (texto ISO com fuso), n (artigos distintos).
     """
     if candidatos.empty:
         return {}
     instantes = fontes.para_sao_paulo_iso(candidatos["instante"].map(texto), "v1-noticias.data_hora_publicacao")
-    meia = fontes.meia_noite_pacifico(instantes)
+    so_data = set(fontes.origens_so_data())
+    meia = [bool(m) and texto(o) in so_data for m, o in zip(fontes.meia_noite_pacifico(instantes), candidatos["origem"])]
     saida: dict = {}
     for (a, o, n), e_meia in zip(_registros(candidatos, ("ano", "origem", "n")), meia):
         if e_meia:

@@ -158,10 +158,15 @@ def carregar(ler) -> Dados:
                  "url", "resolved_url", "source_name", "source_domain"]].rename(columns={"url": "url_raw"})
     v1 = v1.merge(raw_j, on="id_raw", how="left")
     v1["score"] = v1["prob_positivo"] - v1["prob_negativo"]
-    v1["so_data"] = fontes.meia_noite_pacifico(v1["data_hora_publicacao"])
+    # "só data" só nas origens de fontes.origens_so_data() (mesma regra de fontes.aplicar_regra_so_data)
+    v1["so_data"] = fontes.meia_noite_pacifico(v1["data_hora_publicacao"]) & v1["origem"].isin(fontes.origens_so_data())
     v1["hora_real"] = v1["data_hora_publicacao"].notna() & ~v1["so_data"]
     v1["julgado"] = v1["papel"].notna()
     v1["ano"] = v1["data_publicacao"].dt.year
+    # A cópia bruta (para tratar_noticias_lidas, como em ler_noticias) recebe resolved_url do merge com raw,
+    # só nas origens de origens_so_data() (origem de raw_articles): é o que ler_urls_resolvidas faz
+    url_resolvida = v1["resolved_url"].where(v1["origem_raw"].isin(fontes.origens_so_data()))
+    bruta = bruta.assign(resolved_url=url_resolvida.to_numpy())
     return Dados(v1=v1, raw=raw, stg=stg, v1_bruta=bruta)
 
 
@@ -567,7 +572,8 @@ def secao_8(ctx: dict, ler) -> str:
     partes.append(
         "v1-noticias lida uma vez só (na carga, com wordpress); os dois cenários saem em memória pelo "
         "mesmo tratamento do `ler_noticias` (`tratar_noticias_lidas`). Com = nenhuma origem ignorada. "
-        "Sem = tira as origens de `origens_ignoradas` do mapa (wordpress). Versão de notícias 'todas', "
+        "Sem = tira a origem wordpress (lista explícita, não `origens_ignoradas` do mapa, que pode estar vazia). "
+        "Versão de notícias 'todas', "
         f"como no dataset; {len(linhas)} pares pregão × ação do universo; {len(cal)} pregões.")
 
     bruta = ctx["dados"].v1_bruta
@@ -646,8 +652,8 @@ def _impacto_variaveis(linhas: pd.DataFrame, var_com: pd.DataFrame, var_sem: pd.
 
 
 def _sem_ignoradas(nots: pd.DataFrame) -> pd.DataFrame:
-    """Cenário 'sem': tira as origens de `origens_ignoradas` do mapa, como a leitura padrão."""
-    return nots[~nots["origem"].isin(fontes.origens_ignoradas())].reset_index(drop=True)
+    """Cenário 'sem': tira a origem wordpress (lista explícita; `origens_ignoradas` do mapa pode estar vazia)."""
+    return nots[~nots["origem"].isin([WP])].reset_index(drop=True)
 
 
 def _ate_corte(bruta: pd.DataFrame, nots: pd.DataFrame, ate: pd.Timestamp) -> pd.DataFrame:

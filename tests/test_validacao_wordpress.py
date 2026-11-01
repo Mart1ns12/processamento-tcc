@@ -124,6 +124,7 @@ def _tabela_wp(*linhas_dict) -> pd.DataFrame:
         linhas.append({
             "id": d["id"], "ticker": d["ticker"], "titulo": d["titulo"], "link": d["link"],
             "fonte": d.get("fonte", "F"), "papel": d.get("papel"), "evento": d.get("evento"),
+            "origem": d.get("origem", "wordpress"),
             "data_publicacao": pd.Timestamp(d["data_publicacao"]),
             "data_hora_publicacao": pd.Timestamp(d["hora"]).tz_convert("America/Sao_Paulo")
             if d.get("hora") else pd.NaT,
@@ -210,10 +211,10 @@ def test_duplicatas_sem_correspondencia_vazio():
 # ---------------------------------------------------------------- afetados_n1a
 
 def test_afetados_n1a_conta_so_meia_noite_do_pacifico():
-    # 04:00 de São Paulo em outubro = 00:00 em Los Angeles (PDT): hora "só data" pela N1-A
+    # 04:00 de São Paulo em outubro = 00:00 em Los Angeles (PDT): hora "só data" pela N1-A (só google_news)
     df = _tabela_wp(
         {"id": "a", "ticker": "T", "titulo": "x", "link": "l", "data_publicacao": "2025-10-17",
-         "hora": "2025-10-17 04:00:00-03:00"},
+         "hora": "2025-10-17 04:00:00-03:00", "origem": "google_news"},
         {"id": "b", "ticker": "T", "titulo": "y", "link": "l", "data_publicacao": "2025-10-17",
          "hora": "2025-10-17 10:00:00-03:00"},
         {"id": "c", "ticker": "T", "titulo": "z", "link": "l", "data_publicacao": "2025-10-17", "hora": None},
@@ -224,6 +225,13 @@ def test_afetados_n1a_conta_so_meia_noite_do_pacifico():
 def test_afetados_n1a_sem_linhas_so_meia_noite_e_zero():
     df = _tabela_wp({"id": "a", "ticker": "T", "titulo": "x", "link": "l", "data_publicacao": "2025-10-17",
                      "hora": "2025-10-17 10:00:00-03:00"})
+    assert an.afetados_n1a(df) == 0
+
+
+def test_afetados_n1a_wordpress_com_04h_nao_e_so_data():
+    # a regra N1-A só vale para as origens de origens_so_data (google_news): wordpress com 04:00 é hora real
+    df = _tabela_wp({"id": "a", "ticker": "T", "titulo": "x", "link": "l", "data_publicacao": "2025-10-17",
+                     "hora": "2025-10-17 04:00:00-03:00"})
     assert an.afetados_n1a(df) == 0
 
 
@@ -345,10 +353,26 @@ def test_ler_noticias_com_lista_vazia_inclui_wordpress(banco):
     ler = banco(noticias_extra=EXTRAS)
     com = fontes.ler_noticias(ler=ler, origens_ignoradas=[])
     padrao = fontes.ler_noticias(ler=ler)
+    sem = fontes.ler_noticias(ler=ler, origens_ignoradas=["wordpress"])
+
+    # o mapa agora tem origens_ignoradas vazia: o padrão já inclui wordpress
+    assert "wordpress" in set(com["origem"])
+    assert "wordpress" in set(padrao["origem"])
+    assert padrao.attrs["origens_ignoradas"] == {}
+    assert "wordpress" not in set(sem["origem"])
+    assert sem.attrs["origens_ignoradas"] == {"wordpress": 3}
+
+
+def test_cenario_sem_continua_diferente_do_com_com_mapa_vazio(banco):
+    # com o mapa sem origens ignoradas, 'com' e 'sem' ainda diferem: 'sem' tira a origem wordpress explicitamente
+    ler = banco(noticias_extra=EXTRAS)
+    bruta = wp_main.carregar(ler).v1_bruta
+    com = fontes.tratar_noticias_lidas(bruta, ler=ler, origens_ignoradas=[])
+    sem = wp_main._sem_ignoradas(com)
 
     assert "wordpress" in set(com["origem"])
-    assert "wordpress" not in set(padrao["origem"])
-    assert padrao.attrs["origens_ignoradas"] == {"wordpress": 3}
+    assert "wordpress" not in set(sem["origem"])
+    assert len(sem) < len(com)
 
 
 # ---------------------------------------------------------------- main (relatório, código 3 e CSV preservado)
@@ -435,9 +459,13 @@ def test_cenarios_em_memoria_iguais_a_ler_noticias(banco):
     ler = banco(noticias_extra=EXTRAS)
     bruta = wp_main.carregar(ler).v1_bruta
 
+    # o cenário espelha o caminho de produção: ler_noticias(com_url_resolvida=True)
     com = fontes.tratar_noticias_lidas(bruta, ler=ler, origens_ignoradas=[])
-    pd.testing.assert_frame_equal(com, fontes.ler_noticias(ler=ler, origens_ignoradas=[]))
-    pd.testing.assert_frame_equal(wp_main._sem_ignoradas(com), fontes.ler_noticias(ler=ler))
+    pd.testing.assert_frame_equal(com, fontes.ler_noticias(ler=ler, origens_ignoradas=[], com_url_resolvida=True))
+    pd.testing.assert_frame_equal(
+        wp_main._sem_ignoradas(com),
+        fontes.ler_noticias(ler=ler, origens_ignoradas=["wordpress"], com_url_resolvida=True),
+    )
 
     datas = sorted(pd.to_datetime(bruta["data_publicacao"]).dt.date.unique())
     for d in datas:
@@ -445,7 +473,8 @@ def test_cenarios_em_memoria_iguais_a_ler_noticias(banco):
         recorte = wp_main._ate_corte(bruta, com, ate)
         # mesmo conteúdo; em colunas só com vazios (ex.: papel) o tipo e o vazio (nan × None) podem diferir
         pd.testing.assert_frame_equal(
-            _vazios_iguais(recorte), _vazios_iguais(fontes.ler_noticias(ate=ate, ler=ler, origens_ignoradas=[])),
+            _vazios_iguais(recorte),
+            _vazios_iguais(fontes.ler_noticias(ate=ate, ler=ler, origens_ignoradas=[], com_url_resolvida=True)),
             check_dtype=False,
         )
 

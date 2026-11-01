@@ -8,6 +8,7 @@ montadas à mão, com tickers da fábrica.
 
 from __future__ import annotations
 
+import copy
 import dataclasses
 import json
 from datetime import date
@@ -100,12 +101,15 @@ W3 = _linha("w000003", "PETR4", "19:00:00", "2025-10-21", origem="wordpress", pp
 # ---------------------------------------------------------------- (a), (b), (c): leitura
 
 def test_origens_ignoradas_vem_do_mapa():
-    assert fontes.origens_ignoradas() == ["wordpress"]
+    # o mapa de produção não ignora nenhuma origem (lista vazia = todas entram; wordpress entra)
+    assert fontes.origens_ignoradas() == []
 
 
 def test_wordpress_nao_levanta_e_sai_do_resultado(banco_teste):
-    base = fontes.ler_noticias(ler=banco_teste())
-    df = fontes.ler_noticias(ler=banco_teste(alterar={"v1-noticias": _acrescentar(W1)}))
+    # o mecanismo é testado com a lista explícita (o mapa agora está vazio)
+    base = fontes.ler_noticias(ler=banco_teste(), origens_ignoradas=["wordpress"])
+    df = fontes.ler_noticias(ler=banco_teste(alterar={"v1-noticias": _acrescentar(W1)}),
+                             origens_ignoradas=["wordpress"])
 
     assert "w000001" not in set(df["id"])
     assert "wordpress" not in set(df["origem"])
@@ -115,14 +119,16 @@ def test_wordpress_nao_levanta_e_sai_do_resultado(banco_teste):
 
 def test_wordpress_fora_da_janela_ate_nao_entra_na_contagem(banco_teste):
     ate = pd.Timestamp("2025-10-17 23:59:59", tz=SP)
+    lista = ["wordpress"]
 
     # a única wordpress é de 2025-10-20, depois de `ate`: a janela já a deixa de fora
     so_depois = banco_teste(alterar={"v1-noticias": _acrescentar(W2)})
-    assert fontes.ler_noticias(ate=ate, ler=so_depois).attrs["origens_ignoradas"] == {}
+    assert fontes.ler_noticias(ate=ate, ler=so_depois, origens_ignoradas=lista).attrs["origens_ignoradas"] == {}
 
     # com uma dentro da janela e outra fora, só a de dentro conta
     ambas = banco_teste(alterar={"v1-noticias": _acrescentar(W1, W2)})
-    assert fontes.ler_noticias(ate=ate, ler=ambas).attrs["origens_ignoradas"] == {"wordpress": 1}
+    assert fontes.ler_noticias(ate=ate, ler=ambas, origens_ignoradas=lista).attrs["origens_ignoradas"] == {
+        "wordpress": 1}
 
 
 def test_lista_vazia_mantem_o_comportamento_antigo(banco_teste, monkeypatch):
@@ -156,12 +162,16 @@ def _base_do_caso(cal: list) -> list[dict]:
     ]
 
 
-def _consumidores(linhas_extra: list[dict], caso: dict):
-    """Leitura real (`ler_noticias` sobre o SQLite de teste) → dataset do experimento e janela de t."""
+def _consumidores(linhas_extra: list[dict], caso: dict, origens_ignoradas: list[str] | None = None):
+    """Leitura real (`ler_noticias` sobre o SQLite de teste) → dataset do experimento e janela de t.
+
+    Por padrão, wordpress fica de fora (lista explícita); `origens_ignoradas=[]` deixa tudo entrar.
+    """
     cal = caso["cal"]
     tabela = _base_do_caso(cal) + linhas_extra
     ler = caso["banco"](alterar={"v1-noticias": _so(*tabela)})
-    noticias = fontes.ler_noticias(ler=ler)
+    lista = ["wordpress"] if origens_ignoradas is None else origens_ignoradas
+    noticias = fontes.ler_noticias(ler=ler, origens_ignoradas=lista)
     mudancas = fontes.ler_mudancas(ler)
     dados = dados_de(cal, caso["precos"], CADASTRO_INTEGRACAO, noticias, caso["balancos"],
                      EXCLUSOES_INTEGRACAO, mudancas)
@@ -186,12 +196,11 @@ def test_wordpress_nao_muda_fatos_nem_dataset_com_lista_padrao(caso):
     pd.testing.assert_frame_equal(janela_com, janela_sem)
 
 
-def test_wordpress_muda_fatos_e_dataset_com_lista_vazia(caso, monkeypatch):
+def test_wordpress_muda_fatos_e_dataset_com_lista_vazia(caso):
     """Prova de sensibilidade: com a lista vazia a mesma notícia entra e muda o tom e a janela."""
     df_sem, janela_sem = _consumidores([], caso)
-    monkeypatch.setitem(fontes._entrada("noticias"), "origens_ignoradas", [])
     df_vazia, janela_vazia = _consumidores([_linha("w1", "AAAA4", "19:00:00", caso["cal"][20], pp="0.95",
-                                                    pn="0.02", origem="wordpress")], caso)
+                                                    pn="0.02", origem="wordpress")], caso, origens_ignoradas=[])
 
     assert set(NOTICIAS_DIA) <= set(df_sem.columns)
     assert not df_vazia[NOTICIAS_DIA].equals(df_sem[NOTICIAS_DIA])
@@ -200,7 +209,8 @@ def test_wordpress_muda_fatos_e_dataset_com_lista_vazia(caso, monkeypatch):
 
 # ---------------------------------------------------------------- (e): aviso (insumos e execucao.json)
 
-def test_ler_insumos_preenche_noticias_ignoradas(banco_teste):
+def test_ler_insumos_preenche_noticias_ignoradas(banco_teste, monkeypatch):
+    monkeypatch.setitem(fontes._entrada("noticias"), "origens_ignoradas", ["wordpress"])
     ler = banco_teste(alterar={"v1-noticias": _acrescentar(W1, W2, W3)})
     ins = insumos_de_teste(ler)
     assert ins.noticias_ignoradas == {"wordpress": 3}
@@ -244,7 +254,8 @@ def _avisos(pasta: Path) -> list[str]:
     return json.loads((pasta / "execucao.json").read_text(encoding="utf-8"))["registros"][0]["avisos"]
 
 
-def test_gerar_avisa_origem_ignorada_no_execucao(banco_teste, tmp_path, modelos_dir):
+def test_gerar_avisa_origem_ignorada_no_execucao(banco_teste, tmp_path, modelos_dir, monkeypatch):
+    monkeypatch.setitem(fontes._entrada("noticias"), "origens_ignoradas", ["wordpress"])
     pasta = _gerar(tmp_path / "com", banco_teste(alterar={"v1-noticias": _acrescentar(W1, W2, W3)}), modelos_dir)
 
     assert AVISO_ORIGEM_IGNORADA.format(n=3, origem="wordpress") == AVISO_WORDPRESS
@@ -258,8 +269,9 @@ def test_gerar_sem_wordpress_nao_avisa(banco_teste, tmp_path, modelos_dir):
 
 # ---------------------------------------------------------------- (d) no pacote noticias_dia (gerar inteiro)
 
-def test_pacotes_da_saida_nao_mudam_com_wordpress(banco_teste, tmp_path, modelos_dir):
-    """Com a lista padrão, os pacotes (noticias_dia incluso) são iguais aos da base sem a wordpress."""
+def test_pacotes_da_saida_nao_mudam_com_wordpress(banco_teste, tmp_path, modelos_dir, monkeypatch):
+    """Com wordpress na lista de ignoradas, os pacotes (noticias_dia incluso) são iguais aos da base sem ela."""
+    monkeypatch.setitem(fontes._entrada("noticias"), "origens_ignoradas", ["wordpress"])
     sem = _gerar(tmp_path / "sem", banco_teste(), modelos_dir)
     com = _gerar(tmp_path / "com", banco_teste(alterar={"v1-noticias": _acrescentar(W1, W2, W3)}), modelos_dir)
 
@@ -287,9 +299,9 @@ def _ler_distintos(valores_origem: list[tuple[str, int]]):
 
 
 def test_diagnostico_wordpress_nao_diverge_e_tem_nota_com_contagem():
-    secao = c.secao_distintos(
-        _ler_distintos([("google_news", 10), ("wordpress", 3)]), fontes.carregar_mapa(), {"v1-noticias"}
-    )
+    mapa = copy.deepcopy(fontes.carregar_mapa())
+    mapa["tabelas"]["noticias"]["origens_ignoradas"] = ["wordpress"]
+    secao = c.secao_distintos(_ler_distintos([("google_news", 10), ("wordpress", 3)]), mapa, {"v1-noticias"})
 
     assert not [d for d in secao["divergencias"] if d["tema"] == "valor_desconhecido"]
     assert (

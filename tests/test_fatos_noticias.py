@@ -232,6 +232,19 @@ def test_copia_com_probabilidade_vence_no_painel_e_o_resumo_sai_ok():
     assert resumo["tom_medio"][1] == "ok"
 
 
+def test_gn_e_wp_duplicadas_aparecem_uma_vez_e_fica_a_wp():
+    # cópia de n05 no wordpress com horário real (10:00): n05 (google_news, 19:42) cai; no painel fica só a wordpress
+    noticias = _noticias_do_plano()
+    wp = noticias[noticias["id"] == "n05"].assign(
+        id="w05", origem="wordpress", momento_ref=sp("2026-10-22 10:00:00"),
+        data_hora_publicacao=sp("2026-10-22 10:00:00"),
+    )
+    janela = _janela(pd.concat([noticias, wp], ignore_index=True))
+    ids = ids_da_empresa(janela, "1")
+    assert "w05" in ids and "n05" not in ids
+    assert len(_da_empresa(janela, "1")) == len(_da_empresa(_janela(), "1"))
+
+
 def test_sem_noticias_devolve_janela_vazia():
     vazias = _noticias_do_plano().iloc[0:0]
     janela = _janela(vazias)

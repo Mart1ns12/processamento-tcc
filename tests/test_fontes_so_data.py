@@ -99,6 +99,36 @@ def test_regra_e_idempotente():
     pd.testing.assert_frame_equal(uma, duas)
 
 
+def test_regra_so_vale_para_origens_so_data():
+    # 19/03/2026 já está em PDT (LA = UTC-7): 04:00 de SP é 00:00 em LA; 05:00 de SP é 01:00 em LA
+    out = fontes.aplicar_regra_so_data(_noticias([
+        (1, "wordpress", "2026-03-19 05:00:00", "2026-03-19"),
+        (2, "google_news", "2026-03-19 04:00:00", "2026-03-19"),
+        (3, "google_news", "2026-03-19 05:00:00", "2026-03-19"),
+    ])).set_index("id")
+    assert out.loc[1, "precisao_hora"] == "hora"
+    assert out.loc[1, "data_hora_publicacao"] == _sp1("2026-03-19 05:00:00")
+    assert out.loc[1, "data_publicacao"] == pd.Timestamp("2026-03-19")
+    assert out.loc[2, "precisao_hora"] == "meia_noite_pacifico"
+    assert out.loc[3, "precisao_hora"] == "hora"
+
+
+def test_regra_wordpress_com_meia_noite_de_la_nao_vira_so_data():
+    out = fontes.aplicar_regra_so_data(_noticias([(1, "wordpress", "2026-03-19 04:00:00", "2026-03-19")]))
+    assert out.loc[0, "precisao_hora"] == "hora"
+    assert out.loc[0, "data_hora_publicacao"] == _sp1("2026-03-19 04:00:00")
+
+
+def test_regra_exige_coluna_origem():
+    sem_origem = _noticias(CASOS_SO_DATA).drop(columns="origem")
+    with pytest.raises(ValueError, match="origem"):
+        fontes.aplicar_regra_so_data(sem_origem)
+
+
+def test_origens_so_data_vem_do_mapa():
+    assert fontes.origens_so_data() == ["google_news"]
+
+
 # --- janela com o calendário --------------------------------------------------------
 
 def test_janela_so_data_segue_regra_das_sem_horario():
@@ -146,6 +176,7 @@ def test_ler_raw_articles_meia_noite_e_id_noticia():
         "published_at": ["2026-07-15 07:00:00", "2026-01-14 08:00:00", "2026-01-14 07:00:00"],
         "published_precision": ["day", "day", "minute"],
         "origem": ["google_news", "google_news", "google_news"],
+        "resolved_url": ["https://veiculo.invalid/a", None, None],
     })
     df = fontes.ler_raw_articles(ler=_ler_com_raw_articles(raw)).set_index("id")
     assert df.loc[123, "meia_noite_pacifico"] and df.loc[124, "meia_noite_pacifico"]

@@ -26,6 +26,9 @@ _BLOCO_VALIDO = """experimento:
   sem_horario_na_noite: true
   inicio_janela: "manha"
   deduplicar_titulo: true
+  deduplicar_entre_origens: true
+  janela_dias_entre_origens: 1
+  titulo_palavras_min_entre_origens: 5
   principais:
     origens: ["cvm_ipe"]
     tipos_conteudo: ["reportagem"]
@@ -51,6 +54,8 @@ def test_arquivo_real_carrega_os_valores_do_plano():
     assert params.sem_horario_na_noite is True
     assert params.inicio_janela == "manha"
     assert params.deduplicar_titulo is True
+    assert params.deduplicar_entre_origens is True
+    assert (params.janela_dias_entre_origens, params.titulo_palavras_min_entre_origens) == (1, 5)
     assert params.origens_principais == ("cvm_ipe",)
     assert params.tipos_principais == ("reportagem",)
     assert params.papeis_principais == ("protagonista", "citada_com_fato")
@@ -74,6 +79,18 @@ def test_sem_o_bloco_experimento_da_erro(tmp_path):
 def test_chave_desconhecida_da_erro(tmp_path):
     caminho = _escrever(tmp_path, _BLOCO_VALIDO.replace("  deduplicar_titulo: true\n", "  deduplicar_titulo: true\n  extra: 1\n"))
     with pytest.raises(ErroParametrosExperimento, match="chave desconhecida"):
+        carregar_parametros_experimento(caminho)
+
+
+def test_deduplicar_entre_origens_precisa_ser_booleano(tmp_path):
+    caminho = _escrever(tmp_path, _BLOCO_VALIDO.replace("deduplicar_entre_origens: true", "deduplicar_entre_origens: 1"))
+    with pytest.raises(ErroParametrosExperimento, match="deduplicar_entre_origens"):
+        carregar_parametros_experimento(caminho)
+
+
+def test_janela_entre_origens_nao_pode_ser_negativa(tmp_path):
+    caminho = _escrever(tmp_path, _BLOCO_VALIDO.replace("janela_dias_entre_origens: 1", "janela_dias_entre_origens: -1"))
+    with pytest.raises(ErroParametrosExperimento, match="janela_dias_entre_origens"):
         carregar_parametros_experimento(caminho)
 
 

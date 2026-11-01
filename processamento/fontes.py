@@ -434,6 +434,7 @@ def ler_noticias(
     ler: Callable[..., pd.DataFrame] | None = None,
     unir_mudancas: bool = True,
     origens_ignoradas: list[str] | None = None,
+    com_url_resolvida: bool = False,
 ) -> pd.DataFrame:
     """Lê `v1-noticias` na janela (seção 7.2) e devolve também `momento_ref` (horário de São Paulo).
 
@@ -444,6 +445,8 @@ def ler_noticias(
     `df.attrs["origens_ignoradas"]`. `origens_ignoradas` None usa as de `origens_ignoradas()`
     (mapa); uma lista dada (inclusive vazia) substitui essa lista.
     O filtro grosso vai ao SQL pela data; o filtro fino é feito em `momento_ref`.
+    `com_url_resolvida` junta a coluna `resolved_url` (de `raw_articles`, ver `ler_urls_resolvidas`);
+    sem URL resolvida, fica nula. Não muda o número de linhas.
     `ate` precisa ter fuso horário.
     """
     tabela = "noticias"
@@ -463,6 +466,8 @@ def ler_noticias(
         condicoes.append(f"{coluna_data} >= :desde_menos_1")
         params["desde_menos_1"] = _data_texto(pd.Timestamp(desde) - pd.Timedelta(days=1))
     df = _selecionar(tabela, colunas, condicoes, params or None, ler)
+    if com_url_resolvida:
+        df = df.merge(ler_urls_resolvidas(ler), on="id", how="left")
     return tratar_noticias_lidas(
         df, desde=desde, ate=ate_sp, ler=ler, unir_mudancas=unir_mudancas, origens_ignoradas=origens_ignoradas
     )
@@ -503,14 +508,19 @@ def tratar_noticias_lidas(
     return df
 
 
-def _origens_do_mapa() -> list[str]:
-    """Origens de `origens_ignoradas` do mapa de `v1-noticias` (vazia = nenhuma)."""
-    return [str(o) for o in (_entrada("noticias").get("origens_ignoradas") or [])]
+def _origens_do_mapa(chave: str = "origens_ignoradas") -> list[str]:
+    """Origens da lista `chave` do mapa de `v1-noticias` (vazia ou ausente = nenhuma)."""
+    return [str(o) for o in (_entrada("noticias").get(chave) or [])]
 
 
 def origens_ignoradas() -> list[str]:
     """Origens de `v1-noticias` descartadas por `ler_noticias` (`origens_ignoradas` do mapa; vazia = nenhuma)."""
     return _origens_do_mapa()
+
+
+def origens_so_data() -> list[str]:
+    """Origens de `v1-noticias` em que 00:00:00 de Los Angeles é "só data" (`origens_so_data` do mapa; N1-A)."""
+    return _origens_do_mapa("origens_so_data")
 
 
 def meia_noite_pacifico(instantes: pd.Series) -> pd.Series:
@@ -536,10 +546,13 @@ def aplicar_regra_so_data(noticias: pd.DataFrame) -> pd.DataFrame:
     "meia_noite_pacifico": vira só data. `data_publicacao` passa a ser a data em Los Angeles,
     `data_hora_publicacao` fica nula e `momento_ref` é 23:59:59 dessa data (a mesma regra das
     sem horário). Idempotente; as linhas "hora" ficam intactas.
+    A regra vale só para as origens de `origens_so_data()`; exige a coluna `origem`.
     """
+    if "origem" not in noticias.columns:
+        raise ValueError("aplicar_regra_so_data exige a coluna origem (a regra N1-A depende da origem)")
     df = noticias.copy()
     tem_hora = df["data_hora_publicacao"].notna()
-    meia = meia_noite_pacifico(df["data_hora_publicacao"])
+    meia = meia_noite_pacifico(df["data_hora_publicacao"]) & df["origem"].isin(origens_so_data())
     if "precisao_hora" in df.columns:
         meia = meia | df["precisao_hora"].eq("meia_noite_pacifico")
     datas_la = df["data_hora_publicacao"].dt.tz_convert(PACIFICO).dt.tz_localize(None).dt.normalize()
@@ -602,6 +615,40 @@ def ler_raw_articles(ler: Callable[..., pd.DataFrame] | None = None) -> pd.DataF
             "meia_noite_pacifico": meia_noite_pacifico(publicado),
         }
     )
+
+
+def ler_urls_resolvidas(ler: Callable[..., pd.DataFrame] | None = None) -> pd.DataFrame:
+    """`resolved_url` de `raw_articles` ligado a `v1-noticias.id`, só das origens de `origens_so_data()`.
+
+    Na prática, o google_news: o link dele é um redirecionamento; `resolved_url` é o endereço do
+    veículo. `id` vira "n" + id com zeros à esquerda (6 dígitos ou mais), como em `v1-noticias`
+    (ESPECIFICACAO 3.2). URL vazia ou só espaços é ausência (fora do resultado). Só lê.
+    """
+    if ler is None:
+        ler = _ler_padrao
+    _conferir_tabela("raw_articles", ler)
+    vazio = pd.DataFrame({"id": pd.Series([], dtype=object), "resolved_url": pd.Series([], dtype=object)})
+    origens = origens_so_data()
+    if not origens:
+        return vazio
+    marcas = [f":origem{i}" for i in range(len(origens))]
+    condicoes = [
+        f"{coluna_sql('raw_articles', 'origem')} IN ({', '.join(marcas)})",
+        f"{coluna_sql('raw_articles', 'resolved_url')} IS NOT NULL",
+    ]
+    params = {f"origem{i}": o for i, o in enumerate(origens)}
+    df = _selecionar("raw_articles", ["id", "resolved_url"], condicoes, params, ler)
+    df["resolved_url"] = _vazio_como_nulo(df["resolved_url"])
+    df = df[df["resolved_url"].notna()]
+    if df.empty:
+        return vazio
+    ids = pd.to_numeric(df["id"], errors="coerce")
+    if ids.isna().any():
+        raise ErroLeitura(f"raw_articles.id: {int(ids.isna().sum())} valores nulos ou não numéricos")
+    saida = pd.DataFrame(
+        {"id": ids.astype("int64").map(lambda v: f"n{v:06d}"), "resolved_url": df["resolved_url"].to_numpy()}
+    )
+    return saida.drop_duplicates("id").reset_index(drop=True)
 
 
 def para_sao_paulo_iso(serie: pd.Series, rotulo: str) -> pd.Series:

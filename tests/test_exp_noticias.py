@@ -15,15 +15,19 @@ from processamento.experimento.noticias import (
     COLUNAS_PREPARADAS,
     classificar_para_modelo,
     deduplicar,
+    deduplicar_com_pares,
     filtrar_versao,
     ligar_empresa,
     preparar_noticias,
+    remover_entre_origens,
 )
 from processamento.experimento.parametros import carregar_parametros_experimento
 
 SP = ZoneInfo("America/Sao_Paulo")
 PARAMS = carregar_parametros_experimento()
-CAL = [date(2026, 6, 18), date(2026, 6, 19), date(2026, 6, 22)]
+# contagens da deduplicação entre origens (0 quando as cópias são da mesma origem)
+_ZERO_ENTRE = {"duplicadas_titulo_mesmo_dia": 0, "duplicadas_titulo_janela": 0, "duplicadas_url": 0}
+CAL =[date(2026, 6, 18), date(2026, 6, 19), date(2026, 6, 22)]
 CNPJ_DE = {
     "XXXX3": "11111111000111",
     "XXXX4": "11111111000111",
@@ -50,11 +54,17 @@ def nota(
     origem: str | None = "google_news",
     papel: str | None = None,
     tipo: str | None = None,
+    precisao: str | None = None,
+    link: str | None = None,
+    resolved: str | None = None,
 ) -> dict:
-    """Uma linha no formato de `fontes.ler_noticias`. Sem `hora`, o momento vira 23:59:59 do dia."""
+    """Uma linha no formato de `fontes.ler_noticias`. Sem `hora`, o momento vira 23:59:59 do dia.
+
+    `precisao`, `link` e `resolved` (resolved_url) só entram na linha quando são dados.
+    """
     if momento is None:
         momento = hora if hora is not None else f"{data} 23:59:59"
-    return {
+    linha = {
         "id": id_,
         "ticker": ticker,
         "data_hora_publicacao": sp(hora) if hora is not None else None,
@@ -67,6 +77,13 @@ def nota(
         "papel": papel,
         "tipo_conteudo": tipo,
     }
+    if precisao is not None:
+        linha["precisao_hora"] = precisao
+    if link is not None:
+        linha["link"] = link
+    if resolved is not None:
+        linha["resolved_url"] = resolved
+    return linha
 
 
 def fazer(linhas: list[dict]) -> pd.DataFrame:
@@ -156,7 +173,7 @@ def test_mesma_noticia_em_dois_codigos_da_mesma_empresa_fica_uma_vez():
     ]
     saida, info = deduplicar(com_empresa(linhas), PARAMS)
     assert len(saida) == 1
-    assert info == {"duplicadas_id": 1, "duplicadas_titulo": 0}
+    assert info == {**_ZERO_ENTRE, "duplicadas_id": 1, "duplicadas_titulo": 0}
 
 
 def test_mesma_noticia_em_empresas_diferentes_fica_duas_vezes():
@@ -176,7 +193,7 @@ def test_titulo_repetido_no_dia_fica_a_de_menor_momento():
     ]
     saida, info = deduplicar(com_empresa(linhas), PARAMS)
     assert list(saida["id"]) == [4]
-    assert info == {"duplicadas_id": 0, "duplicadas_titulo": 1}
+    assert info == {**_ZERO_ENTRE, "duplicadas_id": 0, "duplicadas_titulo": 1}
 
 
 def test_titulo_repetido_sem_deduplicar_titulo_fica_tudo():
@@ -207,7 +224,7 @@ def test_copia_com_probabilidade_vence_a_sem_probabilidade_mais_cedo():
     ]
     saida, info = deduplicar(com_empresa(linhas), PARAMS)
     assert list(saida["id"]) == [9]
-    assert info == {"duplicadas_id": 0, "duplicadas_titulo": 1}
+    assert info == {**_ZERO_ENTRE, "duplicadas_id": 0, "duplicadas_titulo": 1}
     assert "_sem_prob" not in saida.columns
 
 
@@ -219,7 +236,7 @@ def test_copia_com_probabilidade_vence_tambem_pelo_id_da_mesma_noticia():
     saida, info = deduplicar(com_empresa(linhas), PARAMS)
     assert list(saida["id"]) == [10]
     assert saida.iloc[0]["ticker"] == "XXXX4"
-    assert info == {"duplicadas_id": 1, "duplicadas_titulo": 0}
+    assert info == {**_ZERO_ENTRE, "duplicadas_id": 1, "duplicadas_titulo": 0}
 
 
 def test_duas_copias_sem_probabilidade_fica_a_mais_cedo():
@@ -229,7 +246,7 @@ def test_duas_copias_sem_probabilidade_fica_a_mais_cedo():
     ]
     saida, info = deduplicar(com_empresa(linhas), PARAMS)
     assert list(saida["id"]) == [12]
-    assert info == {"duplicadas_id": 0, "duplicadas_titulo": 1}
+    assert info == {**_ZERO_ENTRE, "duplicadas_id": 0, "duplicadas_titulo": 1}
 
 
 def test_cvm_ipe_nao_deduplica_por_titulo_mesmo_com_copia_com_probabilidade():
@@ -250,7 +267,7 @@ def test_deduplicar_sem_colunas_de_probabilidade_fica_a_mais_cedo():
     df = com_empresa(linhas).drop(columns=["prob_positivo", "prob_negativo"])
     saida, info = deduplicar(df, PARAMS)
     assert list(saida["id"]) == [16]
-    assert info == {"duplicadas_id": 0, "duplicadas_titulo": 1}
+    assert info == {**_ZERO_ENTRE, "duplicadas_id": 0, "duplicadas_titulo": 1}
 
 
 # ---------------------------------------------------------------- janela e score
@@ -381,3 +398,219 @@ def test_hora_real_noite_so_fica_a_noite():
 def test_hora_real_noite_sem_precisao_hora_levanta():
     with pytest.raises(ValueError, match="precisao_hora"):
         filtrar_versao(fazer([nota(1, "AAAA3", hora="2026-06-18 19:00")]), "hora_real_noite", PARAMS)
+
+
+# ---------------------------------------------------------------- deduplicação entre origens
+
+T = "Petrobras anuncia novo plano de investimentos"
+SO_DATA = "meia_noite_pacifico"
+HORA = "hora"
+
+
+def so_data_gn(id_, dia, titulo=T, ticker="XXXX3", **kw):
+    """google_news só com a data: 23:59:59 do dia, precisão meia_noite_pacifico."""
+    return nota(id_, ticker, data=dia, momento=f"{dia} 23:59:59", titulo=titulo, origem="google_news",
+                precisao=SO_DATA, **kw)
+
+
+def hora_wp(id_, dia, hora, titulo=T, ticker="XXXX3", **kw):
+    """wordpress com horário real."""
+    return nota(id_, ticker, data=dia, hora=f"{dia} {hora}", titulo=titulo, origem="wordpress",
+                precisao=HORA, **kw)
+
+
+def test_entre_origens_gn_so_data_com_sufixo_cai_quando_wp_tem_hora_no_dia():
+    linhas = [
+        so_data_gn(21, "2026-10-27", titulo=f"{T} - InfoMoney"),
+        hora_wp(22, "2026-10-27", "10:00:00"),
+    ]
+    saida, info = deduplicar(com_empresa(linhas), PARAMS)
+    assert list(saida["id"]) == [22]
+    assert info == {"duplicadas_id": 0, "duplicadas_titulo": 0, "duplicadas_titulo_mesmo_dia": 1,
+                    "duplicadas_titulo_janela": 0, "duplicadas_url": 0}
+
+
+def test_entre_origens_pares_descrevem_a_remocao():
+    linhas = [
+        so_data_gn(21, "2026-10-27", titulo=f"{T} - InfoMoney"),
+        hora_wp(22, "2026-10-27", "10:00:00"),
+    ]
+    _, _, pares = deduplicar_com_pares(com_empresa(linhas), PARAMS)
+    assert len(pares) == 1
+    par = pares.iloc[0]
+    assert (par["regra"], par["id_removido"], par["origem_removido"], par["id_mantido"], par["origem_mantido"]) == (
+        "titulo_mesmo_dia", 21, "google_news", 22, "wordpress")
+    assert par["dias"] == 0 and bool(par["tambem_url"]) is False
+    assert par["empresa"] == CNPJ_DE["XXXX3"]
+
+
+def test_entre_origens_titulo_com_um_dia_de_diferenca_fica_a_wp():
+    # GN de 26/10 só-data; WP de 27/10 às 07:00: a WP vence pelo horário real, mesmo sendo a mais tarde
+    linhas = [
+        so_data_gn(21, "2026-10-26"),
+        hora_wp(22, "2026-10-27", "07:00:00"),
+    ]
+    saida, info = deduplicar(com_empresa(linhas), PARAMS)
+    assert list(saida["id"]) == [22]
+    assert info["duplicadas_titulo_janela"] == 1 and info["duplicadas_titulo_mesmo_dia"] == 0
+
+
+def test_entre_origens_titulo_a_dois_dias_fica_tudo():
+    linhas = [
+        so_data_gn(21, "2026-10-25"),
+        hora_wp(22, "2026-10-27", "07:00:00"),
+    ]
+    saida, info = deduplicar(com_empresa(linhas), PARAMS)
+    assert sorted(saida["id"]) == [21, 22]
+    assert info["duplicadas_titulo_janela"] == 0 and info["duplicadas_titulo_mesmo_dia"] == 0
+
+
+def test_entre_origens_minimo_de_palavras_segura_titulo_curto():
+    curto = "Petrobras sobe forte hoje"  # 4 palavras
+    linhas = [so_data_gn(21, "2026-10-27", titulo=curto), hora_wp(22, "2026-10-27", "10:00:00", titulo=curto)]
+    saida, info = deduplicar(com_empresa(linhas), PARAMS)
+    assert sorted(saida["id"]) == [21, 22]
+    assert info["duplicadas_titulo"] == 0 and info["duplicadas_titulo_mesmo_dia"] == 0
+
+
+def test_entre_origens_minimo_de_palavras_deixa_titulo_de_cinco():
+    cinco = "Petrobras sobe forte hoje cedo"  # 5 palavras
+    linhas = [so_data_gn(21, "2026-10-27", titulo=cinco), hora_wp(22, "2026-10-27", "10:00:00", titulo=cinco)]
+    saida, info = deduplicar(com_empresa(linhas), PARAMS)
+    assert list(saida["id"]) == [22]
+    assert info["duplicadas_titulo_mesmo_dia"] == 1
+
+
+def test_entre_origens_url_resolvida_remove_sem_janela_de_data():
+    linhas = [
+        so_data_gn(21, "2026-10-17", titulo="Acoes sobem na bolsa hoje", resolved="http://infomoney.com.br/x"),
+        hora_wp(22, "2026-10-27", "10:00:00", titulo="Petrobras anuncia dividendo bilionario",
+                link="https://infomoney.com.br/x/?utm=1"),
+    ]
+    saida, info = deduplicar(com_empresa(linhas), PARAMS)
+    assert list(saida["id"]) == [22]
+    assert info["duplicadas_url"] == 1 and info["duplicadas_titulo_janela"] == 0
+
+
+def test_entre_origens_url_vale_com_titulo_de_duas_palavras():
+    # o mínimo de palavras não vale para URL
+    linhas = [
+        so_data_gn(21, "2026-10-17", titulo="Petro alta", resolved="http://infomoney.com.br/x"),
+        hora_wp(22, "2026-10-27", "10:00:00", titulo="Petro cai", link="https://infomoney.com.br/x/?utm=1"),
+    ]
+    saida, info = deduplicar(com_empresa(linhas), PARAMS)
+    assert list(saida["id"]) == [22]
+    assert info["duplicadas_url"] == 1
+
+
+def test_entre_origens_mesma_origem_dias_seguidos_fica_tudo():
+    linhas = [so_data_gn(21, "2026-10-27"), so_data_gn(22, "2026-10-28")]
+    saida, info = deduplicar(com_empresa(linhas), PARAMS)
+    assert sorted(saida["id"]) == [21, 22]
+    assert info["duplicadas_titulo"] == 0
+
+
+def test_entre_origens_mesma_origem_mesmo_dia_fica_uma():
+    linhas = [so_data_gn(21, "2026-10-27"), so_data_gn(22, "2026-10-27")]
+    saida, info = deduplicar(com_empresa(linhas), PARAMS)
+    assert list(saida["id"]) == [21]
+    assert info["duplicadas_titulo"] == 1 and info["duplicadas_titulo_mesmo_dia"] == 0
+
+
+def test_entre_origens_wp_sem_probabilidade_perde_para_gn_com():
+    linhas = [
+        hora_wp(22, "2026-10-27", "10:00:00", pp=None, pn=None),
+        so_data_gn(21, "2026-10-27"),
+    ]
+    saida, info = deduplicar(com_empresa(linhas), PARAMS)
+    assert list(saida["id"]) == [21]
+    assert info["duplicadas_titulo_mesmo_dia"] == 1
+
+
+def test_entre_origens_empresa_pelo_cnpj_une_codigos_diferentes():
+    linhas = [so_data_gn(21, "2026-10-27", ticker="XXXX3"), hora_wp(22, "2026-10-27", "10:00:00", ticker="XXXX4")]
+    saida, info = deduplicar(com_empresa(linhas), PARAMS)
+    assert list(saida["id"]) == [22]
+    assert info["duplicadas_titulo_mesmo_dia"] == 1
+
+
+def test_entre_origens_empresas_diferentes_ficam_as_duas():
+    linhas = [so_data_gn(21, "2026-10-27", ticker="XXXX3"), hora_wp(22, "2026-10-27", "10:00:00", ticker="YYYY3")]
+    saida, info = deduplicar(com_empresa(linhas), PARAMS)
+    assert sorted(saida["id"]) == [21, 22]
+    assert info["duplicadas_titulo_mesmo_dia"] == 0
+
+
+def test_entre_origens_cvm_ipe_nao_entra():
+    linhas = [
+        nota(31, "XXXX3", data="2026-10-27", momento="2026-10-27 23:59:59", titulo=T, origem="cvm_ipe",
+             precisao="sem_hora"),
+        so_data_gn(21, "2026-10-27"),
+    ]
+    saida, info = deduplicar(com_empresa(linhas), PARAMS)
+    assert sorted(saida["id"]) == [21, 31]
+    assert info["duplicadas_titulo_mesmo_dia"] == 0 and info["duplicadas_titulo_janela"] == 0
+
+
+def test_entre_origens_cadeia_nao_e_transitiva_e_gn_cai():
+    # WP D, GN D+1, WP D+2: a GN cai pela WP de D; a WP de D+2 só compara com as mantidas (WP D, mesma origem)
+    linhas = [
+        hora_wp(41, "2026-10-27", "10:00:00"),
+        so_data_gn(42, "2026-10-28"),
+        hora_wp(43, "2026-10-29", "10:00:00"),
+    ]
+    saida, info = deduplicar(com_empresa(linhas), PARAMS)
+    assert sorted(saida["id"]) == [41, 43]
+    assert info["duplicadas_titulo_janela"] == 1
+
+
+def test_entre_origens_desligada_mantem_so_a_chave_antiga():
+    params = dataclasses.replace(PARAMS, deduplicar_entre_origens=False)
+    mesmo_dia = [so_data_gn(21, "2026-10-27"), hora_wp(22, "2026-10-27", "10:00:00")]
+    saida, info = deduplicar(com_empresa(mesmo_dia), params)
+    assert list(saida["id"]) == [22]  # E10 antiga: a de menor momento (a WP, 10:00)
+    assert info == {"duplicadas_id": 0, "duplicadas_titulo": 1, "duplicadas_titulo_mesmo_dia": 0,
+                    "duplicadas_titulo_janela": 0, "duplicadas_url": 0}
+
+    dia_seguinte = [so_data_gn(21, "2026-10-26"), hora_wp(22, "2026-10-27", "10:00:00")]
+    saida, info = deduplicar(com_empresa(dia_seguinte), params)
+    assert sorted(saida["id"]) == [21, 22] and info["duplicadas_titulo"] == 0
+
+    por_url = [
+        so_data_gn(21, "2026-10-17", titulo="Acoes sobem na bolsa hoje", resolved="http://infomoney.com.br/x"),
+        hora_wp(22, "2026-10-27", "10:00:00", titulo="Petrobras anuncia dividendo bilionario",
+                link="https://infomoney.com.br/x/?utm=1"),
+    ]
+    saida, info = deduplicar(com_empresa(por_url), params)
+    assert sorted(saida["id"]) == [21, 22] and info["duplicadas_url"] == 0
+
+
+def test_entre_origens_sem_colunas_opcionais_nao_quebra():
+    # sem link, resolved_url, precisao_hora e probabilidades
+    df = com_empresa([
+        so_data_gn(21, "2026-10-27"),
+        hora_wp(22, "2026-10-27", "10:00:00"),
+    ]).drop(columns=["prob_positivo", "prob_negativo", "precisao_hora"])
+    saida, info = deduplicar(df, PARAMS)
+    # sem precisão nem probabilidade, vale o momento_ref: a WP (10:00) vem antes da GN (23:59:59)
+    assert list(saida["id"]) == [22]
+    assert info["duplicadas_titulo_mesmo_dia"] == 1
+
+
+def test_remover_entre_origens_devolve_restante_e_pares_sem_colunas_auxiliares():
+    df = com_empresa([so_data_gn(21, "2026-10-27"), hora_wp(22, "2026-10-27", "10:00:00")])
+    colunas = list(df.columns)
+    restante, pares = remover_entre_origens(df, PARAMS)
+    assert list(restante["id"]) == [22]
+    assert list(restante.columns) == colunas  # a saída mantém as colunas da entrada
+    assert list(pares.columns) == [
+        "empresa", "regra", "tambem_url", "id_removido", "origem_removido", "titulo_removido", "data_removido",
+        "ticker_removido", "id_mantido", "origem_mantido", "titulo_mantido", "data_mantido", "ticker_mantido", "dias",
+    ]
+    assert len(pares) == 1
+
+
+def test_remover_entre_origens_exige_origem():
+    with pytest.raises(ValueError, match="origem"):
+        remover_entre_origens(com_empresa([hora_wp(22, "2026-10-27", "10:00:00")]).drop(columns="origem"), PARAMS)
+

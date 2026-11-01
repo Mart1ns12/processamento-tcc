@@ -11,9 +11,11 @@ tabelas:
     textos_vazios_nota: [titulo]   # texto vazio no título vira nota com até 10 ids (a leitura já trata como vazio); nas outras colunas é divergência
     coluna_data: data_publicacao
     coluna_entidade: ticker
-    # Temporário (28/10/2026): origens aceitas na leitura mas descartadas logo depois (fonte nova, aguardando
-    # definição da coleta). Aviso no execucao.json e nota no diagnóstico. Lista vazia = todas entram.
-    origens_ignoradas: [wordpress]
+    # Mecanismo para fontes futuras: origens aceitas na leitura mas descartadas logo depois.
+    # Aviso no execucao.json e nota no diagnóstico. Lista vazia = todas entram.
+    origens_ignoradas: []
+    # Origens em que 00:00:00 de Los Angeles significa "só data" (regra N1-A, fontes.aplicar_regra_so_data).
+    origens_so_data: [google_news]
     valores_permitidos:
       origem: [google_news, cvm_ipe, wordpress]
       papel: [protagonista, citada_com_fato, mencao, errada, matriz_estrangeira]
@@ -76,7 +78,7 @@ tabelas:
 auxiliares:
   raw_articles:
     nome_real: raw_articles
-    colunas: {id: id, lang: lang, published_at: published_at, published_precision: published_precision, origem: origem}
+    colunas: {id: id, lang: lang, published_at: published_at, published_precision: published_precision, origem: origem, resolved_url: resolved_url}
   sentimento_artigos:
     nome_real: staging_article_sentiment
     colunas: {article_id: article_id, model: model, text_source: text_source}

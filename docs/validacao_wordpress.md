@@ -1,5 +1,5 @@
 # Validação da fonte wordpress em v1-noticias (só leitura)
-- Gerado em: 2026-11-01 15:58 (America/Sao_Paulo)
+- Gerado em: 2026-11-01 18:42 (America/Sao_Paulo)
 - Comando: `python -m processamento.diagnostico.wordpress`
 > Este relatório só leu o banco (SELECT). Nada foi gravado no banco; a amostra manual é o único arquivo escrito, e só se ainda não existir.
 
@@ -243,7 +243,7 @@ Artigos wordpress com par no google_news: 1194 de 34585 (3.5%). Por título (mes
 | 2026 | 2019 | 41.0% | 35.9% | 42.6% |
 | total | 34585 | 3.3% | 2.1% | 3.5% |
 
-Duplicatas em que o wordpress tem hora real e o google_news não tem: 1028 artigos (1058 pares).
+Duplicatas em que o wordpress tem hora real e o google_news não tem: 1031 artigos (1061 pares).
 
 ## 4. Hora, fuso, data e momento_pregao
 
@@ -329,10 +329,9 @@ Wordpress: 429 de 83636 horários são em ponto (minuto e segundo zero). Horas e
 
 | precisão | linhas | % |
 |---|---|---|
-| hora real | 83610 | 100.0% |
-| meia-noite do Pacífico (só data pela N1-A) | 26 | 0.0% |
+| hora real | 83636 | 100.0% |
 
-N1-A (`fontes.aplicar_regra_so_data`) trataria 26 linhas wordpress com horário como só data (meia-noite do Pacífico). Por ano: 2021: 0, 2022: 0, 2026: 26. Só reportado; a regra não foi alterada.
+N1-A (`fontes.aplicar_regra_so_data`) trataria 0 linhas wordpress com horário como só data (meia-noite do Pacífico). Por ano: 2021: 0, 2022: 0, 2026: 0. Só reportado; a regra não foi alterada.
 
 ## 5. FinBERT
 
@@ -508,13 +507,13 @@ Preencher `ticker_correto` com S (ticker certo), N (ticker errado) ou ? (dúvida
 
 ## 8. Impacto com × sem wordpress
 
-v1-noticias lida uma vez só (na carga, com wordpress); os dois cenários saem em memória pelo mesmo tratamento do `ler_noticias` (`tratar_noticias_lidas`). Com = nenhuma origem ignorada. Sem = tira as origens de `origens_ignoradas` do mapa (wordpress). Versão de notícias 'todas', como no dataset; 117785 pares pregão × ação do universo; 1703 pregões.
+v1-noticias lida uma vez só (na carga, com wordpress); os dois cenários saem em memória pelo mesmo tratamento do `ler_noticias` (`tratar_noticias_lidas`). Com = nenhuma origem ignorada. Sem = tira a origem wordpress (lista explícita, não `origens_ignoradas` do mapa, que pode estar vazia). Versão de notícias 'todas', como no dataset; 117785 pares pregão × ação do universo; 1703 pregões.
 
 ### Deduplicação e preparo
 
 | leitura | lidas | duplicadas por id | duplicadas por título | preparadas | sem probabilidade |
 |---|---|---|---|---|---|
-| com wordpress | 401743 | 47494 | 6757 | 346797 | 0 |
+| com wordpress | 401743 | 47494 | 5461 | 346644 | 0 |
 | sem wordpress | 318107 | 36067 | 5418 | 276022 | 0 |
 
 ### Pares pregão × ação com ≥1 notícia na janela do dia (noticias_dia_qtd > 0)
@@ -527,11 +526,11 @@ v1-noticias lida uma vez só (na carga, com wordpress); os dois cenários saem e
 | 2022 | 16169 | 12223 | 8107 | 4116 |
 | 2023 | 16693 | 7998 | 7998 | 0 |
 | 2024 | 18005 | 11039 | 11039 | 0 |
-| 2025 | 19189 | 6166 | 6166 | 0 |
-| 2026 | 15239 | 13707 | 13642 | 65 |
-| total | 117785 | 61549 | 54450 | 7099 |
+| 2025 | 19189 | 6165 | 6166 | -1 |
+| 2026 | 15239 | 13704 | 13642 | 62 |
+| total | 117785 | 61545 | 54450 | 7095 |
 
-Correlação de noticias_dia_qtd (com × sem): 0.950. Linhas com quantidade diferente: 18799.
+Correlação de noticias_dia_qtd (com × sem): 0.950. Linhas com quantidade diferente: 18826.
 Correlação de noticias_dia_tom (com × sem): 0.925.
 
 ### 10 maiores diferenças de noticias_dia_tom
@@ -567,14 +566,13 @@ Correlação de noticias_dia_tom (com × sem): 0.925.
 | Cobertura FinBERT (wordpress) ≥ 99% | 100.00% | ≥ 99% | OK |
 | Taxa de papel='errada' (wordpress) ≤ google_news + 5 p.p. | wordpress 1.47% × google_news 10.79% | ≤ google_news + 5 p.p. | OK |
 | Anos com wordpress em raw_articles presentes na v1-noticias (≥ ano_min) | nenhum | nenhum faltando | OK |
-| N1-A não trata fonte com hora real (wordpress) como só data | 26 | 0 linhas | FALHA |
+| N1-A não trata fonte com hora real (wordpress) como só data | 0 | 0 linhas | OK |
 | Amostra manual ≥ 27/30 'S' | 0/30 'S', 30 sem revisão | ≥ 27/30 'S' | PENDENTE |
 
 **Recomendação: liberar só depois de resolver os pendentes.**
 
 ### Precisa resolver antes de liberar
 
-- N1-A em fonte com hora real: 26 linhas wordpress com horário seriam tratadas como só data (meia-noite do Pacífico) pela `fontes.aplicar_regra_so_data`. Só reportado; a regra não foi alterada.
 - Papel 'errada': o código não filtra papel='errada' na versão 'todas' (padrão do dataset, `fontes.ler_noticias` não filtra papel). Só a versão 'principais' filtra papéis (experimento.principais.papeis). Só reportado: nada foi alterado.
 
 ### Perguntas para a coleta
