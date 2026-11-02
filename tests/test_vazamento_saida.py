@@ -23,6 +23,7 @@ from processamento import fontes
 from processamento.experimento import modelos, preparacao
 from processamento.experimento.modelos import CHAVES_METADADOS
 from processamento.saida.gerar import gerar
+from processamento.saida.insumos import ler_insumos
 from processamento.saida.parametros import carregar_parametros_saida
 
 D = date(2025, 10, 22)
@@ -105,7 +106,7 @@ def _bordas_de_22(df: pd.DataFrame) -> pd.DataFrame:
 def _envenenado(banco_teste, extra_noticias=None):
     alterar = {
         "v1-precos": _precos_de_22, "v1-balancos": _balanco_de_22, "v1-proventos": _provento_de_22,
-        "v1-indices": _cdi_de_22,
+        "v1-indices": lambda df: _linhas(_cdi_de_22(df), [{"data": FUTURO, "indice": "SMLL", "valor": "99999"}]),
         "v1-noticias": (lambda df: extra_noticias(_noticias_de_22(df))) if extra_noticias else _noticias_de_22,
     }
     return banco_teste(alterar=alterar)
@@ -149,6 +150,12 @@ def test_veneno_arquivos_iguais_byte_a_byte_menos_execucao(banco_teste, tmp_path
 
 
 # ---------------------------------------------------------------- testes explícitos (seção 6)
+
+def test_insumos_nao_leem_smll_de_depois_de_t(banco_teste):
+    ins = ler_insumos(D, _envenenado(banco_teste), existe_composicao=False)
+    assert not (ins.indices["indice"] == "SMLL").any()
+    assert (ins.indices["data"] <= pd.Timestamp(ins.t)).all()
+
 
 def test_resumo_petr4_nao_usa_balanco_nem_lucro_do_futuro(banco_teste, tmp_path, modelos_dir):
     pasta = _gerar(tmp_path, _envenenado(banco_teste), modelos_dir)

@@ -2,10 +2,12 @@
 
 Nada depois de t pode mudar as linhas de t, exceto o alvo (que olha t+1). Cenários: "cortado"
 (só o que se saberia no fim de t) e "cheio e alterado" (futuro de t mudado: preços ×3, volumes
-×10, notícias após 08:00 de t1 com pp e pn trocados, notícias novas, cvm_ipe e balanço em t1).
-Nenhum teste usa banco ou rede.
+×10, SMLL ×3, notícias após 08:00 de t1 com pp e pn trocados, notícias novas, cvm_ipe e balanço em t1).
+Os blocos A e B do protocolo (inclusive exposicao_small, que lê o SMLL e o IBOV) também não podem
+olhar o futuro. Nenhum teste usa banco ou rede.
 """
 
+import dataclasses
 import functools
 from datetime import timedelta
 
@@ -21,21 +23,27 @@ from fabrica_experimento import (
     dados_de,
     depois_de_t1_alterado,
     em_t,
+    mexer_no_futuro,
     mundo,
     noticias_de,
     sem_pregao,
     so_t1_alterado,
 )
+from fabrica_precos import cadastro_de, precos_de, serie_por_retornos
+from processamento import calendario, fontes
+from processamento.exclusoes import Exclusoes
 from processamento.experimento.dataset import executar, montar_dataset
 from processamento.experimento.parametros import carregar_parametros_experimento
 from processamento.experimento.preparacao import (
     COLUNAS_ALVO,
+    COLUNAS_PROTOCOLO,
     COMPLEMENTARES_PRECO,
     ESSENCIAIS_PRECO,
     preparar,
 )
+from processamento.universo import montar_universo
 
-PRECO = ESSENCIAIS_PRECO + COMPLEMENTARES_PRECO  # as 13 colunas de preço e volume
+PRECO = ESSENCIAIS_PRECO + COMPLEMENTARES_PRECO  # as 13 colunas de preço e volume (sem os blocos A e B)
 
 
 def _linhas(df, d):
@@ -56,19 +64,19 @@ def cenario():
     c = cortado(m)
     a = alterado(m)
     df_cortado, _ = montar_dataset(
-        dados_de(c["cal"], c["precos"], CADASTRO_MUNDO, c["noticias"], c["balancos"]),
+        dados_de(c["cal"], c["precos"], CADASTRO_MUNDO, c["noticias"], c["balancos"], indices=c.get("indices")),
         c["cal"],
         proximo_ao_vivo=t1,
     )
     df_cheio, _ = montar_dataset(
-        dados_de(m["cal"], m["precos"], CADASTRO_MUNDO, m["noticias"], m["balancos"]), m["cal"]
+        dados_de(m["cal"], m["precos"], CADASTRO_MUNDO, m["noticias"], m["balancos"], indices=m.get("indices")), m["cal"]
     )
     df_alterado, _ = montar_dataset(
-        dados_de(a["cal"], a["precos"], CADASTRO_MUNDO, a["noticias"], a["balancos"]), a["cal"]
+        dados_de(a["cal"], a["precos"], CADASTRO_MUNDO, a["noticias"], a["balancos"], indices=a.get("indices")), a["cal"]
     )
     sem_f4 = m["noticias"][m["noticias"]["id"] != "f4"]
     df_sem_f4, _ = montar_dataset(
-        dados_de(m["cal"], m["precos"], CADASTRO_MUNDO, sem_f4, m["balancos"]), m["cal"]
+        dados_de(m["cal"], m["precos"], CADASTRO_MUNDO, sem_f4, m["balancos"], indices=m.get("indices")), m["cal"]
     )
     return {
         "t": t,
@@ -110,7 +118,7 @@ def _mundo_do_caso(caso):
 
 def _montar(m):
     """(dataset, info) de `m` com o mesmo desenho do cenário cheio."""
-    return montar_dataset(dados_de(m["cal"], m["precos"], CADASTRO_MUNDO, m["noticias"], m["balancos"]), m["cal"])
+    return montar_dataset(dados_de(m["cal"], m["precos"], CADASTRO_MUNDO, m["noticias"], m["balancos"], indices=m.get("indices")), m["cal"])
 
 
 def _dataset(m):
@@ -124,12 +132,12 @@ def _pares_do_caso(caso):
     c = cortado(m)
     a = alterado(m)
     df_cortado, _ = montar_dataset(
-        dados_de(c["cal"], c["precos"], CADASTRO_MUNDO, c["noticias"], c["balancos"]),
+        dados_de(c["cal"], c["precos"], CADASTRO_MUNDO, c["noticias"], c["balancos"], indices=c.get("indices")),
         c["cal"],
         proximo_ao_vivo=m["t1"],
     )
     df_alterado, _ = montar_dataset(
-        dados_de(a["cal"], a["precos"], CADASTRO_MUNDO, a["noticias"], a["balancos"]), a["cal"]
+        dados_de(a["cal"], a["precos"], CADASTRO_MUNDO, a["noticias"], a["balancos"], indices=a.get("indices")), a["cal"]
     )
     return df_cortado, df_alterado
 
@@ -225,14 +233,14 @@ def test_regravacao_do_ajustado_nao_muda_precos_de_t():
     mascara = antes & (precos["ticker"] == "AAAA3")
     precos.loc[mascara, "fechamento_ajustado"] = precos.loc[mascara, "fechamento_ajustado"] * 0.97
     df_original, _ = montar_dataset(
-        dados_de(m["cal"], m["precos"], CADASTRO_MUNDO, m["noticias"], m["balancos"]), m["cal"]
+        dados_de(m["cal"], m["precos"], CADASTRO_MUNDO, m["noticias"], m["balancos"], indices=m.get("indices")), m["cal"]
     )
     df_regravado, _ = montar_dataset(
-        dados_de(m["cal"], precos, CADASTRO_MUNDO, m["noticias"], m["balancos"]), m["cal"]
+        dados_de(m["cal"], precos, CADASTRO_MUNDO, m["noticias"], m["balancos"], indices=m.get("indices")), m["cal"]
     )
     pd.testing.assert_frame_equal(
-        _linhas(df_original, t)[["data", "ticker", *PRECO]],
-        _linhas(df_regravado, t)[["data", "ticker", *PRECO]],
+        _linhas(df_original, t)[["data", "ticker", *PRECO, *COLUNAS_PROTOCOLO]],
+        _linhas(df_regravado, t)[["data", "ticker", *PRECO, *COLUNAS_PROTOCOLO]],
         rtol=1e-9,
         atol=1e-12,
     )
@@ -264,22 +272,26 @@ def test_depois_de_t1_alterado_nao_muda_nenhuma_linha_de_t():
     assert _difere(_alvo_do_dia(antes, t1), _alvo_do_dia(depois, t1))
 
 
-def test_dataset_nao_le_proventos_acoes_emitidas_nem_indices(banco_teste, tmp_path):
-    # O dataset não lê v1-proventos, v1-acoes_emitidas nem v1-indices. Por isso, alterar essas
-    # tabelas não muda nada. O espião confere que nenhuma consulta as cita, e que a leitura de
-    # v1-precos passa por ele (senão o teste seria vazio).
+def test_dataset_le_indices_com_corte_e_nao_le_proventos_nem_acoes(banco_teste, tmp_path):
+    # O dataset lê v1-indices (SMLL) cortada em t, e não lê v1-proventos nem v1-acoes_emitidas. O espião
+    # confere isso e também que as leituras de v1-precos e v1-balancos passam por ele (senão seria vazio).
     ler_banco = banco_teste()
+    cal = calendario.pregoes(fontes.ler_tabela("precos", ler=ler_banco))
     consultas = []
 
-    def espiao(sql, *args, **kwargs):
-        consultas.append(sql)
-        return ler_banco(sql, *args, **kwargs)
+    def espiao(sql, params=None):
+        consultas.append((sql, params))
+        return ler_banco(sql, params)
 
-    csv = executar("todas", None, None, tmp_path, ler=espiao, existe_composicao=False)
+    csv = executar("todas", cal[1], None, tmp_path, ler=espiao, existe_composicao=False)
     assert csv.exists()
-    assert any("v1-precos" in sql for sql in consultas)
-    for tabela in ("v1-proventos", "v1-acoes_emitidas", "v1-indices"):
-        assert not any(tabela in sql for sql in consultas), tabela
+    assert any("v1-precos" in sql for sql, _ in consultas)
+    assert any("v1-balancos" in sql for sql, _ in consultas)
+    assert any("v1-indices" in sql for sql, _ in consultas)
+    assert any("v1-indices" in sql and params and params.get("ate") == cal[1].isoformat()
+               for sql, params in consultas)
+    for tabela in ("v1-proventos", "v1-acoes_emitidas"):
+        assert not any(tabela in sql for sql, _ in consultas), tabela
 
 
 TITULO_COPIA = "Empresa AAAA3 anuncia novo plano de investimento"  # 7 palavras (mínimo: 5)
@@ -385,3 +397,101 @@ def test_copia_depois_do_corte_com_probabilidade_nao_tira_a_de_antes_do_corte(or
     assert _valor(df_tarde, t, "AAAA3", "noticias_dia_qtd") == _valor(df_sem, t, "AAAA3", "noticias_dia_qtd") + 1
     # e a de 10:00, mais tarde, sai: t+1 fica igual a sem ela
     assert _valor(df_tarde, t1, "AAAA3", "noticias_dia_qtd") == _valor(df_cedo, t1, "AAAA3", "noticias_dia_qtd")
+
+
+# ---------------------------------------------------------------- blocos A e B do protocolo não olham o futuro
+
+
+def test_colunas_novas_tem_valor_em_t():
+    m = _mundo_do_caso("T_INDICE")
+    t = m["t"]
+    df = _df_cheio("T_INDICE")
+    linhas = _linhas(df, t)
+    for coluna in COLUNAS_PROTOCOLO:
+        assert linhas[coluna].notna().any(), coluna
+    # DDDD3 é o único do setor S2: a média do setor não tem outro para comparar
+    assert pd.isna(_valor(df, t, "DDDD3", "momento_setor_5d"))
+
+
+_TROCAS_FUTURO = [
+    pytest.param({"so_t1": True, "acoes_preco": 1.05}, id="precos_so_t1"),
+    pytest.param({"acoes_preco": 3.0}, id="precos_depois"),
+    pytest.param({"so_t1": True, "acoes_volume": 10.0}, id="volumes_so_t1"),
+    pytest.param({"acoes_volume": 10.0}, id="volumes_depois"),
+    pytest.param({"so_t1": True, "smll": 1.05}, id="smll_so_t1"),
+    pytest.param({"smll": 3.0}, id="smll_depois"),
+    pytest.param({"so_t1": True, "ibov": 1.05}, id="ibov_so_t1"),
+    pytest.param({"ibov": 3.0}, id="ibov_depois"),
+]
+
+
+@pytest.mark.parametrize("trocas", _TROCAS_FUTURO)
+def test_futuro_nao_muda_colunas_novas_em_t(trocas):
+    m = _mundo_do_caso("T_INDICE")
+    t, t1 = m["t"], m["t1"]
+    antes = _df_cheio("T_INDICE")
+    depois = _dataset(mexer_no_futuro(m, **trocas))
+    pd.testing.assert_frame_equal(_linhas(antes, t), _linhas(depois, t), rtol=1e-12, atol=1e-12)
+    pd.testing.assert_frame_equal(
+        _linhas(preparar(antes.copy()), t), _linhas(preparar(depois.copy()), t), rtol=1e-12, atol=1e-12
+    )
+    # prova de efeito: o futuro mudou as colunas novas de t+1
+    assert _difere(_linhas(antes, t1)[COLUNAS_PROTOCOLO], _linhas(depois, t1)[COLUNAS_PROTOCOLO])
+
+
+def test_empresa_nova_depois_de_t_nao_muda_t():
+    m = _mundo_do_caso("T_INDICE")
+    cal = m["cal"]
+    t = m["t"]
+    i = cal.index(t)
+    rng = np.random.default_rng(9)
+    depois = cal[i + 1:]
+    extra = precos_de("EEEE3", depois, serie_por_retornos(60.0, rng.normal(0, 0.01, len(depois) - 1).tolist()))
+    precos = pd.concat([m["precos"], extra], ignore_index=True)
+    cadastro = pd.concat([CADASTRO_MUNDO, cadastro_de([("EEEE3", "9", "S1", "ON")])], ignore_index=True)
+    nova, _ = montar_dataset(dados_de(cal, precos, cadastro, m["noticias"], m["balancos"], indices=m["indices"]), cal)
+    antes = _df_cheio("T_INDICE")
+    pd.testing.assert_frame_equal(_linhas(antes, t), _linhas(nova, t), rtol=1e-12, atol=1e-12)
+    assert "EEEE3" not in set(_linhas(nova, t)["ticker"])
+    # prova de efeito: a empresa nova entra na média do setor de AAAA3 depois de t
+    dia = cal[i + 6]
+    assert not np.isclose(
+        _valor(antes, dia, "AAAA3", "momento_setor_5d"), _valor(nova, dia, "AAAA3", "momento_setor_5d")
+    )
+
+
+def test_entrada_na_composicao_depois_de_t_nao_muda_t():
+    m = _mundo_do_caso("T_INDICE")
+    t, t1, cal = m["t"], m["t1"], m["cal"]
+    i = cal.index(t)
+
+    def com_composicao(inicio_ccc):
+        composicao = pd.DataFrame({
+            "ticker": ["AAAA3", "AAAA4", "BBBB3", "DDDD3", "CCCC3"],
+            "data_inicio": [pd.Timestamp(cal[0])] * 4 + [pd.Timestamp(inicio_ccc)],
+            "data_fim": [pd.NaT] * 5,
+        })
+        dados = dados_de(cal, m["precos"], CADASTRO_MUNDO, m["noticias"], m["balancos"], indices=m["indices"])
+        universo = montar_universo(cal, CADASTRO_MUNDO, m["precos"], Exclusoes(), composicao)
+        return montar_dataset(dataclasses.replace(dados, universo=universo), cal)[0]
+
+    entra_em_t1 = com_composicao(t1)
+    entra_depois = com_composicao(cal[i + 5])
+    pd.testing.assert_frame_equal(_linhas(entra_em_t1, t), _linhas(entra_depois, t), rtol=1e-12, atol=1e-12)
+    # prova de efeito: CCCC3 pesa na média do setor de AAAA3 em t+1
+    assert not np.isclose(
+        _valor(entra_em_t1, t1, "AAAA3", "momento_setor_5d"), _valor(entra_depois, t1, "AAAA3", "momento_setor_5d")
+    )
+
+
+def test_balanco_so_muda_dia_resultado():
+    m = _mundo_do_caso("T_INDICE")
+    cal = m["cal"]
+    balancos = m["balancos"].copy()
+    balancos.loc[balancos["cnpj"] == "1", "data_entrega"] = pd.Timestamp(cal[6])
+    antes = _df_cheio("T_INDICE")
+    depois = _dataset({**m, "balancos": balancos})
+    assert not antes["dia_resultado"].equals(depois["dia_resultado"])
+    pd.testing.assert_frame_equal(
+        antes.drop(columns="dia_resultado"), depois.drop(columns="dia_resultado"), rtol=1e-12, atol=1e-12
+    )

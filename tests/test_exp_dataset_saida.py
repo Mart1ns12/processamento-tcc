@@ -15,7 +15,7 @@ import pytest
 from pandas.testing import assert_frame_equal
 
 from processamento import calendario, fontes
-from processamento.experimento.dataset import COLUNAS_DATASET, executar, main, salvar_dataset
+from processamento.experimento.dataset import AVISO_SMLL_AUSENTE, COLUNAS_DATASET, executar, main, salvar_dataset
 
 
 def _df_pequeno() -> pd.DataFrame:
@@ -101,6 +101,22 @@ def test_executar_conta_sem_probabilidade_no_json(banco_teste, tmp_path):
     registro = json.loads(csv.with_suffix(".json").read_text(encoding="utf-8"))
     assert registro["preparadas"] > 0
     assert registro["sem_probabilidade"] == registro["preparadas"]
+
+
+def test_executar_sem_tabela_de_indices_para_com_erro_legivel(banco_teste, tmp_path):
+    ler = banco_teste(omitir=frozenset({"v1-indices"}))
+    with pytest.raises(fontes.ErroLeitura, match="v1-indices"):
+        executar("todas", None, None, tmp_path, ler=ler, existe_composicao=False)
+
+
+def test_executar_sem_smll_na_tabela_grava_coluna_vazia_e_avisa(banco_teste, tmp_path, capsys):
+    ler = banco_teste()   # tests/dados/indices.csv não tem SMLL
+    csv = executar("todas", None, None, tmp_path, ler=ler, existe_composicao=False)
+    df = pd.read_csv(csv, dtype={"ticker": str, "empresa": str, "setor": str}, parse_dates=["data"])
+    assert df["exposicao_small"].isna().all()
+    registro = json.loads(csv.with_suffix(".json").read_text(encoding="utf-8"))
+    assert registro["smll_pregoes"] == 0
+    assert AVISO_SMLL_AUSENTE in capsys.readouterr().out
 
 
 def test_executar_ate_corta_os_pregoes(banco_teste, tmp_path):

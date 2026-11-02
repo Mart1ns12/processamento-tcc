@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 import numpy as np
 import pandas as pd
 
-from fabrica_precos import cadastro_de, precos_de, pregoes_uteis, serie_por_retornos
+from fabrica_precos import cadastro_de, indices_de, precos_de, pregoes_uteis, serie_por_retornos
 from processamento import calendario, fontes
 from processamento.exclusoes import Exclusoes
 from processamento.experimento.dataset import DadosExperimento
@@ -92,6 +92,7 @@ def dados_de(
     balancos: pd.DataFrame,
     exclusoes: Exclusoes | None = None,
     mudancas: dict | None = None,
+    indices: pd.DataFrame | None = None,
 ) -> DadosExperimento:
     """`DadosExperimento` com o universo refeito para estes preços e este calendário."""
     universo = montar_universo(list(cal), cadastro, precos, exclusoes or Exclusoes())
@@ -102,6 +103,7 @@ def dados_de(
         balancos=balancos,
         universo=universo,
         mudancas=mudancas or {},
+        indices=indices,
     )
 
 
@@ -165,6 +167,13 @@ def _noticias_do_mundo(cal: list, t, t1, rng: np.random.Generator) -> pd.DataFra
     return noticias_de(linhas)
 
 
+def _indices_do_mundo(cal: list) -> pd.DataFrame:
+    """SMLL em todos os pregões de `cal` (rng próprio: não muda os preços nem as notícias do mundo)."""
+    rng = np.random.default_rng(8)
+    serie = serie_por_retornos(1000.0, rng.normal(0, 0.012, len(cal) - 1).tolist())
+    return indices_de([(d.isoformat(), "SMLL", v) for d, v in zip(cal, serie)])
+
+
 def _balancos_do_mundo(cal: list) -> pd.DataFrame:
     """Balanços do CNPJ "1" (cal[5]) e do CNPJ "2" (cal[200]); todos antes de t."""
     return pd.DataFrame({
@@ -175,9 +184,9 @@ def _balancos_do_mundo(cal: list) -> pd.DataFrame:
 
 
 def mundo() -> dict:
-    """Mundo de 300 pregões (a partir de 2025-06-02) com preços, notícias e balanços.
+    """Mundo de 300 pregões (a partir de 2025-06-02) com preços, notícias, balanços e índices (SMLL).
 
-    Devolve `cal`, `precos`, `noticias`, `balancos`, `t` (cal[260]) e `t1` (cal[261]).
+    Devolve `cal`, `precos`, `noticias`, `balancos`, `indices`, `t` (cal[260]) e `t1` (cal[261]).
     """
     rng = np.random.default_rng(7)
     cal = pregoes_uteis(N_MUNDO, "2025-06-02")
@@ -189,27 +198,29 @@ def mundo() -> dict:
         "precos": precos,
         "noticias": noticias,
         "balancos": _balancos_do_mundo(cal),
+        "indices": _indices_do_mundo(cal),
         "t": t,
         "t1": t1,
     }
 
 
 def cortado(m: dict) -> dict:
-    """Só o que se saberia no fim de t (preços e balanços até t; notícias até 08:00 de t1)."""
+    """Só o que se saberia no fim de t (preços, balanços e índices até t; notícias até 08:00 de t1)."""
     t, t1 = m["t"], m["t1"]
     corte_t = pd.Timestamp(t)
     corte_noticia = calendario.corte_manha(t1)
     precos = m["precos"][m["precos"]["data"] <= corte_t].reset_index(drop=True)
     noticias = m["noticias"][m["noticias"]["momento_ref"] <= corte_noticia].reset_index(drop=True)
     balancos = m["balancos"][m["balancos"]["data_entrega"] <= corte_t].reset_index(drop=True)
+    indices = m["indices"][m["indices"]["data"] <= corte_t].reset_index(drop=True)
     cal = [d for d in m["cal"] if d <= t]
-    return {"cal": cal, "precos": precos, "noticias": noticias, "balancos": balancos}
+    return {"cal": cal, "precos": precos, "noticias": noticias, "balancos": balancos, "indices": indices}
 
 
 def alterado(m: dict) -> dict:
     """Mundo cheio com o futuro de t alterado: preços após t ×3 (volume ×10, índices inclusos),
-    notícias após 08:00 de t1 com pp e pn trocados, notícias novas às 08:00:01 de t1, um cvm_ipe
-    datado de t1 e um balanço do CNPJ "1" entregue em t1."""
+    SMLL após t ×3, notícias após 08:00 de t1 com pp e pn trocados, notícias novas às 08:00:01 de t1,
+    um cvm_ipe datado de t1 e um balanço do CNPJ "1" entregue em t1."""
     t, t1 = m["t"], m["t1"]
     corte_t = pd.Timestamp(t)
     precos = m["precos"].copy()
@@ -217,6 +228,9 @@ def alterado(m: dict) -> dict:
     colunas_preco = ["abertura", "maxima", "minima", "fechamento", "fechamento_ajustado"]
     precos.loc[depois, colunas_preco] = precos.loc[depois, colunas_preco] * 3
     precos.loc[depois, "volume"] = precos.loc[depois, "volume"] * 10
+    indices = m["indices"].copy()
+    linhas_smll = (indices["data"] > corte_t) & (indices["indice"] == "SMLL")
+    indices.loc[linhas_smll, "valor"] = indices.loc[linhas_smll, "valor"] * 3
 
     noticias = m["noticias"].copy()
     trocar = noticias["momento_ref"] > calendario.corte_manha(t1)
@@ -235,7 +249,7 @@ def alterado(m: dict) -> dict:
         [m["balancos"], pd.DataFrame({"cnpj": ["1"], "tipo": ["ITR"], "data_entrega": [pd.Timestamp(t1)]})],
         ignore_index=True,
     )
-    return {"cal": m["cal"], "precos": precos, "noticias": noticias, "balancos": balancos}
+    return {"cal": m["cal"], "precos": precos, "noticias": noticias, "balancos": balancos, "indices": indices}
 
 
 def em_t(m: dict, indice: int) -> dict:
@@ -258,18 +272,22 @@ def so_t1_alterado(m: dict) -> dict:
     """Só os preços de t+1 mudam (×1.05, todos menos IBOV). Volumes e notícias ficam iguais.
 
     Nas linhas de t só as colunas de alvo podem mudar (ret_t1, alvo, alvo_abertura...). ×1.05 é
-    pequeno de propósito: um salto de ×3 cairia no retorno suspeito e zeraria o alvo.
+    pequeno de propósito: um salto de ×3 cairia no retorno suspeito e zeraria o alvo. O SMLL de t+1 também ×1.05.
     """
     t1 = pd.Timestamp(m["t1"])
     precos = m["precos"].copy()
     mascara = (precos["data"] == t1) & (precos["ticker"] != "IBOV")
     colunas_preco = ["abertura", "maxima", "minima", "fechamento", "fechamento_ajustado"]
     precos.loc[mascara, colunas_preco] = precos.loc[mascara, colunas_preco] * 1.05
-    return {"cal": m["cal"], "precos": precos, "noticias": m["noticias"], "balancos": m["balancos"]}
+    indices = m["indices"].copy()
+    linhas_smll = (indices["data"] == t1) & (indices["indice"] == "SMLL")
+    indices.loc[linhas_smll, "valor"] = indices.loc[linhas_smll, "valor"] * 1.05
+    return {"cal": m["cal"], "precos": precos, "noticias": m["noticias"], "balancos": m["balancos"],
+            "indices": indices}
 
 
 def depois_de_t1_alterado(m: dict) -> dict:
-    """Preços e volumes de todas as datas depois de t+1 mudam (×3 e ×10, como em `alterado`).
+    """Preços, volumes e SMLL de todas as datas depois de t+1 mudam (×3 e ×10, como em `alterado`).
 
     As linhas de t, inclusive as colunas de alvo, têm de ficar iguais: o alvo olha só t+1.
     """
@@ -279,7 +297,28 @@ def depois_de_t1_alterado(m: dict) -> dict:
     colunas_preco = ["abertura", "maxima", "minima", "fechamento", "fechamento_ajustado"]
     precos.loc[depois, colunas_preco] = precos.loc[depois, colunas_preco] * 3
     precos.loc[depois, "volume"] = precos.loc[depois, "volume"] * 10
-    return {"cal": m["cal"], "precos": precos, "noticias": m["noticias"], "balancos": m["balancos"]}
+    indices = m["indices"].copy()
+    linhas_smll = (indices["data"] > t1) & (indices["indice"] == "SMLL")
+    indices.loc[linhas_smll, "valor"] = indices.loc[linhas_smll, "valor"] * 3
+    return {"cal": m["cal"], "precos": precos, "noticias": m["noticias"], "balancos": m["balancos"],
+            "indices": indices}
+
+
+def mexer_no_futuro(m, *, so_t1=False, acoes_preco=1.0, acoes_volume=1.0, smll=1.0, ibov=1.0) -> dict:
+    """Multiplica só depois de t (ou só em t+1). Ações, IBOV e SMLL são independentes."""
+    t, t1 = pd.Timestamp(m["t"]), pd.Timestamp(m["t1"])
+    alvo = (lambda d: d == t1) if so_t1 else (lambda d: d > t)
+    colunas = ["abertura", "maxima", "minima", "fechamento", "fechamento_ajustado"]
+    precos = m["precos"].copy()
+    futuro, acao = alvo(precos["data"]), precos["ticker"].isin(TICKERS_MUNDO)
+    precos.loc[futuro & acao, colunas] = precos.loc[futuro & acao, colunas] * acoes_preco
+    precos.loc[futuro & acao, "volume"] = precos.loc[futuro & acao, "volume"] * acoes_volume
+    e_ibov = precos["ticker"] == "IBOV"
+    precos.loc[futuro & e_ibov, colunas] = precos.loc[futuro & e_ibov, colunas] * ibov
+    indices = m["indices"].copy()
+    linhas = alvo(indices["data"]) & (indices["indice"] == "SMLL")
+    indices.loc[linhas, "valor"] = indices.loc[linhas, "valor"] * smll
+    return {**m, "precos": precos, "indices": indices}
 
 
 # ---------------------------------------------------------- mundo pequeno com casos exatos (integração)

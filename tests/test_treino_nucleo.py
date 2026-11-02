@@ -9,7 +9,7 @@ import pytest
 
 from fabrica_treino import dataset_sintetico, gravar_versoes, params_teste
 from processamento.experimento import treino, validacao
-from processamento.experimento.preparacao import colunas_do_modelo
+from processamento.experimento.preparacao import COLUNAS_PROTOCOLO, colunas_do_modelo
 
 BLOCOS_TODOS = ("preco_contexto", "macro", "noticias_contexto")
 
@@ -158,7 +158,7 @@ def test_avaliar_sem_colunas_grava_none(dev):
 # ---------------------------------------------------------------- versão de preparação e extremo em rank
 
 
-@pytest.mark.parametrize("versao", [None, 1])
+@pytest.mark.parametrize("versao", [None, 1, 2])
 def test_csv_de_outra_versao_de_preparacao_pede_regerar(tmp_path, versao):
     import json
 
@@ -189,3 +189,16 @@ def test_extremo_em_rank_so_entra_se_o_ganho_passar_do_minimo(monkeypatch, ganho
     assert preparacao.EXTREMO_RANK not in cfg["colunas_1"]
     linha = tentativas[tentativas["descricao"] == "noticias_dia_extremo em rank"]
     assert len(linha) == 1 and bool(linha["aceito"].iloc[0]) is adotado
+
+
+def test_selecionar_configuracao_nao_usa_os_blocos_do_protocolo(monkeypatch):
+    vistas = []
+    monkeypatch.setattr(treino, "prever_walk_forward",
+                        lambda prep, dobras, colunas, tipo, params, hiper=None: vistas.append(list(colunas)) or colunas)
+    monkeypatch.setattr(treino, "auc_medio_wf", lambda colunas: 0.9)
+    cfg, _ = treino.selecionar_configuracao(None, [], params_teste())
+    assert vistas
+    for colunas in vistas:
+        assert not set(colunas) & set(COLUNAS_PROTOCOLO)
+    assert not set(cfg["colunas_1"]) & set(COLUNAS_PROTOCOLO)
+    assert not set(cfg["colunas_3"]) & set(COLUNAS_PROTOCOLO)

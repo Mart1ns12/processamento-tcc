@@ -5,7 +5,7 @@ pregão × ação do universo do modelo. `montar_dataset` é pura: recebe DataFr
 `DadosExperimento`) e devolve DataFrames, sem banco ou rede. Ausência é NaN, nunca 0. Os ranks
 ficam para `preparacao.preparar`, que roda só sobre as linhas daqui.
 
-`executar` e `main` (fase 9) são a parte com I/O: leem a coleta só por `fontes.py`, montam o
+`executar` e `main` (fase 9) são a parte com I/O: leem a coleta só por `fontes.py` (preços, cadastro, notícias, balanços e índices, para o SMLL), montam o
 dataset e gravam o CSV e o JSON em `saida/experimento/` (fora do git).
 Uso: `python -m processamento.experimento.dataset [--versao todas|principais|hora_real_noite] [--ate AAAA-MM-DD] [--proximo AAAA-MM-DD] [--pasta PASTA]`.
 """
@@ -32,15 +32,22 @@ from processamento.experimento.parametros import (
     carregar_parametros_experimento,
     mascara_sem_coleta,
 )
-from processamento.experimento.preparacao import COLUNAS_ALVO, COLUNAS_PRECO, IDENTIFICACAO, VERSAO_PREPARACAO
+from processamento.experimento.preparacao import (
+    COLUNAS_ALVO,
+    COLUNAS_PRECO,
+    COLUNAS_PROTOCOLO,
+    IDENTIFICACAO,
+    VERSAO_PREPARACAO,
+)
 from processamento.experimento.resultados import dias_de_resultado
 from processamento.experimento.tom import COLUNAS_NOTICIAS, variaveis_de_noticias
-from processamento.experimento.variaveis import variaveis_de_preco
+from processamento.experimento.variaveis import serie_smll, variaveis_de_preco
 from processamento.fatos.precos import ParametrosPrecos, carregar_parametros_precos, indice_pregoes, mapas_cadastro
 from processamento.tickers import ligar_a_cnpj, mapas_por_empresa
 from processamento.universo import montar_universo
 
-COLUNAS_DATASET = IDENTIFICACAO + COLUNAS_NOTICIAS + COLUNAS_PRECO + COLUNAS_ALVO
+COLUNAS_DATASET = IDENTIFICACAO + COLUNAS_NOTICIAS + COLUNAS_PRECO + COLUNAS_PROTOCOLO + COLUNAS_ALVO
+AVISO_SMLL_AUSENTE = "SMLL sem nenhuma cotação nos pregões do dataset (v1-indices): exposicao_small fica vazia (NaN), nunca 0."
 
 
 @dataclass(frozen=True)
@@ -54,6 +61,7 @@ class DadosExperimento:
     balancos: pd.DataFrame
     universo: pd.DataFrame
     mudancas: dict[str, str]
+    indices: pd.DataFrame | None = None   # v1-indices já cortada em t (SMLL de exposicao_small); None = sem SMLL
 
 
 def _mascara(modelo: pd.DataFrame, cal: list, tickers: list[str]) -> pd.DataFrame:
@@ -112,8 +120,9 @@ def montar_dataset(
     modelo["setor"] = modelo["ticker"].map(setor_de)
     mascara = _mascara(modelo, cal, tickers)
 
+    smll = serie_smll(dados.indices, cal)
     grades = variaveis_de_preco(
-        dados.precos, cal, tickers, mascara, setor_de, cnpj_de, params, params_precos
+        dados.precos, cal, tickers, mascara, setor_de, cnpj_de, params, params_precos, smll=smll
     )
     grades.update(alvos(dados.precos, cal, tickers, params_precos))
     df = _juntar(modelo, _grades_em_longo(grades))
@@ -146,6 +155,8 @@ def montar_dataset(
         "cobertura_inicio": None if cobertura is None else cobertura.date().isoformat(),
         "pregoes_sem_coleta": int(mascara_sem_coleta(cal, params.periodos_sem_coleta).sum()),
         "setor_herdado": {t: herdados[t][1] for t in sorted(herdados) if herdados[t][1] is not None},
+        "smll_pregoes": int(smll.notna().sum()),
+        "smll_ate": None if smll.notna().sum() == 0 else smll.last_valid_index().date().isoformat(),
     }
     return df, info
 
@@ -246,6 +257,7 @@ def executar(
         balancos=fontes.ler_tabela("balancos", ate=ate, ler=ler),
         universo=montar_universo(cal, cadastro, precos, carregar_exclusoes(), composicao),
         mudancas=fontes.ler_mudancas(ler),
+        indices=fontes.ler_tabela("indices", ate=ate, ler=ler),
     )
     df, info = montar_dataset(
         dados,
@@ -255,6 +267,8 @@ def executar(
         params=params,
         params_precos=params_precos,
     )
+    if info["smll_pregoes"] == 0:
+        print(AVISO_SMLL_AUSENTE)
     info = {
         **info,
         "parametros": {"experimento": asdict(params), "precos": asdict(params_precos)},

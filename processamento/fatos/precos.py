@@ -286,16 +286,16 @@ def posicao_pct(gr: Grade, pares: list[str]) -> Grade:
     return montar_grade(pos, st)
 
 
-def beta(g_aj: pd.DataFrame, ibov_aj: pd.Series, janela: int, minimo: int,
-         excluir: pd.DataFrame | None = None) -> Grade:
-    """Beta MQO dos retornos diários da ação sobre os do IBOV, só nos pares de retornos válidos.
+def beta_sobre_retornos(g_aj: pd.DataFrame, ret_fator: pd.Series, janela: int, minimo: int,
+                        excluir: pd.DataFrame | None = None) -> Grade:
+    """Beta MQO dos retornos diários da ação sobre `ret_fator` (retorno diário do fator), só nos pares válidos.
 
     Janela de `janela` pregões até t; calcula a partir de `minimo` pares válidos.
     `excluir` (seção 6, "Retorno diário suspeito"): máscara bool dos retornos da ação que não contam; o par sai
     e, com menos de `minimo` pares, `historico_insuficiente`.
     """
     ra = _sem_excluidos(retornos_diarios(g_aj), excluir)
-    ri = (ibov_aj / ibov_aj.shift(1) - 1).reindex(ra.index)
+    ri = ret_fator.reindex(ra.index)
     ri_m = pd.DataFrame(np.repeat(ri.to_numpy()[:, None], ra.shape[1], axis=1), index=ra.index, columns=ra.columns)
     valido = ra.notna() & ri_m.notna()
     x = ri_m.where(valido, 0.0)
@@ -311,6 +311,12 @@ def beta(g_aj: pd.DataFrame, ibov_aj: pd.Series, janela: int, minimo: int,
     b = cov / var
     st = _status(g_aj, [(g_aj.isna(), INDISPONIVEL), (n < minimo, HIST), (~(var > 0), INDISPONIVEL)])
     return montar_grade(b, st)
+
+
+def beta(g_aj: pd.DataFrame, ibov_aj: pd.Series, janela: int, minimo: int,
+         excluir: pd.DataFrame | None = None) -> Grade:
+    """Beta contra o IBOV: `beta_sobre_retornos` com o retorno diário do IBOV."""
+    return beta_sobre_retornos(g_aj, ibov_aj / ibov_aj.shift(1) - 1, janela, minimo, excluir)
 
 
 def mapas_cadastro(cadastro: pd.DataFrame) -> tuple[dict, dict]:

@@ -7,10 +7,12 @@ pregão × ticker, só com o valor.
 
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 
 from processamento.experimento.parametros import ParametrosExperimento
 from processamento.fatos import precos as fatos_precos
+from processamento.fatos.indices import grade_de_indices
 from processamento.fatos.precos import ParametrosPrecos
 
 
@@ -46,14 +48,27 @@ def amplitude(g_max: pd.DataFrame, g_min: pd.DataFrame, g_fech: pd.DataFrame) ->
     return ((g_max - g_min) / g_fech).where(valido)
 
 
+def exposicao_de_retorno(g_aj: pd.DataFrame, ret_fator: pd.Series, janela: int, minimo: int,
+                         excluir: pd.DataFrame | None = None) -> pd.DataFrame:
+    """Beta da ação sobre o retorno diário do fator, vezes esse retorno no dia."""
+    b = fatos_precos.beta_sobre_retornos(g_aj, ret_fator, janela, minimo, excluir=excluir).valor
+    return b.mul(ret_fator, axis=0)
+
+
 def exposicao(g_aj: pd.DataFrame, fator: pd.Series, janela: int, minimo: int,
               excluir: pd.DataFrame | None = None) -> pd.DataFrame:
     """Beta da ação sobre o fator (ex.: dólar) vezes o retorno do fator no dia.
 
     `excluir` (seção 6, "Retorno diário suspeito"): retornos suspeitos da ação, que saem do beta.
     """
-    b = fatos_precos.beta(g_aj, fator, janela, minimo, excluir=excluir).valor
-    return b.mul(fator / fator.shift(1) - 1, axis=0)
+    return exposicao_de_retorno(g_aj, fator / fator.shift(1) - 1, janela, minimo, excluir)
+
+
+def _media_do_setor(r: pd.DataFrame, setor_de: dict, cnpj_de: dict, modo: str) -> pd.DataFrame:
+    status = pd.DataFrame(fatos_precos.OK, index=r.index, columns=r.columns)
+    return fatos_precos.media_setor(
+        fatos_precos.montar_grade(r, status), list(r.columns), setor_de, cnpj_de, modo, agregacao="media"
+    ).valor  # o modelo continua com a média (seção 7.3); o painel usa a mediana
 
 
 def ret_vs_setor(ret: pd.DataFrame, mascara: pd.DataFrame, setor_de: dict, cnpj_de: dict,
@@ -63,11 +78,44 @@ def ret_vs_setor(ret: pd.DataFrame, mascara: pd.DataFrame, setor_de: dict, cnpj_
     No modo "empresa", o CNPJ inteiro sai da média (ver `fatos.precos.media_setor`).
     """
     r = ret.where(mascara)
-    status = pd.DataFrame(fatos_precos.OK, index=r.index, columns=r.columns)
-    media = fatos_precos.media_setor(
-        fatos_precos.montar_grade(r, status), list(r.columns), setor_de, cnpj_de, modo, agregacao="media"
-    )  # o modelo continua com a média (seção 7.3); o painel usa a mediana
-    return r - media.valor
+    return r - _media_do_setor(r, setor_de, cnpj_de, modo)
+
+
+MOM_PERTO, MOM_LONGE, LIQUIDEZ_SESSOES, RET_IDIO_PREGOES = 21, 252, 20, 5
+
+
+def posicao_fechamento(g_fech, g_max, g_min):
+    """(fech − mín) ÷ (máx − mín) do dia; NaN com máx ≤ mín ou insumo vazio. Sem máscara de suspeito; não corta em [0, 1]."""
+    return ((g_fech - g_min) / (g_max - g_min)).where(g_fech.notna() & (g_max > g_min))
+
+
+def _base_asof(g, n, defasagem_max):
+    return g.ffill().shift(n).where(fatos_precos.defasagem_pregoes(g).shift(n) <= defasagem_max)
+
+
+def mom_12_1(g_aj, suspeitos, defasagem_max, perto=MOM_PERTO, longe=MOM_LONGE):
+    atravessa = fatos_precos.suspeita_na_janela(suspeitos, longe - perto).shift(perto, fill_value=False)
+    return _distancia(_base_asof(g_aj, perto, defasagem_max), _base_asof(g_aj, longe, defasagem_max)).mask(atravessa)
+
+
+def liquidez_20d(g_fech, gv, suspeitos, sessoes=LIQUIDEZ_SESSOES):
+    return (g_fech * gv).rolling(sessoes, min_periods=sessoes).median().mask(
+        fatos_precos.suspeita_na_janela(suspeitos, sessoes))
+
+
+def ret_idio(ret_5d, beta_acao, ret_ibov_5d: pd.Series):
+    return ret_5d - beta_acao.mul(ret_ibov_5d, axis=0)
+
+
+def momento_setor(ret, mascara, setor_de, cnpj_de):
+    return _media_do_setor(ret.where(mascara), setor_de, cnpj_de, "empresa")
+
+
+def serie_smll(indices, cal) -> pd.Series:
+    """Fechamento do SMLL na grade; NaN onde faltar (tabela ausente ou vazia = tudo NaN). Fora de `cal` não entra."""
+    if indices is None or indices.empty:
+        return pd.Series(np.nan, index=fatos_precos.indice_pregoes(cal), dtype=float, name="SMLL")
+    return grade_de_indices(indices, cal, ("SMLL",))["SMLL"]
 
 
 def variaveis_de_preco(
@@ -79,8 +127,9 @@ def variaveis_de_preco(
     cnpj_de: dict,
     params: ParametrosExperimento,
     params_precos: ParametrosPrecos,
+    smll: pd.Series | None = None,
 ) -> dict[str, pd.DataFrame]:
-    """As 13 grades de preço e volume do dataset (pregão × ticker, só o valor); seção 7.3.
+    """As 19 grades de preço e volume do dataset (pregão × ticker, só o valor); seção 7.3.
 
     Janelas de retorno, extremos, exposição e tom vêm de `params`; volatilidade, volume e beta
     vêm do bloco fase1 (`params_precos`), como no painel. Fator de câmbio e petróleo: fechamento
@@ -129,4 +178,15 @@ def variaveis_de_preco(
                                        excluir=suspeitos)
     res["exposicao_petroleo"] = exposicao(g_aj, brent, params.exposicao_pregoes, params.exposicao_minimo,
                                           excluir=suspeitos)
+    N = params_precos.base_defasagem_max_pregoes
+    res["posicao_fechamento"] = posicao_fechamento(g_fech, g_max, g_min)
+    res["mom_12_1"] = mom_12_1(g_aj, suspeitos, N)
+    res["liquidez_20d"] = liquidez_20d(g_fech, gv, suspeitos)
+    res["ret_idio_5d"] = ret_idio(res["ret_5d"], res["beta"],
+                                  fatos_precos.variacao(ibov.to_frame("IBOV"), RET_IDIO_PREGOES, N).valor["IBOV"])
+    res["momento_setor_5d"] = momento_setor(res["ret_5d"], mascara, setor_de, cnpj_de)
+    serie = pd.Series(np.nan, index=ibov.index, dtype=float) if smll is None else smll.reindex(ibov.index)
+    fator_small = (serie / serie.shift(1) - 1) - (ibov / ibov.shift(1) - 1)
+    res["exposicao_small"] = exposicao_de_retorno(g_aj, fator_small, params.exposicao_pregoes,
+                                                  params.exposicao_minimo, excluir=suspeitos)
     return res

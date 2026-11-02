@@ -3,20 +3,26 @@
 Tabelas montadas à mão, tickers fictícios. Nenhum teste usa banco ou rede.
 """
 
+import itertools
+
 import numpy as np
 import pandas as pd
 import pytest
 
 from processamento.experimento.preparacao import (
     BLOCOS_COMPLEMENTARES,
+    BLOCOS_PROTOCOLO,
     COLUNAS_ALVO,
     COLUNAS_BRUTAS,
+    COLUNAS_PROTOCOLO,
+    COMPLEMENTARES_PRECO,
     EXTREMO_RANK,
     COLUNAS_RANK,
     COMPLEMENTARES_NOTICIAS,
     ESSENCIAIS_PRECO,
     IDENTIFICACAO,
     NOTICIAS_DIA,
+    VERSAO_PREPARACAO,
     colunas_do_modelo,
     linhas_de_treino,
     linhas_modelo_3b,
@@ -191,3 +197,76 @@ def test_extremo_rank_e_uma_coluna_a_parte():
     prep = preparar(df)
     assert prep[EXTREMO_RANK].iloc[:2].tolist() == [0.0, 1.0]
     assert pd.isna(prep[EXTREMO_RANK].iloc[2])
+
+
+# ---------------------------------------------------------------- blocos A e B do protocolo (fora por padrão)
+
+
+def test_blocos_do_protocolo():
+    assert BLOCOS_PROTOCOLO == {
+        "bloco_a": ["posicao_fechamento", "mom_12_1", "liquidez_20d", "ret_idio_5d"],
+        "bloco_b": ["momento_setor_5d", "exposicao_small"],
+    }
+
+
+def _combinacoes_validas(modelo):
+    blocos = list(BLOCOS_COMPLEMENTARES)
+    for k in range(len(blocos) + 1):
+        for comb in itertools.combinations(blocos, k):
+            if modelo == "1" and "noticias_contexto" in comb:
+                continue
+            yield comb
+
+
+@pytest.mark.parametrize("modelo", ["1", "3"])
+def test_protocolo_nao_entra_em_nenhuma_combinacao_de_blocos(modelo):
+    for comb in _combinacoes_validas(modelo):
+        cols = colunas_do_modelo(modelo, comb)
+        assert not set(cols) & set(COLUNAS_PROTOCOLO), (modelo, comb)
+
+
+@pytest.mark.parametrize("bloco", list(BLOCOS_PROTOCOLO))
+def test_blocos_do_protocolo_nao_sao_blocos_do_modelo(bloco):
+    with pytest.raises(ValueError, match="bloco desconhecido"):
+        colunas_do_modelo("3", (bloco,))
+
+
+def test_protocolo_fora_dos_grupos_so_no_rank():
+    assert not set(COLUNAS_PROTOCOLO) & set(ESSENCIAIS_PRECO + COMPLEMENTARES_PRECO + NOTICIAS_DIA)
+    assert set(COLUNAS_PROTOCOLO) <= set(COLUNAS_RANK)
+    assert not set(COLUNAS_PROTOCOLO) & set(COLUNAS_BRUTAS)
+    assert VERSAO_PREPARACAO == 3
+
+
+_BASE_PROTOCOLO = [("AAAA3", 0.10, 1.0), ("BBBB3", 0.10, NAN), ("CCCC3", NAN, 0.0),
+                   ("DDDD3", 0.30, 0.0), ("EEEE3", 0.50, 0.0)]
+
+
+@pytest.mark.parametrize("coluna", COLUNAS_PROTOCOLO)
+def test_protocolo_rank_no_pregao_antes_de_tirar_sem_alvo(coluna):
+    linhas = [{"data": "2026-06-18", "ticker": t, coluna: v, "alvo": a} for t, v, a in _BASE_PROTOCOLO]
+    linhas.append({"data": "2026-06-19", "ticker": "AAAA3", coluna: 999.0, "alvo": 1.0})
+    df = _dataset(linhas)
+    entrada = df[coluna].copy()
+
+    prep = preparar(df)
+    d18 = prep[prep["data"] == pd.Timestamp("2026-06-18")].set_index("ticker")[coluna]
+    _confere(d18, {"AAAA3": 1 / 6, "BBBB3": 1 / 6, "CCCC3": None, "DDDD3": 2 / 3, "EEEE3": 1.0})
+    d19 = prep[prep["data"] == pd.Timestamp("2026-06-19")][coluna]
+    assert d19.tolist() == pytest.approx([0.5], abs=1e-12)
+
+    # 999 vira −999 e a ordem dos outros não muda: o pregão de 18/06 fica igual
+    df_neg = df.copy()
+    df_neg.loc[df_neg["data"] == pd.Timestamp("2026-06-19"), coluna] = -999.0
+    d18_neg = preparar(df_neg)
+    d18_neg = d18_neg[d18_neg["data"] == pd.Timestamp("2026-06-18")].set_index("ticker")[coluna]
+    _confere(d18_neg, {"AAAA3": 1 / 6, "BBBB3": 1 / 6, "CCCC3": None, "DDDD3": 2 / 3, "EEEE3": 1.0})
+
+    # linhas_de_treino tira a sem alvo depois do rank: AAAA3 mantém 1/6
+    treino = linhas_de_treino(prep)
+    assert "BBBB3" not in treino[treino["data"] == pd.Timestamp("2026-06-18")]["ticker"].tolist()
+    aaaa3 = treino[(treino["data"] == pd.Timestamp("2026-06-18")) & (treino["ticker"] == "AAAA3")][coluna]
+    assert aaaa3.tolist() == pytest.approx([1 / 6], abs=1e-12)
+
+    # a entrada de preparar continua bruta
+    pd.testing.assert_series_equal(df[coluna], entrada)

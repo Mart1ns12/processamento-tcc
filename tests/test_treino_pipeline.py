@@ -12,7 +12,7 @@ import pytest
 from fabrica_treino import dataset_sintetico, gravar_versoes, params_teste
 from processamento import fontes
 from processamento.experimento import dataset, modelos, treino
-from processamento.experimento.preparacao import COLUNAS_RANK
+from processamento.experimento.preparacao import COLUNAS_PROTOCOLO, COLUNAS_RANK
 from processamento.experimento.preparacao import VERSAO_PREPARACAO as preparacao_atual
 
 
@@ -109,6 +109,7 @@ def test_dev_grava_arquivos_e_modelos_provisorios(ambiente):
     assert meta["provisorio"] is True
     assert meta["aviso"] == "modelo provisório (treino.modelo_oficial: false): só teste de funcionamento"
     assert meta["versao_preparacao"] == preparacao_atual
+    assert not set(meta["colunas"]) & set(COLUNAS_PROTOCOLO)
     assert meta["teste_final"] == {"inicio": "2026-01-02", "fim": None, "usado": False}
 
 

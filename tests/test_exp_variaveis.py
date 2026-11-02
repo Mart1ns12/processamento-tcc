@@ -25,6 +25,7 @@ from processamento.fatos.precos import ParametrosPrecos
 _NOMES = {
     "ret_1d", "ret_5d", "ret_20d", "volatilidade_20d", "beta", "volume_relativo", "salto_abertura",
     "dist_max_52s", "dist_min_52s", "amplitude", "ret_vs_setor", "exposicao_dolar", "exposicao_petroleo",
+    "posicao_fechamento", "mom_12_1", "liquidez_20d", "ret_idio_5d", "momento_setor_5d", "exposicao_small",
 }
 
 
@@ -219,7 +220,7 @@ def _mundo(n: int = 300):
     return precos, cal
 
 
-def test_variaveis_de_preco_tem_as_13_grades_no_formato_do_calendario():
+def test_variaveis_de_preco_tem_as_19_grades_no_formato_do_calendario():
     precos, cal = _mundo()
     tickers = ["AAAA3", "AAAA4", "BBBB3"]
     mascara = pd.DataFrame(True, index=fatos_precos.indice_pregoes(cal), columns=tickers)

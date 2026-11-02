@@ -16,7 +16,7 @@ import pandas as pd
 from fabrica_precos import pregoes_uteis
 from processamento.experimento import dataset
 from processamento.experimento.parametros import carregar_parametros_treino
-from processamento.experimento.preparacao import COLUNAS_RANK, VERSAO_PREPARACAO
+from processamento.experimento.preparacao import COLUNAS_PROTOCOLO, COLUNAS_RANK, VERSAO_PREPARACAO
 from processamento.experimento.tom import COLUNAS_NOTICIAS
 
 TICKERS = [f"{letra * 4}3" for letra in "ABCDEFGHIJKL"]
@@ -35,7 +35,10 @@ def dataset_sintetico(inicio: str = "2025-08-01", n_pregoes: int = 130, n_ticker
     tickers = np.array(TICKERS[:n_tickers])
     forma = (n_pregoes, n_tickers)
 
-    v = {c: rng.normal(0, 1, forma) for c in COLUNAS_RANK}
+    v = {c: rng.normal(0, 1, forma) for c in COLUNAS_RANK if c not in COLUNAS_PROTOCOLO}
+    # rng próprio: as colunas do protocolo não mudam o sorteio das outras (os valores antigos ficam iguais)
+    rng_protocolo = np.random.default_rng(semente + 10_000)
+    v.update({c: rng_protocolo.normal(0, 1, forma) for c in COLUNAS_PROTOCOLO})
     qtd = rng.poisson(1.0, forma).astype(float)
     vazio = qtd == 0
     v["noticias_dia_qtd"] = qtd

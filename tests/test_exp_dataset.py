@@ -9,8 +9,15 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from fabrica_experimento import CADASTRO_INTEGRACAO, EXCLUSOES_INTEGRACAO, dados_de, integracao
-from fabrica_precos import pregoes_uteis
+from fabrica_experimento import (
+    CADASTRO_INTEGRACAO,
+    CADASTRO_MUNDO,
+    EXCLUSOES_INTEGRACAO,
+    dados_de,
+    integracao,
+    mundo,
+)
+from fabrica_precos import indices_de, pregoes_uteis
 from processamento.exclusoes import Exclusoes
 from processamento.experimento.dataset import COLUNAS_DATASET, DadosExperimento, montar_dataset
 from processamento.experimento.parametros import carregar_parametros_experimento
@@ -230,6 +237,31 @@ def test_periodo_sem_coleta_deixa_noticias_vazias_e_conta_no_info(caso):
 
 def test_info_traz_a_versao_de_preparacao_e_o_csv_guarda_a_qtd_bruta(caso):
     assert caso["info"]["versao_preparacao"] == VERSAO_PREPARACAO
-    assert len(COLUNAS_DATASET) == len(set(COLUNAS_DATASET)) == 30
+    assert len(COLUNAS_DATASET) == len(set(COLUNAS_DATASET)) == 36
     qtd = caso["df"]["noticias_dia_qtd"].dropna()
     assert (qtd == qtd.round()).all() and qtd.max() >= 1   # contagem bruta: o rank só vem em `preparar`
+
+
+# ---------------------------------------------------------------- SMLL ausente (exposicao_small)
+
+
+def _montar_mundo(m, indices):
+    return montar_dataset(
+        dados_de(m["cal"], m["precos"], CADASTRO_MUNDO, m["noticias"], m["balancos"], indices=indices), m["cal"]
+    )
+
+
+def test_smll_ausente_no_dataset_inteiro_so_zera_exposicao_small():
+    m = mundo()
+    cal = m["cal"]
+    cdi = indices_de([(d.isoformat(), "CDI", 10.0) for d in cal])   # tabela sem SMLL
+    com, info_com = _montar_mundo(m, m["indices"])
+    assert com["exposicao_small"].notna().any()
+    assert info_com["smll_pregoes"] == 300 and info_com["smll_ate"] == cal[-1].isoformat()
+    for indices in (None, cdi):
+        sem, info_sem = _montar_mundo(m, indices)
+        assert sem["exposicao_small"].isna().all()
+        assert info_sem["smll_pregoes"] == 0 and info_sem["smll_ate"] is None
+        pd.testing.assert_frame_equal(
+            sem.drop(columns="exposicao_small"), com.drop(columns="exposicao_small"), rtol=1e-12, atol=1e-12
+        )

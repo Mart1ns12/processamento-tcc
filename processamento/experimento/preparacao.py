@@ -12,17 +12,21 @@ IDENTIFICACAO = ["data", "ticker", "empresa", "setor", "universo", "dia_resultad
 ESSENCIAIS_PRECO = ["ret_1d", "ret_5d", "ret_20d", "volatilidade_20d", "beta", "volume_relativo", "salto_abertura"]
 COMPLEMENTARES_PRECO = ["dist_max_52s", "dist_min_52s", "amplitude", "ret_vs_setor", "exposicao_dolar", "exposicao_petroleo"]
 COLUNAS_PRECO = ESSENCIAIS_PRECO + COMPLEMENTARES_PRECO
+BLOCO_A = ["posicao_fechamento", "mom_12_1", "liquidez_20d", "ret_idio_5d"]
+BLOCO_B = ["momento_setor_5d", "exposicao_small"]
+BLOCOS_PROTOCOLO = {"bloco_a": BLOCO_A, "bloco_b": BLOCO_B}   # protocolo_variaveis.md; fora de BLOCOS_COMPLEMENTARES de propósito
+COLUNAS_PROTOCOLO = BLOCO_A + BLOCO_B
 NOTICIAS_DIA = ["noticias_dia_qtd", "noticias_dia_tom", "noticias_dia_extremo", "mudanca_tom"]
 COMPLEMENTARES_NOTICIAS = ["tom_setor", "tom_mercado"]
 # A quantidade de notícias muda de regime entre os anos: entra como rank do pregão, como as de preço (o CSV guarda o bruto).
-COLUNAS_RANK = COLUNAS_PRECO + ["noticias_dia_qtd"]
+COLUNAS_RANK = COLUNAS_PRECO + ["noticias_dia_qtd"] + COLUNAS_PROTOCOLO
 COLUNAS_BRUTAS = [c for c in NOTICIAS_DIA + COMPLEMENTARES_NOTICIAS if c not in COLUNAS_RANK]
 # Variante testada só no desenvolvimento: `selecionar_configuracao` a troca pela bruta se o AUC subir o suficiente.
 EXTREMO_RANK = "noticias_dia_extremo_rank"
 COLUNA_BRUTA = {EXTREMO_RANK: "noticias_dia_extremo"}   # coluna preparada -> coluna do dataset (motivos do top)
 # Sobe quando mudam os ranks, as colunas ou as regras que afetam os valores do dataset: dataset e modelo de outra
 # versão não valem. 2 = regras de 01/11/2026 (cobertura, cópias pelo momento, noticias_dia_qtd em rank).
-VERSAO_PREPARACAO = 2
+VERSAO_PREPARACAO = 3   # 3 = blocos A e B do protocolo, em 02/11/2026
 COLUNAS_ALVO = ["alvo", "alvo_abertura", "alvo_abertura_valido", "ret_t1", "ret_ibov_t1"]
 BLOCOS_COMPLEMENTARES = {
     "preco_contexto": ["dist_max_52s", "dist_min_52s", "amplitude", "ret_vs_setor"],
@@ -53,7 +57,7 @@ def rank_no_pregao(df: pd.DataFrame, colunas: list[str]) -> pd.DataFrame:
 
 
 def preparar(dataset: pd.DataFrame) -> pd.DataFrame:
-    """Ranks das 13 variáveis de preço, volume e mercado e de `noticias_dia_qtd`; acrescenta `EXTREMO_RANK`.
+    """Ranks das 19 variáveis de preço, volume e mercado (blocos A e B incluídos) e de `noticias_dia_qtd`; acrescenta `EXTREMO_RANK`.
 
     Identificação, as outras colunas de notícias e o alvo não mudam.
     """

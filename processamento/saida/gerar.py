@@ -20,7 +20,7 @@ import pandas as pd
 from processamento import calendario, fontes
 from processamento.experimento import dataset as exp_dataset
 from processamento.experimento import modelos, treino
-from processamento.experimento.dataset import DadosExperimento, montar_dataset
+from processamento.experimento.dataset import AVISO_SMLL_AUSENTE, DadosExperimento, montar_dataset
 from processamento.experimento.parametros import carregar_parametros_experimento, carregar_parametros_treino
 from processamento.fatos.fundamentos import carregar_parametros_fundamentos
 from processamento.fatos.multiplos import multiplos_diarios
@@ -212,12 +212,14 @@ def gerar(d: date, *, ler=None, pasta_saida: Path | None = None, pasta_modelos: 
         dados = DadosExperimento(
             precos=ins.precos, cadastro=ins.cadastro, noticias=ins.noticias,
             balancos=ins.balancos if ins.balancos_resultado is None else ins.balancos_resultado,
-            universo=universo(), mudancas=ins.mudancas,
+            universo=universo(), mudancas=ins.mudancas, indices=ins.indices,
         )
         df, info = montar_dataset(dados, ins.cal, versao_noticias="todas", proximo_ao_vivo=d,
                                   params=params_exp, params_precos=params_precos)
         if info["sem_probabilidade"] > 0:   # uma vez só: o dataset é cacheado
             avisos.append(AVISO_SEM_PROBABILIDADE.format(k=info["sem_probabilidade"]))
+        if info["smll_pregoes"] == 0:       # uma vez só: o dataset é cacheado
+            avisos.append(AVISO_SMLL_AUSENTE)
         return df, info
 
     def estado_de(nome: str):

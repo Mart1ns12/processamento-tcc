@@ -389,6 +389,46 @@ def test_caso_3g_sem_probabilidade_vira_aviso_na_rodada_e_sem_aviso_quando_zero(
     pasta_zero = _gerar(tmp_path / "sem", banco_teste(), modelos=modelos_dir)
     assert not any("sem probabilidade do FinBERT" in a for a in _execucao(pasta_zero)["avisos"])
 
+
+def _com_smll_ate_22(df: pd.DataFrame) -> pd.DataFrame:
+    """v1-indices com SMLL em 20/10, 21/10 e 22/10 (o de 22/10 é depois de t = 21/10: o corte tem de tirá-lo)."""
+    smll = pd.DataFrame({"data": ["2025-10-20", "2025-10-21", "2025-10-22"], "indice": ["SMLL"] * 3,
+                         "valor": ["1000", "1010", "1020"]})
+    return pd.concat([df, smll], ignore_index=True)
+
+
+def test_gerar_passa_ao_dataset_os_indices_so_ate_t(banco_teste, tmp_path, modelos_dir, monkeypatch):
+    chamadas = []
+    original = exp_dataset.montar_dataset
+
+    def espiao(dados, cal, **kw):
+        chamadas.append(dados)
+        return original(dados, cal, **kw)
+
+    monkeypatch.setattr("processamento.saida.gerar.montar_dataset", espiao)
+    pasta = _gerar(tmp_path, banco_teste(alterar={"v1-indices": _com_smll_ate_22}), modelos=modelos_dir)
+    assert _execucao(pasta)["status"] == "ok"
+    assert len(chamadas) == 1
+    indices = chamadas[0].indices
+    assert indices is not None and not indices.empty
+    smll = indices.loc[indices["indice"] == "SMLL", "data"]
+    assert smll.max() == pd.Timestamp("2025-10-21")   # t é 21/10; o SMLL de 22/10 não entra
+
+
+def test_gerar_sem_tabela_de_indices_para_como_as_outras_tabelas(banco_teste, tmp_path, modelos_dir):
+    with pytest.raises(ErroSaida):
+        _gerar(tmp_path, banco_teste(omitir=frozenset({"v1-indices"})), modelos=modelos_dir)
+    pasta = tmp_path / "saida" / D.isoformat()
+    assert _execucao(pasta)["status"] == "falhou"
+    assert not (pasta / "mercado_dia.json").exists()
+
+
+def test_aviso_de_smll_so_quando_nao_ha_smll(banco_teste, tmp_path, modelos_dir):
+    sem = _gerar(tmp_path / "sem", banco_teste(), modelos=modelos_dir)
+    assert sum(a == exp_dataset.AVISO_SMLL_AUSENTE for a in _execucao(sem)["avisos"]) == 1
+    com = _gerar(tmp_path / "com", banco_teste(alterar={"v1-indices": _com_smll_ate_22}), modelos=modelos_dir)
+    assert not any(a == exp_dataset.AVISO_SMLL_AUSENTE for a in _execucao(com)["avisos"])
+
 # ---------------------------------------------------------------- pasta limpa (Fase 5; seção 3 do plano)
 
 NOVE = ("acoes.json, series_diarias.json, mercado_dia.json, resumo_acao.json, fundamentos_trimestrais.json, "

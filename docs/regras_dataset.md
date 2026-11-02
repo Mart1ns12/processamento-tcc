@@ -61,7 +61,7 @@ Código em `experimento/alvo.py`. Todos usam `fechamento_ajustado` (aj). t+1 é 
 
 ## 4. Variáveis
 
-São 30 colunas (`dataset.py:39`). **O CSV guarda os valores brutos:** o rank é aplicado depois, em `preparacao.preparar`, com a mesma função no treino e na previsão.
+São 36 colunas (`COLUNAS_DATASET`, em `dataset.py`). **O CSV guarda os valores brutos:** o rank é aplicado depois, em `preparacao.preparar`, com a mesma função no treino e na previsão.
 
 - **Rank:** `(posição média − 1) / (n − 1)` dentro do pregão, entre as ações do universo, antes de tirar as linhas sem alvo. Vazio continua vazio; um único valor vira 0,5.
 - **`noticias_dia_qtd` também entra em rank.** As outras 5 de notícias ficam brutas.
@@ -122,7 +122,20 @@ São 30 colunas (`dataset.py:39`). **O CSV guarda os valores brutos:** o rank é
 | `exposicao_dolar` | Beta contra USDBRL × variação do USDBRL em t | 120 pregões, mínimo 60 pares | Bloco `macro` |
 | `exposicao_petroleo` | Beta contra BRENT × variação do BRENT em t | 120 pregões, mínimo 60 pares | Bloco `macro` |
 
-CDI, IPCA, IDIV, SMLL, IFIX e IVVB11 **não entram**. O IBOV entra só no `beta` e nos alvos.
+CDI, IPCA, IDIV, IFIX e IVVB11 **não entram**. O IBOV entra no `beta`, no `ret_idio_5d`, na `exposicao_small` e nos alvos. O SMLL é lido só para a `exposicao_small`.
+
+### Colunas do protocolo (em rank; fora dos modelos atuais)
+
+Só entram nos testes de bloco de `docs/protocolo_variaveis.md`.
+
+| Coluna | Fórmula | Janela e mínimo | Bloco |
+|---|---|---|---|
+| `posicao_fechamento` | (fechamento − mínima) / (máxima − mínima) | Dia t; máxima ≤ mínima = vazio | A |
+| `mom_12_1` | aj(t−21) / aj(t−252) − 1 | Base as-of até 5 pregões antes de cada data-alvo | A |
+| `liquidez_20d` | Mediana de fechamento × volume | 20 sessões completas, com t | A |
+| `ret_idio_5d` | `ret_5d` − `beta` × retorno de 5 pregões do IBOV | Base as-of até 5 pregões | A |
+| `momento_setor_5d` | Média de `ret_5d` das outras empresas do setor; cada empresa 1 voto | Dia t | B |
+| `exposicao_small` | Beta contra (ret SMLL − ret IBOV) × esse fator em t | 120 pregões, mínimo 60 pares | B |
 
 ### Alvo
 
@@ -134,7 +147,7 @@ CDI, IPCA, IDIV, SMLL, IFIX e IVVB11 **não entram**. O IBOV entra só no `beta`
 
 | Informação | Quando conta | Código |
 |---|---|---|
-| Preços, volume, USDBRL, BRENT | Até o fechamento de t | `variaveis.py` |
+| Preços, volume, USDBRL, BRENT, SMLL | Até o fechamento de t | `variaveis.py`; ao vivo, `saida/insumos.py` corta os índices em t |
 | Notícia com hora real | Até 08:00:00 de t+1; 08:00:01 já é de t+1 | `calendario.py:277-302` |
 | Notícia sem hora (CVM, "só data") | Vale 23:59:59 da sua data, ou seja, a noite do pregão daquela data | `fontes.py:557-586` |
 | Fim de semana e feriado | Vai para o último pregão antes, até 08:00 do próximo | `calendario.py:297-302` |
@@ -236,6 +249,9 @@ Notícia da empresa vale para todas as suas classes: PETR3 e PETR4 recebem os me
 | Histórico curto | Variável vazia | Mínimos da seção 4 |
 | Base as-of a mais de 5 pregões | `ret_*` e `ret_vs_setor` vazios | Base velha |
 | Suspeito no dia s | `ret_1d` e `salto_abertura` em s; `ret_5d` de s a s+4; `ret_20d` de s a s+19; `dist_*` de s a s+250; `ret_vs_setor` em s | A conta atravessa o salto; a ação também sai da média do setor das outras |
+| Suspeito em `mom_12_1` | Vazia se o salto estiver em (t−252, t−21] | A conta atravessa o salto; dentro do mês pulado, não |
+| Suspeito em `liquidez_20d` | Vazia enquanto o salto estiver nas 20 sessões | O `fechamento` também pode vir errado |
+| SMLL ausente na `v1-indices` | `exposicao_small` vazia, com aviso | Nunca 0. Sem a tabela, a leitura para |
 | Suspeito em `volatilidade_20d` | Janela incompleta: vazia | Exige 20 retornos |
 | Suspeito em `beta` e `exposicao_*` | O par sai; vazio só se cair abaixo do mínimo | |
 | `volume_relativo` e `amplitude` no suspeito | Não mudam | Não usam o ajustado |
@@ -349,7 +365,7 @@ Todos em `processamento/config/parametros.yaml`, salvo aviso.
 ### Estado do experimento
 
 17. `modelo_oficial: false`: nenhum resultado vale como conclusão até o usuário declarar o histórico completo.
-18. Os índices (IDIV, SMLL, IFIX) têm buraco em 2025, mas não afetam o dataset.
+18. Os índices estão completos desde 02/11/2026: IDIV, SMLL e IFIX desde 30/12/2019; CDI e IPCA desde 01/2021.
 19. Os três CSVs precisam ser regenerados para valer estas regras. A avaliação de desenvolvimento precisa ser refeita depois disso, e até lá o top 5 fica de fora.
 
 ## 11. Divergências encontradas na revisão: todas tratadas
