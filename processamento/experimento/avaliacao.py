@@ -189,9 +189,17 @@ def faixa_do_acaso(
 
 
 def ic_bootstrap_blocos(
-    valores, tamanho_bloco: int, n_reamostragens: int, semente: int
+    valores,
+    tamanho_bloco: int,
+    n_reamostragens: int,
+    semente: int,
+    *,
+    percentis: tuple[float, float] = (2.5, 97.5),
 ) -> tuple[float | None, float | None]:
-    """IC 95% da média por bootstrap circular de blocos (blocos de pregões consecutivos)."""
+    """IC da média por bootstrap circular de blocos (blocos de pregões consecutivos).
+
+    Padrão: 95% (percentis 2,5 e 97,5). O protocolo pede 99% com (0,5, 99,5).
+    """
     v = np.asarray(valores, dtype=float)
     n = v.size
     if n == 0:
@@ -204,7 +212,7 @@ def ic_bootstrap_blocos(
         ini = rng.integers(0, n, size=m)
         idx = ((ini[:, None] + np.arange(L)) % n).ravel()[:n]
         estatisticas[b] = v[idx].mean()
-    lo, hi = np.percentile(estatisticas, [2.5, 97.5])
+    lo, hi = np.percentile(estatisticas, list(percentis))
     return (float(lo), float(hi))
 
 

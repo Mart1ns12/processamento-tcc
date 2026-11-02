@@ -100,7 +100,7 @@ A grade continua com as 4 combinações de `max_depth` {2, 3} × `min_child_weig
 
 ## 7. Executor do protocolo
 
-**Plano registrado antes de rodar; ainda não implementado.** Ele faz, nesta ordem, nas mesmas dobras e linhas e com os hiperparâmetros do ponto de partida:
+**Implementado em `processamento/experimento/protocolo*.py`; ainda não rodado.** Comando: `python -m processamento.experimento.protocolo_execucao --data AAAA-MM-DD --motivo "1ª rodada"`. Ele faz, nesta ordem, nas mesmas dobras e linhas e com os hiperparâmetros do ponto de partida:
 
 1. Seleção atual dos blocos `preco_contexto`, `macro` e `noticias_contexto`, sem grade, para definir as bases.
 2. Controle e blocos A a E, cada um sozinho contra a sua base.
@@ -145,4 +145,12 @@ Ele só lê o período de desenvolvimento, não abre o teste final e não grava 
 
 **Tempo estimado:** até 12 walk-forwards de XGBoost, de ~30 a ~48 minutos, conforme o número de colunas.
 
-**Antes da primeira rodada:** conferir no banco (só leitura) as reapresentações e os CNPJs de `v1-raw_ipe_docs` e os proventos de JBSS3/JBSS32, que podem gerar 0 falso em `fato_relevante_cvm` e `dy_12m`.
+**Conferências de zeros falsos (só leitura, 02/11/2026; universo aproximado):**
+
+| Conferência | Resultado |
+|---|---|
+| CNPJs de `v1-raw_ipe_docs` | Todos válidos e no cadastro |
+| Empresa × ano coberto no universo, sem nenhum documento | 0 casos em 82.489 linhas |
+| Ticker do universo sem nenhum provento | 0 casos em 98.934 linhas |
+| Reapresentações de Fato Relevante | 197 de 3.487; 60 sem original (mesma referência ou até 10 dias antes). **Corrigido:** contam como evento na própria `data_entrega`, se entregues até 10 dias depois da referência (58 das 60) |
+| JBS | JBSS3 não tem preços nem proventos; JBSS32 tem todos os preços desde 2019 e é BDR. **Decidido: a JBS fica fora do universo.** Limitação do TCC (seção 3.4 da especificação) |

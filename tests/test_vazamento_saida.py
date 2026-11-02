@@ -300,6 +300,25 @@ def test_ao_vivo_documento_antes_de_d_cai_em_t_e_o_de_d_fica_fora(banco_teste):
     assert _do_dia(df, ins.t, "NOVA3")["fato_relevante_cvm"] == 0
 
 
+def test_ao_vivo_reapresentacao_orfa_de_d_menos_1_marca_t_e_a_de_d_fica_fora(banco_teste):
+    def documentos(df):
+        return _linhas(df, [
+            {"protocolo_entrega": "IPE9025", "cnpj": "07526557000100", "categoria": "Fato Relevante",
+             "data_entrega": "2025-10-21", "data_referencia": "2025-10-20",
+             "tipo_apresentacao": "RE - Reapresentação Espontânea", "versao": "2"},
+            {"protocolo_entrega": "IPE9026", "cnpj": "11111111000111", "categoria": "Fato Relevante",
+             "data_entrega": "2025-10-22", "data_referencia": "2025-10-22",
+             "tipo_apresentacao": "RE - Reapresentação Espontânea", "versao": "2"},
+        ])
+
+    ins, df = _dataset_ao_vivo(D, banco_teste(alterar={"v1-raw_ipe_docs": documentos, "v1-precos": _abev3_com_preco_em_21}))
+    assert ins.t == date(2025, 10, 21)
+    assert "IPE9025" in set(ins.documentos_cvm["protocolo_entrega"])
+    assert "IPE9026" not in set(ins.documentos_cvm["protocolo_entrega"])
+    assert _do_dia(df, ins.t, "ABEV3")["fato_relevante_cvm"] == 1
+    assert _do_dia(df, ins.t, "NOVA3")["fato_relevante_cvm"] == 0
+
+
 def test_ao_vivo_balanco_entregue_antes_de_d_marca_dias_e_o_de_d_nao(banco_teste):
     linha = {"tipo_documento": "ITR", "data_inicio_periodo": "2025-07-01", "data_fim_periodo": "2025-09-30",
              "receita_liquida": "1", "lucro_bruto": "1", "lucro_liquido": "1", "patrimonio_liquido": "1"}

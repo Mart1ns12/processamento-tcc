@@ -176,18 +176,18 @@ def _ganho_aceito(candidato: float | None, atual: float | None, minimo: float) -
     return (candidato - atual) > minimo
 
 
-def selecionar_configuracao(prep, dobras, params: ParametrosTreino) -> tuple[dict, pd.DataFrame]:
-    """Blocos, bloco de notícias, extremo em rank e hiperparâmetros, só com as dobras de desenvolvimento.
+def selecionar_blocos(prep, dobras, params: ParametrosTreino, prever=None) -> dict:
+    """Seleção dos blocos (F6): preco_contexto e macro no modelo 1, noticias_contexto no modelo 3.
 
-    1) blocos de preço no modelo 1, em ordem; 2) "noticias_contexto" no modelo 3; 3) `noticias_dia_extremo` em rank
-    no modelo 3, pela mesma regra de ganho; 4) grade no modelo 3 final (o maior AUC médio; empate fica com o
-    primeiro). Devolve (configuração, tabela de tentativas).
+    Usa os hiperparâmetros do yaml. Não testa o extremo em rank nem a grade. `prever` troca
+    `prever_walk_forward` (mesma assinatura), para o protocolo reaproveitar as previsões.
     """
+    prever = prever_walk_forward if prever is None else prever   # resolvido aqui: os testes trocam o nome do módulo
+
+    def auc_de(colunas: list[str]) -> float | None:
+        return auc_medio_wf(prever(prep, dobras, colunas, "xgb", params, None))
+
     tentativas: list[dict] = []
-
-    def auc_de(colunas: list[str], hiper: dict | None = None) -> float | None:
-        return auc_medio_wf(prever_walk_forward(prep, dobras, colunas, "xgb", params, hiper))
-
     blocos: list[str] = []
     atual = auc_de(preparacao.colunas_do_modelo("1", ()))
     for bloco in ("preco_contexto", "macro"):
@@ -204,12 +204,35 @@ def selecionar_configuracao(prep, dobras, params: ParametrosTreino) -> tuple[dic
     tentativas.append({
         "etapa": "modelo_3", "descricao": "bloco noticias_contexto", "auc_medio": candidato, "aceito": noticias_contexto,
     })
+    return {
+        "blocos": list(blocos),
+        "noticias_contexto": bool(noticias_contexto),
+        "tentativas": tentativas,
+        "auc_3": candidato if noticias_contexto else atual,
+    }
+
+
+def selecionar_configuracao(prep, dobras, params: ParametrosTreino) -> tuple[dict, pd.DataFrame]:
+    """Blocos, bloco de notícias, extremo em rank e hiperparâmetros, só com as dobras de desenvolvimento.
+
+    1) blocos de preço no modelo 1, em ordem; 2) "noticias_contexto" no modelo 3; 3) `noticias_dia_extremo` em rank
+    no modelo 3, pela mesma regra de ganho; 4) grade no modelo 3 final (o maior AUC médio; empate fica com o
+    primeiro). Devolve (configuração, tabela de tentativas).
+    """
+    sel = selecionar_blocos(prep, dobras, params)
+    tentativas: list[dict] = sel["tentativas"]
+
+    def auc_de(colunas: list[str], hiper: dict | None = None) -> float | None:
+        return auc_medio_wf(prever_walk_forward(prep, dobras, colunas, "xgb", params, hiper))
+
+    blocos = sel["blocos"]
+    noticias_contexto = sel["noticias_contexto"]
+    atual = sel["auc_3"]
 
     blocos_3 = tuple(blocos) + (("noticias_contexto",) if noticias_contexto else ())
     colunas_1 = preparacao.colunas_do_modelo("1", tuple(blocos))
     colunas_3 = preparacao.colunas_do_modelo("3", blocos_3)
 
-    atual = candidato if noticias_contexto else atual
     com_rank = [preparacao.EXTREMO_RANK if c == "noticias_dia_extremo" else c for c in colunas_3]
     candidato = auc_de(com_rank)
     extremo_em_rank = _ganho_aceito(candidato, atual, params.ganho_minimo_bloco)

@@ -33,7 +33,7 @@ EXTREMO_RANK = "noticias_dia_extremo_rank"
 COLUNA_BRUTA = {EXTREMO_RANK: "noticias_dia_extremo"}   # coluna preparada -> coluna do dataset (motivos do top)
 # Sobe quando mudam os ranks, as colunas ou as regras que afetam os valores do dataset: dataset e modelo de outra
 # versão não valem. 2 = regras de 01/11/2026 (cobertura, cópias pelo momento, noticias_dia_qtd em rank).
-VERSAO_PREPARACAO = 4   # 3 = blocos A e B; 4 = blocos C, D, E e controle, em 02/11/2026
+VERSAO_PREPARACAO = 5   # 3 = blocos A e B; 4 = blocos C, D, E e controle, em 02/11/2026; 5 = reapresentação sem original conta em fato_relevante_cvm, em 02/11/2026
 COLUNAS_ALVO = ["alvo", "alvo_abertura", "alvo_abertura_valido", "ret_t1", "ret_ibov_t1"]
 BLOCOS_COMPLEMENTARES = {
     "preco_contexto": ["dist_max_52s", "dist_min_52s", "amplitude", "ret_vs_setor"],

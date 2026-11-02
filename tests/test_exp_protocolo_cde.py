@@ -347,6 +347,58 @@ def test_fato_reapresentacao_nao_marca(tipo, versao, esperado):
     assert r.iloc[0, 0] == esperado
 
 
+# --- fato_relevante_cvm: reapresentação sem original conta na data_entrega (regra de 02/11/2026)
+
+RC = "RC - Reapresentação por Exigência"
+CAL_OUT = pregoes_uteis(20, "2025-10-06")   # pregões de 06/10 a 31/10/2025
+FECHO_OUT = date(2025, 11, 3)                # fecha 31/10 com proximo_ao_vivo
+
+
+def _dia(n):
+    return None if n is None else f"2025-10-{n:02d}"
+
+
+def _docs(*linhas):
+    """Linhas (protocolo, cnpj, categoria, dia de entrega, tipo, versão, dia de referência) de out/2025, mais o
+    comunicado de 06/10 que cobre a série."""
+    convertidas = [(p, c, cat, _dia(e), tipo, v, _dia(r)) for p, c, cat, e, tipo, v, r in linhas]
+    return documentos_de([("cob", "9", CM, "2025-10-06", AP, 1), *convertidas])
+
+
+@pytest.mark.parametrize("docs, dias_x, dias_y", [
+    (_docs(("a", "1", FR, 8, AP, 1, 8)), [8], []),                                              # original
+    (_docs(("a", "1", FR, 10, RE, 2, 10)), [10], []),                                           # órfã mesmo dia
+    (_docs(("a", "1", FR, 20, RE, 2, 10)), [20], []),                                           # atraso 10
+    (_docs(("a", "1", FR, 21, RE, 2, 10)), [], []),                                             # atraso 11
+    (_docs(("a", "1", FR, 21, RE, 2, 22)), [], []),                                             # atraso negativo
+    (_docs(("a", "1", FR, 21, RE, 2, None)), [], []),                                           # sem referência
+    (_docs(("a", "1", FR, 8, AP, 1, 8), ("b", "1", FR, 9, RE, 2, 8)), [8], []),                 # tem original, mesma referência
+    (_docs(("a", "1", FR, 7, AP, 1, 7), ("b", "1", FR, 17, RE, 2, 15)), [7], []),               # original a 10 dias
+    (_docs(("a", "1", FR, 6, AP, 1, 6), ("b", "1", FR, 17, RE, 2, 15)), [6, 17], []),           # original a 11 dias
+    (_docs(("a", "1", FR, 10, RE, 2, 10), ("b", "1", FR, 14, AP, 1, 10)), [10, 14], []),        # original só depois
+    (_docs(("a", "1", FR, 10, RE, 2, 10), ("b", "1", FR, 13, RE, 3, 10)), [10], []),            # duas órfãs, mesma referência
+    (_docs(("a", "1", FR, 10, RC, 2, 10)), [10], []),                                           # RC
+    (_docs(("a", "2", FR, 10, AP, 1, 10), ("b", "1", FR, 10, RE, 2, 10)), [10], [10]),          # original de outra empresa
+    (_docs(("a", "1", FR, 11, RE, 2, 10)), [10], []),                                           # sábado: vale na sexta
+    (_docs(("a", "1", CM, 10, RE, 2, 10)), [], []),                                             # outra categoria
+], ids=["original", "orfa_mesmo_dia", "atraso_10", "atraso_11", "atraso_negativo", "sem_referencia",
+        "original_mesma_referencia", "original_outra_referencia_10_dias", "original_outra_referencia_11_dias",
+        "original_so_depois", "duas_orfas_mesma_referencia", "rc", "original_de_outra_empresa", "sabado",
+        "outra_categoria"])
+def test_fato_reapresentacao_sem_original_conta_na_entrega(docs, dias_x, dias_y):
+    r = fato_relevante_cvm(docs, CAL_OUT, ["1", "2"], (), proximo_ao_vivo=FECHO_OUT)
+    _iguais(r["1"], [1.0 if d.day in dias_x else 0.0 for d in CAL_OUT])
+    _iguais(r["2"], [1.0 if d.day in dias_y else 0.0 for d in CAL_OUT])
+
+
+def test_fato_orfa_mesmo_dia_dentro_de_periodo_sem_coleta_e_nan():
+    docs = _docs(("a", "1", FR, 10, RE, 2, 10))
+    r = fato_relevante_cvm(docs, CAL_OUT, ["1", "2"], ((date(2025, 10, 9), date(2025, 10, 10)),),
+                           proximo_ao_vivo=FECHO_OUT)
+    assert np.isnan(r.loc[pd.Timestamp("2025-10-10"), "1"])
+    assert r.loc[pd.Timestamp("2025-10-13"), "1"] == 0.0
+
+
 # --- controle_sorteado
 
 MODELO = pd.DataFrame({"data": pd.to_datetime(["2026-06-18"] * 3 + ["2026-06-19"] * 2),

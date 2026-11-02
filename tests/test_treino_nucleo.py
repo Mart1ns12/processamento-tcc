@@ -202,3 +202,47 @@ def test_selecionar_configuracao_nao_usa_os_blocos_do_protocolo(monkeypatch):
         assert not set(colunas) & set(COLUNAS_PROTOCOLO)
     assert not set(cfg["colunas_1"]) & set(COLUNAS_PROTOCOLO)
     assert not set(cfg["colunas_3"]) & set(COLUNAS_PROTOCOLO)
+
+
+def test_selecionar_blocos_sem_grade_nem_extremo(monkeypatch):
+    from processamento.experimento import preparacao
+
+    vistas = []
+    monkeypatch.setattr(treino, "prever_walk_forward",
+                        lambda prep, dobras, colunas, tipo, params, hiper=None: vistas.append(list(colunas)) or colunas)
+    monkeypatch.setattr(treino, "auc_medio_wf", lambda colunas: 0.9)
+    sel = treino.selecionar_blocos(None, [], params_teste())
+    esperado = [
+        preparacao.colunas_do_modelo("1", ()),
+        preparacao.colunas_do_modelo("1", ("preco_contexto",)),
+        preparacao.colunas_do_modelo("1", ("macro",)),
+        preparacao.colunas_do_modelo("3", ()),
+        preparacao.colunas_do_modelo("3", ("noticias_contexto",)),
+    ]
+    assert vistas == esperado
+    for colunas in vistas:
+        assert "noticias_dia_extremo_rank" not in colunas
+        assert not set(colunas) & set(COLUNAS_PROTOCOLO)
+    assert sel["blocos"] == []
+    assert sel["noticias_contexto"] is False
+    assert len(sel["tentativas"]) == 3
+
+
+def test_selecionar_blocos_aceita_acima_do_ganho(monkeypatch):
+    vistas = []
+    monkeypatch.setattr(treino, "prever_walk_forward",
+                        lambda prep, dobras, colunas, tipo, params, hiper=None: vistas.append(list(colunas)) or colunas)
+    monkeypatch.setattr(treino, "auc_medio_wf", lambda colunas: 0.506 if "dist_max_52s" in colunas else 0.5)
+    sel = treino.selecionar_blocos(None, [], params_teste())
+    assert len(vistas) == 5
+    assert sel["blocos"] == ["preco_contexto"]
+    assert sel["noticias_contexto"] is False
+
+
+def test_selecionar_blocos_recusa_ganho_igual_ao_minimo(monkeypatch):
+    monkeypatch.setattr(treino, "prever_walk_forward",
+                        lambda prep, dobras, colunas, tipo, params, hiper=None: colunas)
+    monkeypatch.setattr(treino, "auc_medio_wf", lambda colunas: 0.75 if "dist_max_52s" in colunas else 0.5)
+    sel = treino.selecionar_blocos(None, [], params_teste(ganho_minimo_bloco=0.25))
+    assert sel["blocos"] == []
+    assert sel["noticias_contexto"] is False

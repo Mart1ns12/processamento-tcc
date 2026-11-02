@@ -139,7 +139,7 @@ Só entram nos testes de bloco de `docs/protocolo_variaveis.md`.
 | `dias_desde_resultado` | Pregões desde a última entrega válida; entrega em t = 0 | Atraso até 180 dias; balanço velho = vazio | C |
 | `var_lucro_aa` | (Lucro do trimestre − mesmo trimestre do ano anterior) / PL | `data_entrega` ≤ t; PL ≤ 0 = vazio | C |
 | `dy_12m` | Proventos em (t − 12 meses, t] / fechamento(t) | Suspeito nas 20 sessões = vazio; sem provento = 0 | D |
-| `fato_relevante_cvm` | 1 ou 0 no pregão de referência da entrega | Vazio sem cobertura ou com janela aberta | E |
+| `fato_relevante_cvm` | 1 ou 0 no pregão de referência da entrega; conta o original e a reapresentação sem original | Vazio sem cobertura ou com janela aberta | E |
 | `controle_sorteado` | Uniforme [0, 1) por pregão | Semente `treino.semente` | Controle |
 
 ### Alvo
@@ -282,7 +282,7 @@ Notícia da empresa vale para todas as suas classes: PETR3 e PETR4 recebem os me
 | Notícia `errada`, cópia repetida, ou fora do calendário | Na preparação |
 | Balanço com período inválido | `dias_de_resultado`, `dias_desde_resultado`, `var_lucro_aa` |
 | Entrega com atraso acima de 180 dias | Só em `dias_desde_resultado` |
-| Reapresentação de documento da CVM | `fato_relevante_cvm` |
+| Reapresentação da CVM com original, ou sem original com mais de 10 dias de atraso | `fato_relevante_cvm` |
 | Linha sem `alvo` | Treino e avaliação (continua no CSV) |
 | Linha antes da cobertura; teste final e embargo | Na leitura do treino |
 
@@ -376,6 +376,7 @@ Todos em `processamento/config/parametros.yaml`, salvo aviso.
 ### Universo e preços
 
 9. **Viés de sobrevivência:** 46 tickers da composição sem nenhum preço, mais os 3 excluídos.
+   **JBS fora do universo (medido em 02/11/2026):** JBSS3 está na composição até 08/06/2025, mas não tem preço nem proventos; JBSS32 tem os preços desde 2019, mas é BDR. Ficam fora ~1.100 linhas, ~1,1% do universo (estimativa). Limitação do TCC.
 10. **Composição não oficial:** 115 de 137 linhas vêm de `paccafelipe_csv`.
 11. **Classes da mesma empresa:** PETR3 e PETR4 têm as mesmas notícias e podem ocupar duas vagas do top 5. As linhas não são independentes.
 12. **`tom_mercado` é igual para todas as ações do dia:** só ajuda por interação com outras variáveis.

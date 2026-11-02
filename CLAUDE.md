@@ -30,6 +30,7 @@ python -m processamento.diagnostico                       # etapa 1: diagnóstic
 python -m processamento.rotina --data AAAA-MM-DD          # rotina de um dia (Fase 1 + top 5 + pacotes em saida/AAAA-MM-DD/)
 python -m processamento.rotina --data AAAA-MM-DD --sem-esperar   # não espera a coleta terminar (para testes)
 python -m processamento.experimento.treino                # treino e avaliação walk-forward
+python -m processamento.experimento.protocolo_execucao --data AAAA-MM-DD --motivo "..."   # teste de blocos (docs/protocolo_variaveis.md); só lê o CSV
 ```
 Os comandos acima são o **alvo**: cada etapa da seção 9 da especificação cria o seu ponto de entrada. Se um comando ainda não existir, ele faz parte da etapa em andamento.
 

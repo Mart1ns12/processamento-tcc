@@ -264,7 +264,7 @@ CONTRATO = {
         "corte": "data_com",
     },
     "indices": {"datas": ["data"], "numeros": ["valor"], "corte": "data"},
-    "raw_ipe_docs": {"datas": ["data_entrega"], "numeros": ["versao"], "corte": "data_entrega"},
+    "raw_ipe_docs": {"datas": ["data_entrega", "data_referencia"], "numeros": ["versao"], "corte": "data_entrega"},
     "noticias": {
         "datas": ["data_publicacao"],
         "numeros": ["prob_positivo", "prob_neutro", "prob_negativo", "qualidade"],

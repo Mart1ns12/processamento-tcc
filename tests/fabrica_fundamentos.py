@@ -308,8 +308,11 @@ def mundo() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.
 
 
 def documentos_de(linhas: list[tuple]) -> pd.DataFrame:
-    """Linhas de `v1-raw_ipe_docs`: (protocolo, cnpj, categoria, data_entrega, tipo_apresentacao, versao)."""
-    colunas = ["protocolo_entrega", "cnpj", "categoria", "data_entrega", "tipo_apresentacao", "versao"]
+    """Linhas de `v1-raw_ipe_docs`: (protocolo, cnpj, categoria, data_entrega, tipo_apresentacao, versao[, data_referencia]).
+    Sem `data_referencia` na tupla, fica nula (NaT), como no banco."""
+    colunas = ["protocolo_entrega", "cnpj", "categoria", "data_entrega", "tipo_apresentacao", "versao", "data_referencia"]
+    linhas = [tuple(linha) + (None,) * (len(colunas) - len(linha)) for linha in linhas]
     df = pd.DataFrame(linhas, columns=colunas)
     df["data_entrega"] = pd.to_datetime(df["data_entrega"])
+    df["data_referencia"] = pd.to_datetime(df["data_referencia"])
     return df

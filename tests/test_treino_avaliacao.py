@@ -350,6 +350,27 @@ def test_bootstrap_serie_vazia():
     assert ic_bootstrap_blocos([], 5, 200, 1) == (None, None)
 
 
+def test_bootstrap_percentis_99_com_valor_constante():
+    lo, hi = ic_bootstrap_blocos([0.4] * 10, 5, 200, 1, percentis=(0.5, 99.5))
+    assert (lo, hi) == pytest.approx((0.4, 0.4), abs=1e-12)
+
+
+def test_bootstrap_padrao_continua_95():
+    v = np.random.default_rng(0).normal(0, 1, 50)
+    padrao = ic_bootstrap_blocos(v, 5, 200, 1)
+    assert padrao[0] == pytest.approx(-0.22262255984169776, abs=1e-12)
+    assert padrao[1] == pytest.approx(0.4797838262846961, abs=1e-12)
+    assert padrao == ic_bootstrap_blocos(v, 5, 200, 1, percentis=(2.5, 97.5))
+
+
+def test_bootstrap_99_e_mais_largo_que_95():
+    v = np.random.default_rng(0).normal(0, 1, 50)
+    lo95, hi95 = ic_bootstrap_blocos(v, 5, 2000, 1)
+    lo99, hi99 = ic_bootstrap_blocos(v, 5, 2000, 1, percentis=(0.5, 99.5))
+    assert lo99 <= lo95
+    assert hi99 >= hi95
+
+
 # ---------- Robustez por ano e sensibilidade ----------
 
 def _diario_simples(datas, acertos_top, com_excesso=False):

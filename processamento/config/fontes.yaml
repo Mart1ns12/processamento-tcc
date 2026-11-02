@@ -102,4 +102,4 @@ auxiliares:
   raw_ipe_docs:               # documentos da CVM (fato_relevante_cvm); leitura estrita: sem `opcional`
     nome_real: v1-raw_ipe_docs
     chave: [protocolo_entrega]
-    colunas: {protocolo_entrega: protocolo_entrega, cnpj: cnpj, categoria: categoria, data_entrega: data_entrega, tipo_apresentacao: tipo_apresentacao, versao: versao}
+    colunas: {protocolo_entrega: protocolo_entrega, cnpj: cnpj, categoria: categoria, data_entrega: data_entrega, tipo_apresentacao: tipo_apresentacao, versao: versao, data_referencia: data_referencia}

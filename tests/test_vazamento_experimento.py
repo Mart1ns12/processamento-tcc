@@ -662,6 +662,59 @@ def test_documento_de_d_presente_nos_dados_nao_entra_na_noite_de_t():
     _igual_em_t(limpo, sujo, t)
 
 
+# --- reapresentação sem original (fato_relevante_cvm): o que entrega depois de t não muda t
+
+RE = "RE - Reapresentação Espontânea"
+
+
+def test_reapresentacao_orfa_entregue_depois_da_janela_nao_muda_t():
+    m = _mundo_do_caso("T_INDICE")
+    t, cal = m["t"], m["cal"]
+    dia = cal[cal.index(t) + 5]
+    orfa = documentos_de([("orfa-futura", "3", FATO, dia.isoformat(), RE, 2, dia.isoformat())])
+    antes, depois = _df_cheio("T_INDICE"), _dataset(_com_linhas(m, "documentos", orfa))
+    _igual_em_t(antes, depois, t)
+    assert _valor(depois, dia, "CCCC3", "fato_relevante_cvm") == 1   # prova de efeito: marca o próprio pregão
+    assert _valor(antes, dia, "CCCC3", "fato_relevante_cvm") == 0
+
+
+def test_original_futuro_nao_tira_a_orfa_de_t():
+    m = _mundo_do_caso("T_INDICE")
+    t, cal = m["t"], m["cal"]
+    futuro = cal[cal.index(t) + 3]
+    orfa = documentos_de([("orfa-t", "3", FATO, t.isoformat(), RE, 2, t.isoformat())])
+    original = documentos_de([("original-futuro", "3", FATO, futuro.isoformat(), AP, 1, t.isoformat())])
+    so_orfa = _dataset(_com_linhas(m, "documentos", orfa))
+    com_original = _dataset(_com_linhas(_com_linhas(m, "documentos", orfa), "documentos", original))
+    _igual_em_t(so_orfa, com_original, t)
+    assert _valor(com_original, t, "CCCC3", "fato_relevante_cvm") == 1
+    # o mesmo dataset, cortado em t, dá o mesmo valor
+    c = cortado(_com_linhas(_com_linhas(m, "documentos", orfa), "documentos", original))
+    cortado_em_t = montar_dataset(dados_do_mundo(c), c["cal"], proximo_ao_vivo=m["t1"])[0]
+    assert _valor(cortado_em_t, t, "CCCC3", "fato_relevante_cvm") == 1
+    # prova de efeito, depois de t: o original futuro marca o próprio pregão
+    assert _valor(com_original, futuro, "CCCC3", "fato_relevante_cvm") == 1
+    assert _valor(so_orfa, futuro, "CCCC3", "fato_relevante_cvm") == 0
+
+
+def test_reapresentacao_futura_de_original_de_t_nao_muda_t():
+    m = _mundo_do_caso("T_INDICE")
+    t, cal = m["t"], m["cal"]
+    futuro = cal[cal.index(t) + 15]   # longe o bastante de t para a janela de 10 dias não alcançar o original
+    original = documentos_de([("original-t", "3", FATO, t.isoformat(), AP, 1)])
+    com_original = _com_linhas(m, "documentos", original)
+    reapresentacao = documentos_de([("reap-futura", "3", FATO, futuro.isoformat(), RE, 2, t.isoformat())])
+    antes = _dataset(com_original)
+    depois = _dataset(_com_linhas(com_original, "documentos", reapresentacao))
+    _igual_em_t(antes, depois, t)
+    assert _valor(depois, t, "CCCC3", "fato_relevante_cvm") == 1
+    assert _valor(depois, futuro, "CCCC3", "fato_relevante_cvm") == 0   # tem original com a mesma referência: não conta
+    # prova de efeito: a mesma reapresentação, sem original de mesma referência, conta no próprio pregão
+    orfa = documentos_de([("reap-orfa", "3", FATO, futuro.isoformat(), RE, 2, futuro.isoformat())])
+    sem_original = _dataset(_com_linhas(com_original, "documentos", orfa))
+    assert _valor(sem_original, futuro, "CCCC3", "fato_relevante_cvm") == 1
+
+
 def _so_controle(df, d):
     return _linhas(df, d)[["ticker", "controle_sorteado"]]
 
