@@ -74,7 +74,7 @@ def aviso_retornos_suspeitos(ins: Insumos, params_precos: ParametrosPrecos) -> s
     pares = pares_do_painel(ins.cadastro, ins.exclusoes)
     g = grade_de_precos(ins.precos, ins.cal, "fechamento_ajustado", pares)
     susp = retornos_suspeitos(g, params_precos.retorno_suspeito_min, params_precos.retorno_suspeito_max,
-                              params_precos.base_defasagem_max_pregoes)
+                              params_precos.base_defasagem_max_pregoes, params_precos.eventos_retorno_suspeito)
     ini = inicio_janela(ins.cal, ins.t)
     dentro = (susp.index >= pd.Timestamp(ini)) & (susp.index <= pd.Timestamp(ins.t))
     janela = susp[dentro]
@@ -88,9 +88,29 @@ def aviso_retornos_suspeitos(ins: Insumos, params_precos: ParametrosPrecos) -> s
     lista = ", ".join(itens[:MAX_TICKERS_AVISO])
     if len(itens) > MAX_TICKERS_AVISO:
         lista += f" e mais {len(itens) - MAX_TICKERS_AVISO}"
-    return AVISO_SUSPEITOS.format(minimo=pct(params_precos.retorno_suspeito_min, 0),
-                                  maximo=pct(params_precos.retorno_suspeito_max, 0),
-                                  ini=ini.isoformat(), t=ins.t.isoformat(), lista=lista)
+    aviso = AVISO_SUSPEITOS.format(minimo=pct(params_precos.retorno_suspeito_min, 0),
+                                   maximo=pct(params_precos.retorno_suspeito_max, 0),
+                                   ini=ini.isoformat(), t=ins.t.isoformat(), lista=lista)
+    eventos = _eventos_no_aviso(janela, params_precos.motivos_eventos_suspeitos)
+    return aviso if eventos is None else f"{aviso} {eventos}"
+
+
+def _eventos_no_aviso(janela: pd.DataFrame, motivos: tuple[tuple[str, date, str], ...]) -> str | None:
+    """Eventos da lista explícita que estão marcados na janela, com o motivo; agrupados por ticker e motivo.
+
+    Só entra o par (ticker, data) marcado como suspeito (o mesmo critério da lista do aviso, sem limite de tickers).
+    None se nenhum evento da lista cair na janela.
+    """
+    grupos: dict[tuple[str, str], list[date]] = {}
+    for tk, d, motivo in motivos:
+        dia = pd.Timestamp(d)
+        if dia in janela.index and tk in janela.columns and janela.at[dia, tk]:
+            grupos.setdefault((tk, motivo), []).append(d)
+    if not grupos:
+        return None
+    partes = [f"{tk} ({', '.join(x.isoformat() for x in sorted(datas))}): {motivo}."
+              for (tk, motivo), datas in sorted(grupos.items())]
+    return "Eventos conhecidos: " + " ".join(partes)
 
 
 def _cotacao(g: pd.DataFrame) -> Grade:
@@ -171,7 +191,7 @@ def series_completas(ins: Insumos, multiplos: dict[str, Grade],
     cdi = indice_cdi(ins.indices, cal)
     ipca = indice_ipca(ins.indices, cal, params_precos.ipca_defasagem_max_meses)
     suspeitos = retornos_suspeitos(g_aj_bruto, params_precos.retorno_suspeito_min, params_precos.retorno_suspeito_max,
-                                   params_precos.base_defasagem_max_pregoes)
+                                   params_precos.base_defasagem_max_pregoes, params_precos.eventos_retorno_suspeito)
     sem, n_sem = indice_setor_sem_empresa(g_aj_bruto, ins.cadastro, pares, tickers, params_precos.setor_excluir,
                                           suspeitos=suspeitos)
     setor_de = mapas_cadastro(ins.cadastro)[0]

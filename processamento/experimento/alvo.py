@@ -64,7 +64,8 @@ def alvos(
 
     pp = carregar_parametros_precos() if params_precos is None else params_precos
     suspeito_t1 = retornos_suspeitos(
-        aj, pp.retorno_suspeito_min, pp.retorno_suspeito_max, pp.base_defasagem_max_pregoes
+        aj, pp.retorno_suspeito_min, pp.retorno_suspeito_max, pp.base_defasagem_max_pregoes,
+        pp.eventos_retorno_suspeito,
     ).shift(-1, fill_value=False).astype(bool)
 
     ret_t1 = _retorno(aj, aj).mask(suspeito_t1)

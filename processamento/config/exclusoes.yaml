@@ -4,6 +4,7 @@ tickers_excluidos:            # fora do universo em TODAS as datas (viés de sob
   CRFB3: deslistada, sem preço nas fontes
   SRNA3: deslistada, sem preço nas fontes
   STBP3: deslistada, sem preço nas fontes
+  JBSS3: sem proventos, balanços e documentos CVM do período (zeros falsos); volta quando a coleta os trouxer (decisão de 02/11/2026)
 # 26/10/2026: Bradespar (03847461000192) saiu: tem balanços de 2021 a 2023; a regra do balanço velho cuida do resto.
 cnpjs_sem_balanco:            # empresa fica no painel e no modelo; indicadores de balanço = indisponivel
   "06057223000171": só 3 ITRs de 2021 nas fontes (Assaí; pedido à coleta em 26/10/2026)

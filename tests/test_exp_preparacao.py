@@ -239,7 +239,7 @@ def test_protocolo_fora_dos_grupos_so_no_rank():
     assert not set(COLUNAS_PROTOCOLO) & set(ESSENCIAIS_PRECO + COMPLEMENTARES_PRECO + NOTICIAS_DIA)
     assert set(COLUNAS_PROTOCOLO) <= set(COLUNAS_RANK)
     assert not set(COLUNAS_PROTOCOLO) & set(COLUNAS_BRUTAS)
-    assert VERSAO_PREPARACAO == 5
+    assert VERSAO_PREPARACAO == 6
 
 
 _BASE_PROTOCOLO = [("AAAA3", 0.10, 1.0), ("BBBB3", 0.10, NAN), ("CCCC3", NAN, 0.0),

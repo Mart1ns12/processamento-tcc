@@ -137,7 +137,7 @@ def ler_prazo_rotina(raiz: Path) -> str | None:
 CHAVES_AJUDA = ("prazo", "prazo_tardio", "inicio_consulta", "intervalo", "limite_historico", "corte_noite",
                 "retorno_min", "retorno_max", "defasagem", "pvp_min", "pvp_max_x1000", "sorteios", "teste_final_inicio",
                 "tempo_limite_api", "atipico_min_acoes", "atipico_retorno", "atipico_ibov", "coerencia_ivvb11",
-                "coerencia_dif", "etapas_conferidas")
+                "coerencia_dif", "etapas_conferidas", "eventos_suspeitos")
 
 
 def _inteiro(v: object) -> bool:
@@ -202,7 +202,34 @@ def ler_valores_ajuda(raiz: Path) -> dict[str, str | None]:
         "coerencia_ivvb11": _percentual(ivvb_min),
         "coerencia_dif": _percentual(dif_min),
         "etapas_conferidas": ", ".join(etapas) if _lista_de_textos(etapas) else None,
+        "eventos_suspeitos": _eventos_suspeitos(fase1.get("eventos_retorno_suspeito")),
     }
+
+
+def _eventos_suspeitos(eventos: object) -> str | None:
+    """Frase com os eventos de `fase1.eventos_retorno_suspeito` (ticker, datas e motivo), agrupados por ticker e motivo.
+
+    None se a lista estiver vazia, faltar ou tiver itens inválidos sem nenhum evento utilizável.
+    """
+    grupos: dict[tuple[str, str], list[date]] = {}
+    for item in eventos if isinstance(eventos, list) else []:
+        if not isinstance(item, dict):
+            continue
+        ticker, datas, motivo = item.get("ticker"), item.get("datas"), item.get("motivo")
+        if not (isinstance(ticker, str) and ticker.strip() and isinstance(datas, list)
+                and isinstance(motivo, str) and motivo.strip()):
+            continue
+        for d in datas:
+            try:
+                dia = d if isinstance(d, date) else date.fromisoformat(d)
+            except (TypeError, ValueError):
+                continue
+            grupos.setdefault((ticker, motivo), []).append(dia)
+    if not grupos:
+        return None
+    partes = [f"{tk} ({', '.join(x.strftime('%d/%m/%Y') for x in sorted(datas))}): {motivo}."
+              for (tk, motivo), datas in sorted(grupos.items())]
+    return "Também são tratados como suspeitos, mesmo dentro dos limites, os eventos da lista do parametros.yaml: " + " ".join(partes)
 
 
 def _percentual(v: object) -> str | None:

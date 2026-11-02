@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import copy
 import json
+from dataclasses import replace
 from datetime import date, timedelta
 
 import pandas as pd
@@ -495,3 +496,46 @@ def test_aviso_com_mais_de_dez_tickers():
         "fora das séries e das medianas do setor: T013 (2025-01-03), T023 (2025-01-03), T033 (2025-01-03), "
         "T043 (2025-01-03), T053 (2025-01-03), T063 (2025-01-03), T073 (2025-01-03), T083 (2025-01-03), "
         "T093 (2025-01-03), T103 (2025-01-03) e mais 2.")
+
+
+def _params_com_eventos(*eventos):
+    """Parâmetros reais com a lista de eventos trocada: (ticker, data, motivo) vira pares e motivos."""
+    return replace(carregar_parametros_precos(),
+                   eventos_retorno_suspeito=tuple((tk, d) for tk, d, _ in eventos),
+                   motivos_eventos_suspeitos=tuple(eventos))
+
+
+def test_aviso_com_evento_na_janela_traz_ticker_data_e_motivo():
+    cal = pregoes_uteis(4)   # 02/01, 03/01, 06/01, 07/01
+    ins = _ins_de_acoes(cal, {"ABCD3": [10.0, 10.5, 10.5, 10.5]}, [("ABCD3", "1", "S", "ON")])
+    # sem salto pelos limites: só o evento marca o dia 03/01
+    assert aviso_retornos_suspeitos(ins, _params_com_eventos(("ABCD3", cal[1], "Evento de teste"))) == (
+        "Retornos diários suspeitos (abaixo de -75% ou acima de 100%) entre 2025-01-02 e 2025-01-07, "
+        "fora das séries e das medianas do setor: ABCD3 (2025-01-03). "
+        "Eventos conhecidos: ABCD3 (2025-01-03): Evento de teste.")
+
+
+def test_aviso_agrupa_datas_do_mesmo_evento_e_ordena_por_ticker():
+    cal = pregoes_uteis(5)   # 02/01 a 08/01
+    acoes = {"ZZZZ3": [10.0, 10.5, 10.5, 10.5, 10.5], "ABCD3": [10.0, 10.5, 10.5, 10.5, 10.5]}
+    cadastro = [("ZZZZ3", "1", "S", "ON"), ("ABCD3", "2", "S", "ON")]
+    ins = _ins_de_acoes(cal, acoes, cadastro)
+    eventos = [("ZZZZ3", d, "Motivo Z") for d in cal[1:5]] + [("ABCD3", cal[1], "Motivo A")]
+    assert aviso_retornos_suspeitos(ins, _params_com_eventos(*eventos)) == (
+        "Retornos diários suspeitos (abaixo de -75% ou acima de 100%) entre 2025-01-02 e 2025-01-08, "
+        "fora das séries e das medianas do setor: ABCD3 (2025-01-03), "
+        "ZZZZ3 (2025-01-03, 2025-01-06, 2025-01-07, 2025-01-08). "
+        "Eventos conhecidos: ABCD3 (2025-01-03): Motivo A. "
+        "ZZZZ3 (2025-01-03, 2025-01-06, 2025-01-07, 2025-01-08): Motivo Z.")
+
+
+def test_aviso_evento_fora_da_janela_ou_lista_vazia_texto_igual():
+    cal = pregoes_uteis(4)
+    ins = _ins_de_acoes(cal, {"ABCD3": [10.0, 30.0, 30.0, 30.0]}, [("ABCD3", "1", "S", "ON")])
+    base = aviso_retornos_suspeitos(ins, _params_com_eventos())
+    assert base == (
+        "Retornos diários suspeitos (abaixo de -75% ou acima de 100%) entre 2025-01-02 e 2025-01-07, "
+        "fora das séries e das medianas do setor: ABCD3 (2025-01-03).")
+    # evento de 2023 (fora da janela) e lista real (PCAR3 e NATU3, também fora): nenhuma linha a mais
+    assert aviso_retornos_suspeitos(ins, _params_com_eventos(("ABCD3", date(2023, 8, 23), "Antigo"))) == base
+    assert aviso_retornos_suspeitos(ins, carregar_parametros_precos()) == base

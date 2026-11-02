@@ -10,6 +10,7 @@ fase1:
   retorno_suspeito_min: -0.75
   retorno_suspeito_max: 1.0
   base_defasagem_max_pregoes: 5
+  eventos_retorno_suspeito: []
 fundamentos:
   pvp_minimo_plausivel: 0.05
   pvp_maximo_plausivel_x1000: 20.0

@@ -294,6 +294,7 @@ def test_ler_valores_ajuda_da_fixture(tmp_path):
         "teste_final_inicio": "23/06/2026",
         "tempo_limite_api": "2 s", "atipico_min_acoes": "5", "atipico_retorno": "30%", "atipico_ibov": "5%",
         "coerencia_ivvb11": "3%", "coerencia_dif": "2%", "etapas_conferidas": "precos, noticias, enriquecimento",
+        "eventos_suspeitos": None,   # fixture com eventos_retorno_suspeito: [] (nenhuma frase sobre eventos)
     }
 
 

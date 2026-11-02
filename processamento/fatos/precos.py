@@ -6,7 +6,9 @@ Ausência é NaN + `status` (nunca 0). `fechamento` é cotação; `fechamento_aj
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
+from datetime import date
 
 import numpy as np
 import pandas as pd
@@ -33,7 +35,9 @@ _CHAVES_FASE1 = {
     "retorno_suspeito_pregoes_nivel",
     "base_defasagem_max_pregoes",
     "ipca_defasagem_max_meses",
+    "eventos_retorno_suspeito",  # obrigatória; [] = nenhum evento
 }
+_CHAVES_EVENTO = ("ticker", "datas", "motivo")
 _SETOR_EXCLUIR = ("acao", "empresa")
 
 
@@ -57,6 +61,10 @@ class ParametrosPrecos:
     retorno_suspeito_pregoes_nivel: int = 21
     base_defasagem_max_pregoes: int = 5
     ipca_defasagem_max_meses: int = 2
+    # pares (ticker, data) achatados de fase1.eventos_retorno_suspeito; tupla para ser comparável e hashável
+    eventos_retorno_suspeito: tuple[tuple[str, date], ...] = ()
+    # mesmos eventos com o motivo (ticker, data, motivo), para o aviso e a ajuda; não entra nas chamadas de retornos_suspeitos
+    motivos_eventos_suspeitos: tuple[tuple[str, date, str], ...] = ()
 
 
 def _inteiro_positivo(valor: object, onde: str) -> int:
@@ -78,6 +86,41 @@ def _numero(valor: object, onde: str) -> float:
     if isinstance(valor, bool) or not isinstance(valor, (int, float)) or not np.isfinite(valor):
         raise ErroParametrosPrecos(f"{onde} deve ser um número (recebeu {valor!r})")
     return float(valor)
+
+
+def _data_iso(valor: object, onde: str) -> date:
+    """Confere uma data AAAA-MM-DD (texto, entre aspas no YAML); levanta `ErroParametrosPrecos` se não bater."""
+    if isinstance(valor, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", valor):
+        try:
+            return date.fromisoformat(valor)
+        except ValueError:
+            pass
+    raise ErroParametrosPrecos(f"{onde} deve ser uma data AAAA-MM-DD válida, entre aspas (recebeu {valor!r})")
+
+
+def _eventos_retorno_suspeito(valor: object) -> tuple[tuple[str, date, str], ...]:
+    """Lista de `{ticker, datas, motivo}` → triplas (ticker, data, motivo); levanta `ErroParametrosPrecos` se não bater."""
+    if not isinstance(valor, list):
+        raise ErroParametrosPrecos("fase1.eventos_retorno_suspeito deve ser uma lista")
+    pares: list[tuple[str, date, str]] = []
+    for i, item in enumerate(valor):
+        onde = f"fase1.eventos_retorno_suspeito[{i}]"
+        if not isinstance(item, dict):
+            raise ErroParametrosPrecos(f"{onde} deve ser um mapeamento com ticker, datas e motivo (recebeu {item!r})")
+        faltantes = [c for c in _CHAVES_EVENTO if c not in item]
+        if faltantes:
+            raise ErroParametrosPrecos(f"faltam chaves em {onde}: {faltantes}")
+        ticker = item["ticker"]
+        if not isinstance(ticker, str) or not ticker.strip():
+            raise ErroParametrosPrecos(f"{onde}.ticker deve ser um texto não vazio (recebeu {ticker!r})")
+        datas = item["datas"]
+        if not isinstance(datas, list) or not datas:
+            raise ErroParametrosPrecos(f"{onde}.datas deve ser uma lista não vazia de datas AAAA-MM-DD")
+        motivo = item["motivo"]
+        if not isinstance(motivo, str) or not motivo.strip():
+            raise ErroParametrosPrecos(f"{onde}.motivo deve ser um texto não vazio (recebeu {motivo!r})")
+        pares.extend((ticker, _data_iso(d, f"{onde}.datas"), motivo) for d in datas)
+    return tuple(pares)
 
 
 def carregar_parametros_precos(caminho: str | None = None) -> ParametrosPrecos:
@@ -107,6 +150,7 @@ def carregar_parametros_precos(caminho: str | None = None) -> ParametrosPrecos:
     if not maximo > 0:
         raise ErroParametrosPrecos(f"fase1.retorno_suspeito_max deve ser maior que zero (recebeu {maximo!r})")
 
+    eventos = _eventos_retorno_suspeito(bloco["eventos_retorno_suspeito"])
     params = ParametrosPrecos(
         janelas=dict(janelas),
         volume_pregoes=_inteiro_positivo(bloco["volume_pregoes"], "fase1.volume_pregoes"),
@@ -124,6 +168,8 @@ def carregar_parametros_precos(caminho: str | None = None) -> ParametrosPrecos:
             bloco["base_defasagem_max_pregoes"], "fase1.base_defasagem_max_pregoes"
         ),
         ipca_defasagem_max_meses=_inteiro_positivo(bloco["ipca_defasagem_max_meses"], "fase1.ipca_defasagem_max_meses"),
+        eventos_retorno_suspeito=tuple((t, d) for t, d, _ in eventos),
+        motivos_eventos_suspeitos=eventos,
     )
     if params.beta_minimo > params.beta_pregoes:
         raise ErroParametrosPrecos(
@@ -211,7 +257,7 @@ def retornos_asof(g: pd.DataFrame) -> pd.DataFrame:
 
 
 def retornos_suspeitos(g_aj: pd.DataFrame, minimo: float, maximo: float,
-                       defasagem_max: int | None = None) -> pd.DataFrame:
+                       defasagem_max: int | None = None, eventos: tuple | list = ()) -> pd.DataFrame:
     """True onde o retorno as-of do dia é < `minimo` ou > `maximo` (estrito; NaN nunca é suspeito).
 
     Erro da coleta (seção 6, "Retorno diário suspeito"): o preço não é corrigido, só isolado
@@ -220,11 +266,20 @@ def retornos_suspeitos(g_aj: pd.DataFrame, minimo: float, maximo: float,
     `defasagem_max` (seção 6, "Base velha"): o retorno só vale onde a base (pregão anterior) tem valor a no máximo
     `defasagem_max` pregões de distância; acima disso é variação através de lacuna, não retorno diário: NaN (não
     suspeito). None = sem limite (comportamento antigo).
+
+    `eventos` (seção 6, "Retorno diário suspeito"; produção: `fase1.eventos_retorno_suspeito`): pares (ticker, data)
+    marcados como suspeitos mesmo dentro dos limites. Só valem onde a data está no índice, o ticker está nas colunas
+    e `g_aj` tem valor (NaN nunca é suspeito); fora da grade são ignorados. `g_aj` não é alterado.
     """
     r = retornos_asof(g_aj)
     if defasagem_max is not None:
         r = r.where(defasagem_pregoes(g_aj).shift(1) <= defasagem_max)
-    return (r < minimo) | (r > maximo)
+    marcados = (r < minimo) | (r > maximo)
+    for ticker, data in eventos:
+        dia = pd.Timestamp(data).normalize()
+        if dia in g_aj.index and ticker in g_aj.columns and pd.notna(g_aj.at[dia, ticker]):
+            marcados.at[dia, ticker] = True
+    return marcados
 
 
 def suspeita_na_janela(suspeitos: pd.DataFrame, n: int) -> pd.DataFrame:
@@ -420,17 +475,18 @@ def pares_do_painel(cadastro: pd.DataFrame, exclusoes: Exclusoes) -> list[str]:
 
 
 def tickers_com_suspeita(precos: pd.DataFrame, cal: list, t, tickers: list[str], minimo: float,
-                         maximo: float, n: int, defasagem_max: int | None = None) -> set[str]:
+                         maximo: float, n: int, defasagem_max: int | None = None, eventos: tuple | list = ()) -> set[str]:
     """Tickers com retorno suspeito (fechamento_ajustado) em algum dos `n` pregões até t.
 
     `ValueError` se t não é pregão de `cal`. Só olha preços até t (sem vazamento).
     `defasagem_max`: repassado a `retornos_suspeitos` (produção passa `fase1.base_defasagem_max_pregoes`).
+    `eventos`: repassado a `retornos_suspeitos` (produção passa `fase1.eventos_retorno_suspeito`).
     """
     ts = pd.Timestamp(t).normalize()
     g = grade_de_precos(precos, cal, "fechamento_ajustado", tickers)
     if ts not in g.index:
         raise ValueError(f"{t} não é pregão")
-    linha = suspeita_na_janela(retornos_suspeitos(g, minimo, maximo, defasagem_max), n).loc[ts]
+    linha = suspeita_na_janela(retornos_suspeitos(g, minimo, maximo, defasagem_max, eventos), n).loc[ts]
     return {tk for tk, v in linha.items() if bool(v)}
 
 
@@ -466,7 +522,8 @@ def calcular_precos(
     res["cotacao.variacao_dia"] = variacao(g_fech, 1, n_max)
     # import local: fatos/series.py importa este módulo (importar no topo daria importação circular)
     from processamento.fatos.series import rentabilidade_setor_sem_empresa
-    suspeitos = retornos_suspeitos(g_aj, params.retorno_suspeito_min, params.retorno_suspeito_max, n_max)
+    suspeitos = retornos_suspeitos(g_aj, params.retorno_suspeito_min, params.retorno_suspeito_max, n_max,
+                                   params.eventos_retorno_suspeito)
     setor_rent = rentabilidade_setor_sem_empresa(g_aj, cadastro, pares, tickers, params.janelas,
                                                  params.setor_excluir, suspeitos=suspeitos, defasagem_max=n_max)
     for nome, n in params.janelas.items():

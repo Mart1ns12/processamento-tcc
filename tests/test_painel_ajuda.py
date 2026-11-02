@@ -1,10 +1,13 @@
 import re
 from pathlib import Path
 
-from processamento.painel import ajuda
+from processamento.painel import ajuda, leitores
 from processamento.painel.ajuda import (
     AJUDA, CAMPOS, GLOSSARIO, O_QUE_FAZER, campos_do_texto, montar_ajuda,
 )
+
+RAIZ_REAL = Path(__file__).resolve().parents[1]   # só leitura do parametros.yaml real
+RAIZ_FIXTURA = Path(__file__).resolve().parent / "dados" / "painel" / "raiz"
 
 IDS = {"resumo", "fluxo", "coleta", "processamento", "interface", "pacotes", "contrato", "rodada",
        "carga_vs_rotina", "linha_tempo", "prazo", "folga", "saude", "saude_contrato",
@@ -111,6 +114,26 @@ def test_codigo_do_modulo_sem_termos_proibidos_no_painel():
     fonte = Path(ajuda.__file__).read_text(encoding="utf-8")
     for termo in ["SELECT", ".env", "executar_leitura"]:
         assert termo not in fonte, termo
+
+
+def test_ajuda_de_retornos_cita_os_dois_eventos_com_motivo_do_yaml_real():
+    texto = montar_ajuda(leitores.ler_valores_ajuda(RAIZ_REAL))["saude_retornos"]["texto"]
+    assert "Também são tratados como suspeitos, mesmo dentro dos limites" in texto
+    assert "PCAR3 (23/08/2023): Cisão do Éxito, sem ajuste no preço." in texto
+    assert ("NATU3 (27/06/2025, 30/06/2025, 01/07/2025, 02/07/2025): "
+            "Preço parado sem volume antes do 1º negócio (NTCO3 → NATU3).") in texto
+    assert "sem dados" not in texto
+
+
+def test_ajuda_de_retornos_sem_eventos_nao_fala_de_eventos():
+    # a fixture do painel tem `eventos_retorno_suspeito: []`
+    assert leitores.ler_valores_ajuda(RAIZ_FIXTURA)["eventos_suspeitos"] is None
+    texto = montar_ajuda(leitores.ler_valores_ajuda(RAIZ_FIXTURA))["saude_retornos"]["texto"]
+    assert "Também são tratados" not in texto
+    assert "sem dados" not in texto
+    sem_campo = {k: v for k, v in leitores.ler_valores_ajuda(RAIZ_FIXTURA).items() if k != "eventos_suspeitos"}
+    assert texto == montar_ajuda(sem_campo)["saude_retornos"]["texto"]
+    assert texto.endswith("esses dias voltam a entrar sozinhos.")
 
 
 def test_glossario_tem_15_itens_na_ordem():

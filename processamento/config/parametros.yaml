@@ -158,6 +158,14 @@ fase1:
   retorno_suspeito_min: -0.75          # retorno diário (fechamento_ajustado, contra o último preço) abaixo disto = suspeito (erro da coleta; seção 6)
   retorno_suspeito_max: 1.0            # acima disto = suspeito (ex.: AZUL3 com 30.599.848 de 09/04 a 17/04/2026)
   retorno_suspeito_pregoes_nivel: 21   # P/L, P/VP e yield: empresa fora das medianas do setor se teve retorno suspeito nos últimos N pregões até t
+  # Eventos conhecidos abaixo dos limites, tratados como retorno suspeito (mesma máscara). Decisão do usuário, 02/11/2026.
+  eventos_retorno_suspeito:
+    - ticker: PCAR3
+      datas: ["2023-08-23"]
+      motivo: "Cisão do Éxito, sem ajuste no preço"
+    - ticker: NATU3
+      datas: ["2025-06-27", "2025-06-30", "2025-07-01", "2025-07-02"]
+      motivo: "Preço parado sem volume antes do 1º negócio (NTCO3 → NATU3)"
 # Fase 1: fundamentos e proventos (seções 5 e 6 da especificação; plano da etapa 4).
 fundamentos:
   # bancos, seguradoras e holdings (subsetor do v1-cadastro): margens, EBITDA e endividamento = nao_se_aplica.

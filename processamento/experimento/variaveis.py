@@ -140,7 +140,7 @@ def dy_12m_de_proventos(proventos, cadastro, mudancas, precos, cal, tickers, mes
     g_aj = fatos_precos.grade_de_precos(precos, cal, "fechamento_ajustado", tickers)
     suspeitos = fatos_precos.retornos_suspeitos(
         g_aj, params_precos.retorno_suspeito_min, params_precos.retorno_suspeito_max,
-        params_precos.base_defasagem_max_pregoes,
+        params_precos.base_defasagem_max_pregoes, params_precos.eventos_retorno_suspeito,
     )
     return dy_12m(ligar_proventos(proventos, cadastro, mudancas), g_fech, suspeitos, meses)
 
@@ -187,7 +187,7 @@ def variaveis_de_preco(
     # a janela com o salto fica vazia e o preço não é corrigido
     suspeitos = fatos_precos.retornos_suspeitos(
         g_aj, params_precos.retorno_suspeito_min, params_precos.retorno_suspeito_max,
-        params_precos.base_defasagem_max_pregoes,
+        params_precos.base_defasagem_max_pregoes, params_precos.eventos_retorno_suspeito,
     )
 
     res: dict[str, pd.DataFrame] = {}

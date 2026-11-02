@@ -153,4 +153,4 @@ Ele só lê o período de desenvolvimento, não abre o teste final e não grava 
 | Empresa × ano coberto no universo, sem nenhum documento | 0 casos em 82.489 linhas |
 | Ticker do universo sem nenhum provento | 0 casos em 98.934 linhas |
 | Reapresentações de Fato Relevante | 197 de 3.487; 60 sem original (mesma referência ou até 10 dias antes). **Corrigido:** contam como evento na própria `data_entrega`, se entregues até 10 dias depois da referência (58 das 60) |
-| JBS | JBSS3 não tem preços nem proventos; JBSS32 tem todos os preços desde 2019 e é BDR. **Decidido: a JBS fica fora do universo.** Limitação do TCC (seção 3.4 da especificação) |
+| JBS | `v1-precos` tem JBSS3 de 30/12/2019 a 06/06/2025 e JBSS32 de 09/06/2025 em diante; nenhum provento dos dois códigos; documentos da CVM só desde 2025. **Decidido (02/11/2026): a JBS fica fora do universo por exclusão explícita em `exclusoes.yaml`**; dy_12m e fato_relevante_cvm seriam zeros falsos. Volta quando a coleta trouxer proventos, balanços e documentos da CVM do período. Limitação do TCC (seção 3.4 da especificação) |

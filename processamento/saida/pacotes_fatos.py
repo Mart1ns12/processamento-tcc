@@ -70,7 +70,8 @@ def calcular_grades(ins: Insumos, params_precos: ParametrosPrecos, params_fund: 
     fora = tickers_com_suspeita(ins.precos, ins.cal, ins.t, tickers_do_painel(ins.cadastro, ins.exclusoes),
                                 params_precos.retorno_suspeito_min, params_precos.retorno_suspeito_max,
                                 params_precos.retorno_suspeito_pregoes_nivel,
-                                params_precos.base_defasagem_max_pregoes)
+                                params_precos.base_defasagem_max_pregoes,
+                                params_precos.eventos_retorno_suspeito)
     return GradesDoDia(
         precos=calcular_precos(ins.precos, ins.cadastro, ins.cal, ins.exclusoes, params_precos),
         indices=calcular_indices(ins.precos, ins.indices, ins.cal, params_precos),
