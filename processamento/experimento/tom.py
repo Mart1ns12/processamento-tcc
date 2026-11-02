@@ -12,7 +12,7 @@ from datetime import date
 import numpy as np
 import pandas as pd
 
-from processamento.experimento.parametros import ParametrosExperimento
+from processamento.experimento.parametros import ParametrosExperimento, mascara_sem_coleta
 
 COLUNAS_NOTICIAS = [
     "noticias_dia_qtd",
@@ -50,9 +50,17 @@ def _consultar(grade: pd.DataFrame, datas: pd.DatetimeIndex, empresas: pd.Series
 
 
 def _media_base(
-    nots: pd.DataFrame, cal_ts: pd.DatetimeIndex, pregoes: int, minimo: int, cobertura: pd.Timestamp | None
+    nots: pd.DataFrame,
+    cal_ts: pd.DatetimeIndex,
+    pregoes: int,
+    minimo: int,
+    cobertura: pd.Timestamp | None,
+    periodos_sem_coleta: tuple = (),
 ) -> pd.DataFrame:
-    """Média dos scores da empresa nos `pregoes` pregões ANTERIORES a cada data (sem t); NaN fora das regras."""
+    """Média dos scores da empresa nos `pregoes` pregões ANTERIORES a cada data (sem t); NaN fora das regras.
+
+    Como no início da cobertura, a base exige a janela inteira coberta: se tocar um período sem coleta, fica NaN.
+    """
     por = nots.groupby(["pregao_ref", "empresa"])["score"].agg(soma="sum", n="count")
     soma = por["soma"].unstack("empresa").reindex(cal_ts).fillna(0.0)
     contagem = por["n"].unstack("empresa").reindex(cal_ts).fillna(0.0)
@@ -62,7 +70,9 @@ def _media_base(
     if cobertura is not None:
         inicio_janela = pd.Series(cal_ts.to_numpy(), index=cal_ts).shift(pregoes)
         media = media.where(inicio_janela >= cobertura, axis=0)
-    return media
+    sem_coleta = pd.Series(mascara_sem_coleta(cal_ts, periodos_sem_coleta).astype(float), index=cal_ts)
+    toca_periodo = sem_coleta.rolling(pregoes, min_periods=1).max().shift(1) > 0
+    return media.where(~toca_periodo, axis=0)
 
 
 def _tom_setor(datas: pd.DatetimeIndex, empresas: pd.Series, setores: pd.Series, tom: np.ndarray) -> np.ndarray:
@@ -102,6 +112,7 @@ def variaveis_de_noticias(
 
     `noite_aberta`: a janela do dia dessa data ainda não fechou; as 6 colunas ficam vazias.
     `cobertura_inicio`: antes dela não há notícias no banco; todas as colunas ficam vazias.
+    `params.periodos_sem_coleta`: pregões sem coleta também ficam vazios (ausência, nunca `qtd = 0`).
     """
     cal_ts = pd.DatetimeIndex(pd.to_datetime(list(cal))).sort_values()
     nots = nots.assign(
@@ -125,13 +136,17 @@ def variaveis_de_noticias(
     qtd = np.where(dentro_do_calendario & np.isnan(qtd), 0.0, qtd)
     extremo_dia = _consultar(ext_g, datas, empresas)
 
-    base = _media_base(nots, cal_ts, params.mudanca_tom_pregoes, params.mudanca_tom_minimo, cobertura_inicio)
+    base = _media_base(
+        nots, cal_ts, params.mudanca_tom_pregoes, params.mudanca_tom_minimo, cobertura_inicio,
+        params.periodos_sem_coleta,
+    )
     mudanca = tom - _consultar(base, datas, empresas)
 
     tom_setor = _tom_setor(datas, empresas, linhas["setor"], tom)
     tom_mercado = _tom_mercado(dia_df[["pregao_ref", "empresa", "id", "score"]], datas, empresas)
 
     coberta = np.ones(n, dtype=bool) if cobertura_inicio is None else np.asarray(datas >= cobertura_inicio)
+    coberta = coberta & ~mascara_sem_coleta(datas, params.periodos_sem_coleta)
     noite_fechada = (
         np.zeros(n, dtype=bool) if noite_aberta is None else np.asarray(datas == pd.Timestamp(noite_aberta))
     )

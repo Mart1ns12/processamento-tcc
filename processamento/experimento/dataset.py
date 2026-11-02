@@ -27,7 +27,11 @@ from processamento import calendario, fontes
 from processamento.exclusoes import carregar_exclusoes
 from processamento.experimento.alvo import alvos
 from processamento.experimento.noticias import VERSOES, preparar_noticias
-from processamento.experimento.parametros import ParametrosExperimento, carregar_parametros_experimento
+from processamento.experimento.parametros import (
+    ParametrosExperimento,
+    carregar_parametros_experimento,
+    mascara_sem_coleta,
+)
 from processamento.experimento.preparacao import COLUNAS_ALVO, COLUNAS_RANK, IDENTIFICACAO
 from processamento.experimento.resultados import dias_de_resultado
 from processamento.experimento.tom import COLUNAS_NOTICIAS, variaveis_de_noticias
@@ -139,6 +143,7 @@ def montar_dataset(
         "versao_noticias": versao_noticias,
         "inicio_janela_efetivo": "fechamento" if versao_noticias == "hora_real_noite" else params.inicio_janela,
         "cobertura_inicio": None if cobertura is None else cobertura.date().isoformat(),
+        "pregoes_sem_coleta": int(mascara_sem_coleta(cal, params.periodos_sem_coleta).sum()),
         "setor_herdado": {t: herdados[t][1] for t in sorted(herdados) if herdados[t][1] is not None},
     }
     return df, info

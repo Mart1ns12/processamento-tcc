@@ -72,6 +72,7 @@ def coletar(ler, mapa) -> list[dict]:
         _seguro("Quantidade de ações suspeita", temas.secao_quantidade_acoes, ler, mapa, existentes),
         _seguro("Retornos diários suspeitos", temas.secao_retornos_suspeitos, ler, mapa, existentes),
         _seguro("Lacunas nas séries de preços e índices", lacunas.secao_lacunas, ler, mapa, existentes),
+        _seguro("Notícias por mês", lacunas.secao_noticias_por_mes, ler, mapa, existentes),
         _seguro("Colunas vazias", consultas.secao_vazios, ler, mapa, existentes, df_colunas),
         _seguro("Gatilho da coleta e composição", temas.secao_painel, ler, mapa, existentes),
         _seguro("Histórico novo", historico.secao_historico, ler, mapa, existentes),

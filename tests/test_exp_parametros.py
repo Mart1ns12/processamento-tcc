@@ -1,11 +1,14 @@
 """Testes do bloco `experimento` de config/parametros.yaml (plano da etapa 5, fase 1)."""
 
+from datetime import date
+
 import pytest
 
 from processamento import calendario
 from processamento.experimento.parametros import (
     ErroParametrosExperimento,
     carregar_parametros_experimento,
+    mascara_sem_coleta,
 )
 
 _CABECALHO_YAML = """fuso: "America/Sao_Paulo"
@@ -29,6 +32,8 @@ _BLOCO_VALIDO = """experimento:
   deduplicar_entre_origens: true
   janela_dias_entre_origens: 1
   titulo_palavras_min_entre_origens: 5
+  periodos_sem_coleta: []
+  noticias_mes_fracao_minima: 0.25
   principais:
     origens: ["cvm_ipe"]
     tipos_conteudo: ["reportagem"]
@@ -59,6 +64,7 @@ def test_arquivo_real_carrega_os_valores_do_plano():
     assert params.origens_principais == ("cvm_ipe",)
     assert params.tipos_principais == ("reportagem",)
     assert params.papeis_principais == ("protagonista", "citada_com_fato")
+    assert params.periodos_sem_coleta == ((date(2025, 1, 1), date(2025, 7, 31)),)
 
 
 def test_calendario_continua_carregando_com_o_bloco_experimento():
@@ -127,3 +133,34 @@ def test_papeis_vazio_da_erro(tmp_path):
     caminho = _escrever(tmp_path, _BLOCO_VALIDO.replace('papeis: ["protagonista", "citada_com_fato"]', "papeis: []"))
     with pytest.raises(ErroParametrosExperimento, match="papeis"):
         carregar_parametros_experimento(caminho)
+
+
+# --- períodos sem coleta ---------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "valor, trecho",
+    [
+        ('{inicio: "2025-01-01"}', "periodos_sem_coleta"),
+        ('[{inicio: 2025-01-01, fim: "2025-07-31"}]', "entre aspas"),
+        ('[{inicio: "2025-08-01", fim: "2025-07-31"}]', "depois do fim"),
+        ('[{inicio: "2025-01-01"}]', "faltam chaves"),
+    ],
+)
+def test_periodos_sem_coleta_invalidos(tmp_path, valor, trecho):
+    caminho = _escrever(tmp_path, _BLOCO_VALIDO.replace("periodos_sem_coleta: []", f"periodos_sem_coleta: {valor}"))
+    with pytest.raises(ErroParametrosExperimento, match=trecho):
+        carregar_parametros_experimento(caminho)
+
+
+def test_periodos_sem_coleta_sem_a_chave_da_erro(tmp_path):
+    caminho = _escrever(tmp_path, _BLOCO_VALIDO.replace("  periodos_sem_coleta: []\n", ""))
+    with pytest.raises(ErroParametrosExperimento, match="faltam chaves"):
+        carregar_parametros_experimento(caminho)
+
+
+def test_mascara_sem_coleta_limites_inclusivos():
+    periodos = ((date(2025, 1, 1), date(2025, 7, 31)),)
+    datas = ["2024-12-30", "2025-01-02", "2025-07-31", "2025-08-01"]
+    assert mascara_sem_coleta(datas, periodos).tolist() == [False, True, True, False]
+    assert mascara_sem_coleta(datas, ()).tolist() == [False] * 4

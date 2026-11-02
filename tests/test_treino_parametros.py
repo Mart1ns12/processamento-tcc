@@ -51,6 +51,7 @@ def _escrever(tmp_path, bloco: str) -> str:
 
 def test_arquivo_real_carrega_os_valores_do_plano():
     params = carregar_parametros_treino()
+    assert params.inicio_experimento == "2021-01-01"
     assert params.teste_final_inicio == date(2026, 6, 23)
     assert params.teste_final_fim is None
     assert params.teste_final_liberado is False

@@ -13,6 +13,7 @@ from fabrica_experimento import CADASTRO_INTEGRACAO, EXCLUSOES_INTEGRACAO, dados
 from fabrica_precos import pregoes_uteis
 from processamento.exclusoes import Exclusoes
 from processamento.experimento.dataset import COLUNAS_DATASET, DadosExperimento, montar_dataset
+from processamento.experimento.parametros import carregar_parametros_experimento
 from processamento.experimento.preparacao import COLUNAS_ALVO, COLUNAS_BRUTAS, preparar
 from processamento.experimento.tom import COLUNAS_NOTICIAS
 from processamento.universo import montar_universo
@@ -211,3 +212,17 @@ def test_sem_probabilidade_conta_as_preparadas_com_score_vazio(caso):
     _, info = montar_dataset(dados, caso["cal"])
     assert info["preparadas"] == 2
     assert info["sem_probabilidade"] == 2
+
+
+def test_periodo_sem_coleta_deixa_noticias_vazias_e_conta_no_info(caso):
+    cal = caso["cal"]
+    params = dataclasses.replace(
+        carregar_parametros_experimento(), periodos_sem_coleta=((cal[20], cal[21]),)
+    )
+    df, info = montar_dataset(caso["dados"], cal, params=params)
+    assert info["pregoes_sem_coleta"] == 2
+    dentro = df[df["data"].isin([pd.Timestamp(cal[20]), pd.Timestamp(cal[21])])]
+    assert len(dentro) > 0 and dentro[COLUNAS_NOTICIAS].isna().all(axis=None)
+    assert df.loc[df["data"] == pd.Timestamp(cal[19]), "noticias_dia_qtd"].notna().all()
+    # preço e alvo não mudam
+    assert dentro["ret_1d"].notna().any()

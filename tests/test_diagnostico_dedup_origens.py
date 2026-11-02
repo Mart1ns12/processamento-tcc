@@ -92,7 +92,8 @@ def test_secao_1_conta_regras_e_titulo_com_url(cenario):
     assert sec["titulo_com_url"] == 1  # o par de título também casa por URL
     assert sec["url_fora_de_um_dia"] == 1  # a remoção por URL tem 10 dias
     assert sec["segurados"] == 0  # os títulos têm 6 palavras: o mínimo não segura nada aqui
-    assert list(sec["por_origem"]["pares"]) == [2]  # google_news removida, wordpress mantida, nos dois pares
+    # mesmo dia: cai a google_news (hora real desempata); URL a 10 dias: cai a wordpress (a data mais antiga vence)
+    assert list(sec["por_origem"]["pares"]) == [1, 1]
 
 
 def test_secao_2_pares_por_url_entre_origens(cenario):

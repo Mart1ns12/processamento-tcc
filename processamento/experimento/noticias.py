@@ -88,8 +88,9 @@ def _url_util(*valores) -> str | None:
 def remover_entre_origens(df: pd.DataFrame, params: ParametrosExperimento) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Tira as cópias da mesma notícia entre origens diferentes. Devolve (df sem as removidas, pares).
 
-    Candidatas: origem diferente de cvm_ipe. Quem fica, na ordem de prioridade: com probabilidade antes de sem;
-    `precisao_hora == "hora"` antes (sem a coluna, não conta); menor `momento_ref`; menor `id`.
+    Candidatas: origem diferente de cvm_ipe. Quem fica, na ordem de prioridade: a `data_publicacao` mais antiga
+    (uma cópia posterior ao corte nunca muda o passado; sem data vai por último); na mesma data, com probabilidade
+    antes de sem; `precisao_hora == "hora"` antes (sem a coluna, não conta); menor `momento_ref`; menor `id`.
     Percorre as candidatas nessa ordem e cai a linha que casa com uma linha JÁ MANTIDA de OUTRA origem:
     - título (só com `deduplicar_titulo`): mesma empresa, mesmo `normalizar_titulo`, com pelo menos
       `titulo_palavras_min_entre_origens` palavras (no título normalizado) e |data_publicacao| até
@@ -148,7 +149,8 @@ def remover_entre_origens(df: pd.DataFrame, params: ParametrosExperimento) -> tu
         grupo |= com_titulo.groupby(["empresa", "tn"])["origem"].transform("nunique").reindex(w.index) > 1
     com_url = w[w["uk"].notna()]
     grupo |= com_url.groupby(["empresa", "uk"])["origem"].transform("nunique").reindex(w.index) > 1
-    g = w[grupo].sort_values(["sem_prob", "nao_hora", "momento", "id"], kind="mergesort")
+    w["dia_ordem"] = pd.to_numeric(w["dia"]).fillna(float("inf"))
+    g = w[grupo].sort_values(["dia_ordem", "sem_prob", "nao_hora", "momento", "id"], kind="mergesort")
 
     mantidas_t: dict = {}
     mantidas_u: dict = {}

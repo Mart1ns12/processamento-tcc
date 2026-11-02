@@ -248,7 +248,9 @@ def gerar(d: date, *, ler=None, pasta_saida: Path | None = None, pasta_modelos: 
         return quando_muda("proventos", pacotes_fatos.montar_proventos(ins, params_fund, gerado_em, dados_ate))
 
     def noticias():
-        return pacote_noticias.montar_noticias_dia(ins, janela(), gerado_em, dados_ate), [], None
+        return pacote_noticias.montar_noticias_dia(
+            ins, janela(), gerado_em, dados_ate, params_exp.periodos_sem_coleta
+        ), [], None
 
     def historico():
         fim = params_treino.teste_final_fim

@@ -10,6 +10,9 @@ import re
 from dataclasses import dataclass
 from datetime import date
 
+import numpy as np
+import pandas as pd
+
 from processamento import calendario
 
 _CHAVES = {
@@ -26,6 +29,8 @@ _CHAVES = {
     "deduplicar_entre_origens",
     "janela_dias_entre_origens",
     "titulo_palavras_min_entre_origens",
+    "periodos_sem_coleta",
+    "noticias_mes_fracao_minima",
     "principais",
 }
 _CHAVES_PRINCIPAIS = {"origens", "tipos_conteudo", "papeis"}
@@ -87,6 +92,17 @@ class ParametrosExperimento:
     origens_principais: tuple[str, ...]
     tipos_principais: tuple[str, ...]
     papeis_principais: tuple[str, ...]
+    periodos_sem_coleta: tuple[tuple[date, date], ...] = ()
+    noticias_mes_fracao_minima: float = 0.25
+
+
+def mascara_sem_coleta(datas, periodos: tuple[tuple[date, date], ...]) -> np.ndarray:
+    """True nas datas dentro de algum período sem coleta de notícias (limites inclusivos)."""
+    indice = pd.DatetimeIndex(pd.to_datetime(list(datas))).normalize()
+    mascara = np.zeros(len(indice), dtype=bool)
+    for inicio, fim in periodos:
+        mascara |= np.asarray((indice >= pd.Timestamp(inicio)) & (indice <= pd.Timestamp(fim)))
+    return mascara
 
 
 def _inteiro_positivo(valor: object, onde: str) -> int:
@@ -189,6 +205,10 @@ def carregar_parametros_experimento(caminho: str | None = None) -> ParametrosExp
         origens_principais=_lista_de_textos(principais["origens"], "experimento.principais.origens"),
         tipos_principais=_lista_de_textos(principais["tipos_conteudo"], "experimento.principais.tipos_conteudo"),
         papeis_principais=_lista_de_textos(principais["papeis"], "experimento.principais.papeis"),
+        periodos_sem_coleta=_periodos_sem_coleta(bloco["periodos_sem_coleta"]),
+        noticias_mes_fracao_minima=_real(
+            bloco["noticias_mes_fracao_minima"], "experimento.noticias_mes_fracao_minima", True
+        ),
     )
 
 
@@ -249,6 +269,22 @@ def _data_em_texto(valor: object, onde: str) -> date:
         return date.fromisoformat(valor)
     except ValueError as erro:
         raise ErroParametrosExperimento(f"{onde}: data inválida {valor!r} ({erro})") from erro
+
+
+def _periodos_sem_coleta(valor: object) -> tuple[tuple[date, date], ...]:
+    """Lista (pode ser vazia) de {inicio, fim}, com datas entre aspas e inicio <= fim."""
+    onde = "experimento.periodos_sem_coleta"
+    if not isinstance(valor, list):
+        raise ErroParametrosExperimento(f"{onde} deve ser uma lista de {{inicio, fim}} (vazia = nenhum período)")
+    periodos = []
+    for item in valor:
+        _chaves_exatas(item, {"inicio", "fim"}, onde)
+        inicio = _data_em_texto(item["inicio"], f"{onde}.inicio")
+        fim = _data_em_texto(item["fim"], f"{onde}.fim")
+        if inicio > fim:
+            raise ErroParametrosExperimento(f"{onde}: inicio {inicio} depois do fim {fim}")
+        periodos.append((inicio, fim))
+    return tuple(periodos)
 
 
 def _chaves_exatas(bloco: object, chaves: set[str], prefixo: str) -> None:

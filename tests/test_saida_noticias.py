@@ -6,7 +6,7 @@ Sem rede e sem banco: `banco_teste` é o SQLite de tests/dados (conftest). Nunca
 from __future__ import annotations
 
 import json
-from datetime import date
+from datetime import date, timedelta
 from zoneinfo import ZoneInfo
 
 import pandas as pd
@@ -174,3 +174,14 @@ def test_todos_os_registros_passam_no_contrato(banco_teste):
         for registro in regs.values():
             contrato.validar("noticias_dia", registro)
             json.dumps(registro, ensure_ascii=False, allow_nan=False)
+
+
+def test_periodo_sem_coleta_todas_as_folhas_indisponiveis():
+    ins = _insumos_do_plano()
+    janela = janela_do_dia(ins, PARAMS)
+    com_periodo = montar_noticias_dia(ins, janela, GERADO, DADOS_ATE, periodos_sem_coleta=((T, T),))
+    for registro in com_periodo:
+        assert registro["itens"] == []
+        assert all(folha["status"] == "indisponivel" and folha["valor"] is None for folha in registro["resumo"].values())
+    fora = montar_noticias_dia(ins, janela, GERADO, DADOS_ATE, periodos_sem_coleta=((T - timedelta(days=30), T - timedelta(days=20)),))
+    assert fora == montar_noticias_dia(ins, janela, GERADO, DADOS_ATE)

@@ -9,7 +9,7 @@ from __future__ import annotations
 import pandas as pd
 
 from processamento import calendario, tickers
-from processamento.experimento.parametros import ParametrosExperimento
+from processamento.experimento.parametros import ParametrosExperimento, mascara_sem_coleta
 from processamento.fatos import noticias as fatos_noticias
 from processamento.fatos.precos import mapas_cadastro, tickers_do_painel
 from processamento.saida import contrato
@@ -24,10 +24,15 @@ def janela_do_dia(ins: Insumos, params_exp: ParametrosExperimento) -> pd.DataFra
     )
 
 
-def montar_noticias_dia(ins: Insumos, janela: pd.DataFrame, gerado_em: str, dados_ate: str) -> list[dict]:
-    """Um registro por ticker do painel (ordem alfabética), com `resumo` e `itens` no formato do contrato."""
+def montar_noticias_dia(
+    ins: Insumos, janela: pd.DataFrame, gerado_em: str, dados_ate: str, periodos_sem_coleta: tuple = ()
+) -> list[dict]:
+    """Um registro por ticker do painel (ordem alfabética), com `resumo` e `itens` no formato do contrato.
+
+    Pregão t em período sem coleta fica como antes da cobertura: tudo `indisponivel`, nunca zero.
+    """
     _, cnpj_de = mapas_cadastro(ins.cadastro)
-    coberta = _coberta(ins)
+    coberta = _coberta(ins) and not mascara_sem_coleta([ins.t], periodos_sem_coleta)[0]
     inicio_janela = calendario.corte_manha(ins.t) + pd.Timedelta(seconds=1)
     registros = []
     for ticker in tickers_do_painel(ins.cadastro, ins.exclusoes):

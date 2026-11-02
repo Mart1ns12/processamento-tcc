@@ -47,24 +47,29 @@ def _instante(dia, hora: str) -> pd.Timestamp:
     return pd.Timestamp(f"{pd.Timestamp(dia):%Y-%m-%d} {hora}").tz_localize(SP)
 
 
-def noticias_de(linhas: list[tuple]) -> pd.DataFrame:
+def noticias_de(linhas: list[tuple], campos: dict | None = None) -> pd.DataFrame:
     """Linhas de `fontes.ler_noticias`, a partir de (id, ticker, instante, dia, pp, pn, origem, papel, tipo).
 
     `instante` é `data_hora_publicacao` (SP) ou None (sem hora). `momento_ref` segue `ler_noticias`:
     a hora, ou 23:59:59 do dia de publicação. Depois, `fontes.aplicar_regra_so_data` (como na leitura
     real): 04:00 ou 05:00 de SP vira "só data" (meia-noite do Pacífico).
+    `campos` (id -> dict com `titulo`, `link`, `resolved_url`) troca o título padrão ("titulo <id>") e
+    preenche as URLs; sem ele, `link` e `resolved_url` ficam nulos.
     """
     registros = []
     for id_, ticker, instante, dia, pp, pn, origem, papel, tipo in linhas:
         data_pub = pd.Timestamp(dia).normalize()
         fim_do_dia = data_pub.tz_localize(SP) + pd.Timedelta(hours=23, minutes=59, seconds=59)
+        extra = (campos or {}).get(id_, {})
         registros.append({
             "id": id_,
             "ticker": ticker,
             "data_hora_publicacao": instante,
             "data_publicacao": data_pub,
             "momento_ref": fim_do_dia if instante is None else instante,
-            "titulo": f"titulo {id_}",
+            "titulo": extra.get("titulo", f"titulo {id_}"),
+            "link": extra.get("link"),
+            "resolved_url": extra.get("resolved_url"),
             "prob_positivo": float(pp),
             "prob_neutro": 1.0 - float(pp) - float(pn),
             "prob_negativo": float(pn),
@@ -231,6 +236,50 @@ def alterado(m: dict) -> dict:
         ignore_index=True,
     )
     return {"cal": m["cal"], "precos": precos, "noticias": noticias, "balancos": balancos}
+
+
+def em_t(m: dict, indice: int) -> dict:
+    """Cópia de `m` com t = cal[indice] e t1 = cal[indice + 1]: o mesmo mundo, outro dia de corte."""
+    return {**m, "t": m["cal"][indice], "t1": m["cal"][indice + 1]}
+
+
+def sem_pregao(m: dict, dia) -> dict:
+    """Cópia de `m` sem o pregão `dia` (feriado): sai de cal, de precos e das notícias datadas nele."""
+    d = pd.Timestamp(dia)
+    return {
+        **m,
+        "cal": [x for x in m["cal"] if x != dia],
+        "precos": m["precos"][m["precos"]["data"] != d].reset_index(drop=True),
+        "noticias": m["noticias"][m["noticias"]["data_publicacao"] != d].reset_index(drop=True),
+    }
+
+
+def so_t1_alterado(m: dict) -> dict:
+    """Só os preços de t+1 mudam (×1.05, todos menos IBOV). Volumes e notícias ficam iguais.
+
+    Nas linhas de t só as colunas de alvo podem mudar (ret_t1, alvo, alvo_abertura...). ×1.05 é
+    pequeno de propósito: um salto de ×3 cairia no retorno suspeito e zeraria o alvo.
+    """
+    t1 = pd.Timestamp(m["t1"])
+    precos = m["precos"].copy()
+    mascara = (precos["data"] == t1) & (precos["ticker"] != "IBOV")
+    colunas_preco = ["abertura", "maxima", "minima", "fechamento", "fechamento_ajustado"]
+    precos.loc[mascara, colunas_preco] = precos.loc[mascara, colunas_preco] * 1.05
+    return {"cal": m["cal"], "precos": precos, "noticias": m["noticias"], "balancos": m["balancos"]}
+
+
+def depois_de_t1_alterado(m: dict) -> dict:
+    """Preços e volumes de todas as datas depois de t+1 mudam (×3 e ×10, como em `alterado`).
+
+    As linhas de t, inclusive as colunas de alvo, têm de ficar iguais: o alvo olha só t+1.
+    """
+    t1 = pd.Timestamp(m["t1"])
+    precos = m["precos"].copy()
+    depois = precos["data"] > t1
+    colunas_preco = ["abertura", "maxima", "minima", "fechamento", "fechamento_ajustado"]
+    precos.loc[depois, colunas_preco] = precos.loc[depois, colunas_preco] * 3
+    precos.loc[depois, "volume"] = precos.loc[depois, "volume"] * 10
+    return {"cal": m["cal"], "precos": precos, "noticias": m["noticias"], "balancos": m["balancos"]}
 
 
 # ---------------------------------------------------------- mundo pequeno com casos exatos (integração)

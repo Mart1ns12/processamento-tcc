@@ -1,23 +1,29 @@
-"""Lacunas nas séries de preços e índices (nota do diagnóstico; seção 6 da especificação, "Base velha").
+"""Lacunas nas séries de preços e índices (nota do diagnóstico; seção 6 da especificação, "Base velha"),
+e meses com poucas notícias (`secao_noticias_por_mes`).
 
-Só notas e tabelas (não é divergência). Lê só por `fontes.ler_tabela` (camada de leitura, sessão só leitura).
+Só notas e tabelas (não é divergência). Lê só por `fontes.ler_tabela` / `fontes.ler_noticias` (camada de leitura, sessão só leitura).
 """
 
 from __future__ import annotations
 
 from datetime import date
+from statistics import median
 
 import pandas as pd
 
 from processamento import calendario, fontes
 from processamento.diagnostico.regras import adicionar_tabela, nova_secao
 from processamento.diagnostico.temas import _existe, _pulada
+from processamento.experimento.parametros import carregar_parametros_experimento
 from processamento.fatos.precos import carregar_parametros_precos
 
 INDICES_PREGOES = ("CDI", "IDIV", "IFIX", "SMLL")   # ordem da tabela (alfabética); o IPCA vem por último, em meses
 COLUNAS = ["serie", "inicio", "fim", "tamanho", "unidade"]
 REGRA_INDICES = ("IDIV, SMLL e IFIX: mais de {n} pregões, inclusive no fim; CDI: qualquer pregão sem taxa no meio e "
                  "mais de {n} no fim; IPCA: meses faltando e atraso de mais de {m} meses no fim")
+REFERENCIA_NOTICIAS = 12        # meses anteriores que formam a mediana de referência
+MINIMO_REFERENCIA_NOTICIAS = 6  # abaixo disso o mês não é avaliado
+COLUNAS_NOTICIAS = ["mes", "artigos", "mediana_referencia", "situacao"]
 
 
 def lacunas_em_pregoes(datas_com_valor, cal: list, minimo: int,
@@ -114,4 +120,91 @@ def secao_lacunas(ler, mapa: dict, existentes: set) -> dict:
         adicionar_tabela(secao, "Lacunas em v1-indices", COLUNAS, linhas)
     else:
         secao["notas"].append(f"nenhuma lacuna em v1-indices ({regra})")
+    return secao
+
+
+def _sobrepoe(mes: pd.Period, periodos) -> bool:
+    """Diz se o mês cruza algum período de `periodos` (datas inclusivas)."""
+    ini, fim = mes.start_time.date(), mes.end_time.date()
+    return any(ini <= p_fim and fim >= p_ini for p_ini, p_fim in periodos)
+
+
+def _avaliar_meses_noticias(contagem: dict, fracao: float, periodos, referencia: int,
+                            minimo_referencia: int) -> tuple[list[dict], list[str], int]:
+    """Núcleo de `meses_com_poucas_noticias`: devolve (meses baixos, meses do período sem baixa, nº avaliado)."""
+    if not contagem:
+        return [], [], 0
+    ms = sorted(pd.Period(m, "M") for m in contagem)
+    todos = pd.period_range(ms[0], ms[-1], freq="M")
+    baixos, rever, avaliados = [], [], 0
+    usaveis: list[int] = []   # artigos dos meses de referência (não baixos e fora do período), em ordem
+    for mes in todos[:-1]:   # o último mês da contagem é incompleto: não avalia nem entra na referência
+        rotulo = str(mes)
+        artigos = contagem.get(rotulo, 0)
+        do_periodo = _sobrepoe(mes, periodos)
+        ref = usaveis[-referencia:]
+        if len(ref) < minimo_referencia:
+            if not do_periodo:
+                usaveis.append(artigos)
+            continue
+        avaliados += 1
+        mediana = median(ref)
+        if artigos < fracao * mediana:
+            situacao = "cadastrado" if do_periodo else "rever: fora de periodos_sem_coleta"
+            mediana_ref = int(mediana) if mediana == int(mediana) else round(mediana, 1)
+            baixos.append({"mes": rotulo, "artigos": artigos, "mediana_referencia": mediana_ref,
+                           "situacao": situacao})
+        elif do_periodo:
+            rever.append(rotulo)
+        else:
+            usaveis.append(artigos)
+    return baixos, rever, avaliados
+
+
+def meses_com_poucas_noticias(contagem: dict[str, int], fracao: float, periodos: tuple[tuple[date, date], ...],
+                              referencia: int = REFERENCIA_NOTICIAS,
+                              minimo_referencia: int = MINIMO_REFERENCIA_NOTICIAS) -> tuple[list[dict], list[str]]:
+    """Meses com poucas notícias e meses do período que não ficaram baixos.
+
+    `contagem`: "AAAA-MM" -> artigos distintos. O último mês da contagem é incompleto: não é avaliado. Meses
+    ausentes entre o 1º e o último valem 0. Referência de um mês: até `referencia` meses anteriores que não são
+    baixos nem do período; com menos de `minimo_referencia`, o mês não é avaliado. Baixo: artigos < fracao × mediana.
+    Devolve (linhas dos baixos: mes, artigos, mediana_referencia, situacao; "AAAA-MM" do período sem baixa, com
+    referência suficiente, que sugere rever `periodos_sem_coleta`).
+    """
+    baixos, rever, _ = _avaliar_meses_noticias(contagem, fracao, periodos, referencia, minimo_referencia)
+    return baixos, rever
+
+
+def secao_noticias_por_mes(ler, mapa: dict, existentes: set) -> dict:
+    """Meses com poucas notícias (nota e tabela; nunca divergência). Parâmetros em `experimento` (parametros.yaml)."""
+    secao = nova_secao("Notícias por mês")
+    if not _existe(mapa, existentes, "noticias"):
+        secao["notas"].append(_pulada(mapa, "noticias"))
+        return secao
+    params = carregar_parametros_experimento()
+    fracao = params.noticias_mes_fracao_minima
+    noticias = fontes.ler_noticias(ler=ler)
+    meses = pd.to_datetime(noticias["data_publicacao"], errors="coerce").dt.to_period("M")
+    validos = pd.DataFrame({"mes": meses, "id": noticias["id"]}).dropna(subset=["mes"])
+    contagem = {str(m): int(n) for m, n in validos.groupby("mes")["id"].nunique().items()}
+    baixos, rever, avaliados = _avaliar_meses_noticias(
+        contagem, fracao, params.periodos_sem_coleta, REFERENCIA_NOTICIAS, MINIMO_REFERENCIA_NOTICIAS)
+    limite = f"{fracao * 100:g}%"
+    secao["notas"].append(
+        f"{avaliados} meses avaliados (mês abaixo de {limite} da mediana dos até {REFERENCIA_NOTICIAS} meses "
+        f"anteriores; o último mês da coleta fica de fora por estar incompleto)")
+    if baixos:
+        adicionar_tabela(secao, "Meses com poucas notícias", COLUNAS_NOTICIAS,
+                         [[l[c] for c in COLUNAS_NOTICIAS] for l in baixos])
+    else:
+        secao["notas"].append(f"nenhum mês abaixo de {limite} da mediana dos meses anteriores")
+    fora = sum(1 for l in baixos if l["situacao"].startswith("rever: fora"))
+    if fora:
+        secao["notas"].append(
+            f"Atenção: {fora} mês(es) com poucas notícias fora de experimento.periodos_sem_coleta: rever o parâmetro.")
+    if rever:
+        secao["notas"].append(
+            f"Atenção: período sem coleta com notícias normais em {', '.join(rever)}: a coleta pode ter preenchido; "
+            f"rever experimento.periodos_sem_coleta.")
     return secao

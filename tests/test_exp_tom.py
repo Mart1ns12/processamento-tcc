@@ -254,3 +254,56 @@ def test_mudanca_tom_conta_so_noticias_com_score():
     assert _mudanca_g(_nots(*base, *hoje, *sem_score)) == pytest.approx(0.3, abs=1e-12)
     # com 4 notícias com score na base e 3 sem score, não chega ao mínimo de 5: NaN
     assert np.isnan(_mudanca_g(_nots(*base[:4], *hoje, *sem_score, ("i", "1", "dia", "2026-06-16", NAN))))
+
+
+# ---------------------------------------------------------------- períodos sem coleta (seção 7.3, E4)
+
+CAL_BURACO = list(pd.bdate_range("2025-06-02", periods=30).strftime("%Y-%m-%d"))
+ULTIMO_DO_BURACO = CAL_BURACO[9]
+
+
+def _com_buraco():
+    return dataclasses.replace(
+        PARAMS,
+        mudanca_tom_pregoes=5,
+        mudanca_tom_minimo=2,
+        periodos_sem_coleta=((pd.Timestamp(CAL_BURACO[1]).date(), pd.Timestamp(ULTIMO_DO_BURACO).date()),),
+    )
+
+
+def _variaveis_buraco(params):
+    # a empresa "1" tem 1 notícia por pregão em todo o calendário, inclusive dentro do período
+    nots = _nots(*[(f"n{i}", "1", "dia", d, 0.2) for i, d in enumerate(CAL_BURACO)])
+    linhas = _linhas(*[(d, "XXXX3", "1", "S1") for d in CAL_BURACO], *[(d, "SEMN3", "2", "S1") for d in CAL_BURACO])
+    out = variaveis_de_noticias(
+        nots, linhas, CAL_BURACO, params, noite_aberta=None, cobertura_inicio=pd.Timestamp(CAL_BURACO[0])
+    )
+    return out.set_index(["data", "ticker"])
+
+
+@pytest.mark.parametrize("dia", [CAL_BURACO[1], ULTIMO_DO_BURACO])
+@pytest.mark.parametrize("ticker", ["XXXX3", "SEMN3"])
+def test_pregao_no_periodo_sem_coleta_fica_todo_vazio_e_nao_zero(dia, ticker):
+    linha = _variaveis_buraco(_com_buraco()).loc[(pd.Timestamp(dia), ticker)]
+    assert linha[COLUNAS_NOTICIAS].isna().all()
+
+
+def test_fora_do_periodo_empresa_sem_noticia_continua_com_qtd_zero():
+    out = _variaveis_buraco(_com_buraco())
+    assert out.loc[(pd.Timestamp(CAL_BURACO[0]), "SEMN3"), "noticias_dia_qtd"] == 0
+    assert out.loc[(pd.Timestamp(CAL_BURACO[10]), "SEMN3"), "noticias_dia_qtd"] == 0
+    assert out.loc[(pd.Timestamp(CAL_BURACO[10]), "XXXX3"), "noticias_dia_qtd"] == 1
+
+
+def test_mudanca_tom_fica_vazia_enquanto_a_base_toca_o_periodo():
+    # base de 5 pregões: último dia do período = índice 9; do índice 10 ao 14 a base toca o período; o 15 já não
+    out = _variaveis_buraco(_com_buraco()).xs("XXXX3", level="ticker")["mudanca_tom"]
+    assert out.loc[pd.Timestamp(CAL_BURACO[10]):pd.Timestamp(CAL_BURACO[14])].isna().all()
+    assert out.loc[pd.Timestamp(CAL_BURACO[15])] == pytest.approx(0.0)
+
+
+def test_sem_periodo_o_calculo_nao_muda():
+    params = dataclasses.replace(_com_buraco(), periodos_sem_coleta=())
+    out = _variaveis_buraco(params)
+    assert out.loc[(pd.Timestamp(CAL_BURACO[1]), "SEMN3"), "noticias_dia_qtd"] == 0
+    assert out.loc[(pd.Timestamp(CAL_BURACO[10]), "XXXX3"), "mudanca_tom"] == pytest.approx(0.0)

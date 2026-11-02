@@ -444,15 +444,24 @@ def test_entre_origens_pares_descrevem_a_remocao():
     assert par["empresa"] == CNPJ_DE["XXXX3"]
 
 
-def test_entre_origens_titulo_com_um_dia_de_diferenca_fica_a_wp():
-    # GN de 26/10 só-data; WP de 27/10 às 07:00: a WP vence pelo horário real, mesmo sendo a mais tarde
+def test_entre_origens_titulo_com_um_dia_de_diferenca_fica_a_mais_antiga():
+    # GN de 26/10 só-data; WP de 27/10 às 07:00: a data mais antiga vence; hora real só desempata na mesma data
     linhas = [
         so_data_gn(21, "2026-10-26"),
         hora_wp(22, "2026-10-27", "07:00:00"),
     ]
     saida, info = deduplicar(com_empresa(linhas), PARAMS)
-    assert list(saida["id"]) == [22]
+    assert list(saida["id"]) == [21]
     assert info["duplicadas_titulo_janela"] == 1 and info["duplicadas_titulo_mesmo_dia"] == 0
+
+
+def test_entre_origens_copia_posterior_com_probabilidade_nao_tira_a_antiga_sem():
+    linhas = [
+        so_data_gn(21, "2026-10-26", pp=None, pn=None),
+        hora_wp(22, "2026-10-27", "07:00:00"),
+    ]
+    saida, _ = deduplicar(com_empresa(linhas), PARAMS)
+    assert list(saida["id"]) == [21]
 
 
 def test_entre_origens_titulo_a_dois_dias_fica_tudo():
@@ -488,7 +497,7 @@ def test_entre_origens_url_resolvida_remove_sem_janela_de_data():
                 link="https://infomoney.com.br/x/?utm=1"),
     ]
     saida, info = deduplicar(com_empresa(linhas), PARAMS)
-    assert list(saida["id"]) == [22]
+    assert list(saida["id"]) == [21]  # a data mais antiga vence: a cópia de 27/10 não muda o dia 17/10
     assert info["duplicadas_url"] == 1 and info["duplicadas_titulo_janela"] == 0
 
 
@@ -499,7 +508,7 @@ def test_entre_origens_url_vale_com_titulo_de_duas_palavras():
         hora_wp(22, "2026-10-27", "10:00:00", titulo="Petro cai", link="https://infomoney.com.br/x/?utm=1"),
     ]
     saida, info = deduplicar(com_empresa(linhas), PARAMS)
-    assert list(saida["id"]) == [22]
+    assert list(saida["id"]) == [21]
     assert info["duplicadas_url"] == 1
 
 

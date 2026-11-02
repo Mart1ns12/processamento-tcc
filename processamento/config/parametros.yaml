@@ -186,6 +186,11 @@ experimento:
   deduplicar_entre_origens: true
   janela_dias_entre_origens: 1
   titulo_palavras_min_entre_origens: 5
+  # Períodos sem coleta de notícias: colunas de notícias vazias (nunca qtd = 0) e mudanca_tom vazia enquanto a base tocar o período.
+  # DATAS ENTRE ASPAS. Rever quando a coleta preencher (o diagnóstico avisa, seção "Notícias por mês").
+  periodos_sem_coleta:
+    - {inicio: "2025-01-01", fim: "2025-07-31"}
+  noticias_mes_fracao_minima: 0.25   # diagnóstico: mês abaixo desta fração da mediana dos 12 meses anteriores gera aviso
   principais:
     origens: ["cvm_ipe"]
     tipos_conteudo: ["reportagem"]
@@ -193,7 +198,7 @@ experimento:
 # Fase 2: treino e avaliação (seções 7.4–7.7; plano da etapa 6). Com ~1 ano de histórico: SÓ TESTE DE FUNCIONAMENTO.
 treino:
   semente: 20261023
-  inicio_experimento: "cobertura"   # "cobertura" = cobertura_inicio do JSON do dataset (1ª data com notícias) ou "AAAA-MM-DD"
+  inicio_experimento: "2021-01-01"  # "AAAA-MM-DD" ou "cobertura" = cobertura_inicio do JSON do dataset (1ª data com notícias)
   treino_minimo_meses: 3            # meses de treino antes da 1ª dobra de teste
   embargo_pregoes: 1
   teste_final:

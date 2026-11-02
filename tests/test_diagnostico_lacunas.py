@@ -3,6 +3,7 @@
 Sem banco e sem rede: `fontes.ler_tabela` é trocado por monkeypatch. Casos L1, L2 e L3 do plano (seção 2.3).
 """
 
+import dataclasses
 from datetime import date
 
 import pandas as pd
@@ -10,7 +11,16 @@ import pytest
 
 from fabrica_precos import indices_de, precos_de, pregoes_uteis
 from processamento import fontes
-from processamento.diagnostico.lacunas import COLUNAS, lacunas_em_meses, lacunas_em_pregoes, secao_lacunas
+from processamento.diagnostico import lacunas
+from processamento.diagnostico.lacunas import (
+    COLUNAS,
+    lacunas_em_meses,
+    lacunas_em_pregoes,
+    meses_com_poucas_noticias,
+    secao_lacunas,
+    secao_noticias_por_mes,
+)
+from processamento.experimento.parametros import carregar_parametros_experimento
 
 CAL = pregoes_uteis(20)   # 0 = 2025-01-02 ... 19 = 2025-01-29
 V = [CAL[i] for i in (0, 1, 8, 9, 10, 11, 12, 14, 15)]
@@ -186,3 +196,125 @@ def test_l3_so_precos_existe_indices_pulada(mapa, tabelas):
     assert len(secao["notas"]) == 2
     assert secao["notas"][0] == NOTA_PRECOS
     assert secao["notas"][1].startswith("pulada: tabela ausente")
+
+
+# Notícias por mês: meses_com_poucas_noticias (função pura)
+
+def _mensal_2024(valor=100):
+    """Contagem de 2024 inteiro com `valor` artigos por mês."""
+    return {f"2024-{m:02d}": valor for m in range(1, 13)}
+
+
+def test_n_a_baixos_fora_de_periodo_e_mes_ausente_vale_zero():
+    cont = {**_mensal_2024(), "2025-01": 10, "2025-03": 100, "2025-04": 100}
+    baixos, rever = meses_com_poucas_noticias(cont, 0.25, ())
+    assert baixos == [
+        {"mes": "2025-01", "artigos": 10, "mediana_referencia": 100, "situacao": "rever: fora de periodos_sem_coleta"},
+        {"mes": "2025-02", "artigos": 0, "mediana_referencia": 100, "situacao": "rever: fora de periodos_sem_coleta"},
+    ]
+    assert rever == []
+
+
+def test_n_b_baixos_dentro_de_periodo_viram_cadastrado():
+    cont = {**_mensal_2024(), "2025-01": 10, "2025-03": 100, "2025-04": 100}
+    periodos = ((date(2025, 1, 1), date(2025, 2, 28)),)
+    baixos, rever = meses_com_poucas_noticias(cont, 0.25, periodos)
+    assert [(l["mes"], l["situacao"]) for l in baixos] == [("2025-01", "cadastrado"), ("2025-02", "cadastrado")]
+    assert rever == []
+
+
+def test_n_c_mes_do_periodo_preenchido_deve_ser_revisto():
+    cont = {**_mensal_2024(), "2025-01": 100, "2025-02": 100}
+    periodos = ((date(2025, 1, 1), date(2025, 1, 31)),)
+    baixos, rever = meses_com_poucas_noticias(cont, 0.25, periodos)
+    assert baixos == []
+    assert rever == ["2025-01"]
+
+
+def test_n_d_historico_curto_nao_avalia_nada():
+    cont = {"2025-01": 100, "2025-02": 100, "2025-03": 100, "2025-04": 100}
+    assert meses_com_poucas_noticias(cont, 0.25, ()) == ([], [])
+
+
+def test_n_e_limite_estrito_25_nao_e_baixo_24_e():
+    cont = {**_mensal_2024(), "2025-01": 25, "2025-02": 100}
+    assert meses_com_poucas_noticias(cont, 0.25, ()) == ([], [])
+    cont["2025-01"] = 24
+    baixos, _ = meses_com_poucas_noticias(cont, 0.25, ())
+    assert [l["mes"] for l in baixos] == ["2025-01"]
+
+
+def test_n_f_mes_baixo_nao_entra_na_referencia_dos_seguintes():
+    # referência de 3 meses: 2025-04 (10) e 2025-05 (20) são baixos; se 2025-04 entrasse na referência de
+    # 2025-05, a mediana seria 30 e 20 não seria baixo (7,5 de corte)
+    cont = {"2025-01": 100, "2025-02": 100, "2025-03": 30, "2025-04": 10, "2025-05": 20,
+            "2025-06": 100, "2025-07": 100}
+    baixos, rever = meses_com_poucas_noticias(cont, 0.25, (), referencia=3, minimo_referencia=3)
+    assert baixos == [
+        {"mes": "2025-04", "artigos": 10, "mediana_referencia": 100, "situacao": "rever: fora de periodos_sem_coleta"},
+        {"mes": "2025-05", "artigos": 20, "mediana_referencia": 100, "situacao": "rever: fora de periodos_sem_coleta"},
+    ]
+    assert rever == []
+
+
+def test_n_contagem_vazia_e_vazia():
+    assert meses_com_poucas_noticias({}, 0.25, ()) == ([], [])
+
+
+# Notícias por mês: secao_noticias_por_mes (com banco de teste em SQLite)
+
+@pytest.fixture
+def params_noticias(monkeypatch):
+    """Sem períodos de coleta e fração 0,25, independentemente do parametros.yaml."""
+    params = dataclasses.replace(carregar_parametros_experimento(), periodos_sem_coleta=(),
+                                 noticias_mes_fracao_minima=0.25)
+    monkeypatch.setattr(lacunas, "carregar_parametros_experimento", lambda *_a, **_k: params)
+    return params
+
+
+def _noticia_banco(id_, dia):
+    """Linha de v1-noticias (colunas do banco de teste) publicada em `dia` (AAAA-MM-DD), origem wordpress."""
+    return {
+        "id": id_, "ticker": "PETR4", "data_hora_publicacao": f"{dia}T10:00:00-03:00",
+        "data_hora_coleta": "2026-09-07T17:38:43-03:00", "titulo": f"Notícia {id_}", "fonte": "F",
+        "link": f"https://exemplo.invalid/{id_}", "prob_positivo": "0.5", "prob_neutro": "0.3",
+        "prob_negativo": "0.2", "origem": "wordpress", "papel": None, "tipo_conteudo": None, "evento": None,
+        "qualidade": None, "data_publicacao": dia, "momento_pregao": "durante",
+    }
+
+
+def test_n_secao_noticias_com_banco_de_teste(banco_teste, mapa, params_noticias):
+    # 2024: 8 por mês; 2025-01: 1 (baixo); 2025-02 ausente (0, baixo); 2025-03 e 2025-04: 8 (último, incompleto)
+    cont = {**_mensal_2024(8), "2025-01": 1, "2025-03": 8, "2025-04": 8}
+    linhas, k = [], 0
+    for mes, n in cont.items():
+        for _ in range(n):
+            k += 1
+            linhas.append(_noticia_banco(f"w{k:06d}", f"{mes}-15"))
+
+    def _substituir(df):
+        return pd.DataFrame(linhas, columns=df.columns)
+
+    ler = banco_teste(alterar={"v1-noticias": _substituir})
+    secao = secao_noticias_por_mes(ler, mapa, {fontes.nome_real("noticias")})
+
+    assert secao["titulo"] == "Notícias por mês"
+    assert secao["divergencias"] == []
+    assert secao["tabelas"] == [{
+        "subtitulo": "Meses com poucas notícias",
+        "colunas": ["mes", "artigos", "mediana_referencia", "situacao"],
+        "linhas": [
+            ["2025-01", 1, 8, "rever: fora de periodos_sem_coleta"],
+            ["2025-02", 0, 8, "rever: fora de periodos_sem_coleta"],
+        ],
+    }]
+    assert "9 meses avaliados" in secao["notas"][0]
+    assert "Atenção: 2 mês(es) com poucas notícias fora de experimento.periodos_sem_coleta: rever o parâmetro." \
+        in secao["notas"]
+
+
+def test_n_secao_noticias_tabela_ausente_vira_nota_pulada(mapa, params_noticias):
+    secao = secao_noticias_por_mes(None, mapa, set())
+    assert len(secao["notas"]) == 1
+    assert secao["notas"][0].startswith("pulada: tabela ausente")
+    assert secao["tabelas"] == []
