@@ -9,6 +9,7 @@ Proventos de BDR não são coletados: o yield e a soma de BDR saem indisponívei
 
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 
 from processamento.fatos.precos import INDISPONIVEL, OK
@@ -65,6 +66,20 @@ def _soma_na_janela(ligados: pd.DataFrame, ticker: str, inicio, fim) -> float:
     linhas = _do_ticker(ligados, ticker)
     na_janela = linhas[(linhas["data_com"] > inicio) & (linhas["data_com"] <= pd.Timestamp(fim))]
     return float(na_janela["valor_por_acao"].sum())
+
+
+def somas_na_janela(ligados: pd.DataFrame, ticker: str, datas: pd.DatetimeIndex, meses: int) -> np.ndarray:
+    """Soma de `valor_por_acao` do ticker com data_com em (d − meses, d], para cada d de `datas`.
+
+    Mesma conta de `_soma_na_janela` + `inicio_janela`, sem repetir o filtro por pregão. data_com depois de d nunca entra.
+    """
+    linhas = _do_ticker(ligados, ticker)
+    linhas = linhas[linhas["data_com"].notna()].sort_values("data_com")
+    com = pd.DatetimeIndex(linhas["data_com"])
+    valores = linhas["valor_por_acao"].to_numpy(dtype=float)
+    fim = com.searchsorted(datas, side="right")
+    inicio = com.searchsorted(datas - pd.DateOffset(months=meses), side="right")
+    return np.array([np.nansum(valores[i:j]) for i, j in zip(inicio, fim)], dtype=float)
 
 
 def dividend_yield(ligados: pd.DataFrame, ticker: str, tipo_acao: str | None, fech, t, meses: int) -> tuple[float, str]:

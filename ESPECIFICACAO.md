@@ -112,7 +112,7 @@ Nomes reais (com crase): `v1-noticias`, `v1-precos`, `v1-cadastro`, `v1-mudancas
 - `raw_articles` (`lang`, `published_precision`, `published_at` em **UTC**, `resolved_url`: endereço final da matéria no Google News, usado para achar cópias entre origens, E10); ligação: `v1-noticias.id` = `"n"` + `raw_articles.id` com zeros à esquerda (6 dígitos ou mais).
 - `staging_article_sentiment` (`model`, `text_source`): modelo do FinBERT usado (`lucas-leme/FinBERT-PT-BR` para português, `ProsusAI/finbert` para inglês) e texto lido (`body` ou `title`).
 - `v1-staging_noticias_julgamento`: julgamentos da juíza por versão.
-- `v1-raw_ipe_docs`: fatos relevantes e comunicados (data de entrega).
+- `v1-raw_ipe_docs` (`protocolo_entrega`, `cnpj`, `categoria`, `data_entrega`, `tipo_apresentacao`, `versao`): fatos relevantes, comunicados e avisos aos acionistas, um protocolo por entrega, só com a data. Lida pelo dataset e pela rotina para `fato_relevante_cvm` (7.3), com leitura estrita: tabela ausente ou sem coluna para a execução (2.2).
 - `v1-raw_b3_proventos`, `v1-raw_b3_suplemento`: eventos em ações (para conferir ajustes).
 - `v1-raw_b3_cadastro`: `other_codes` (JSON) = códigos de negociação **atuais** de cada empresa na B3. Define quais classes existem (seção 6, "Ação → empresa").
 - `v1-painel_execucoes`, `v1-painel_etapas`: estado da coleta do dia (gatilho, seção 4).
@@ -124,7 +124,7 @@ Ticker sem `.SA`; datas `AAAA-MM-DD`; ponto decimal; vazio = `NULL` (nunca 0); b
 | Lacuna | Comportamento do processamento |
 |---|---|
 | EBITDA e endividamento com insumo vazio (colunas preenchidas desde 22/10/2026, mas ~10% das linhas sem valor) | `status = indisponivel` no indicador que dependia do valor vazio |
-| Histórico (medido em 02/11/2026): preços, IDIV, SMLL e IFIX desde 30/12/2019; CDI, IPCA, balanços e ações emitidas desde 2021; notícias desde 01/2021, sem coleta em jan–jul/2025 (`experimento.periodos_sem_coleta`, E4; a maioria sem hora) | Implementar tudo. **Não treinar o modelo "para valer"** até o usuário declarar o histórico completo (`treino.modelo_oficial: true`, R7); até lá, só teste de funcionamento (sem conclusões) |
+| Histórico (medido em 02/11/2026): preços, IDIV, SMLL e IFIX desde 30/12/2019; CDI, IPCA, balanços e ações emitidas desde 2021; notícias desde 01/2021, sem coleta em jan–jul/2025 (`experimento.periodos_sem_coleta`, E4; a maioria sem hora); documentos da CVM sem coleta em 2023 e em jan–jul/2025 (`experimento.periodos_sem_coleta_cvm`) | Implementar tudo. **Não treinar o modelo "para valer"** até o usuário declarar o histórico completo (`treino.modelo_oficial: true`, R7); até lá, só teste de funcionamento (sem conclusões) |
 | Composição histórica do Ibovespa | Ver 3.5 |
 | Troca de ação por BDR (JBSS3 → JBSS32 em 09/06/2025) | Não une os históricos (seção 6): JBSS3 fica com as suas linhas (até 06/06/2025) e entra no universo histórico enquanto está na composição (classe ON pelo sufixo, empresa pela raiz); a BDR começa em 09/06/2025 |
 | Ações deslistadas sem preço nas fontes: CRFB3, SRNA3, STBP3 (decidido com a coleta em 22/10/2026) | Fora do universo **em todas as datas**. Lista em `processamento/config/exclusoes.yaml` (`tickers_excluidos`). Entra na limitação de **viés de sobrevivência** do TCC |
@@ -270,6 +270,13 @@ Fonte dos dados: tabelas da seção 3. `fech` = `fechamento`; `aj` = `fechamento
 | `ret_idio_5d` | `ret_5d` − `beta` × retorno de 5 pregões do IBOV (mesma base as-of) | A |
 | `momento_setor_5d` | Média de `ret_5d` das outras empresas do setor no universo do dia, cada empresa 1 voto | B |
 | `exposicao_small` | Beta contra (ret SMLL − ret IBOV), 120 pregões, mínimo 60 pares, × esse fator em t; dia sem SMLL = vazio | B |
+| `dias_desde_resultado` | Pregões entre o pregão da última entrega válida e t (entrega em t = 0). Pregão da entrega: E11. Ignora período inválido e `data_entrega − data_fim_periodo` > 180 dias. Sem entrega, balanço velho ou `cnpjs_sem_balanco` = vazio | C |
+| `var_lucro_aa` | (Lucro do trimestre isolado do balanço de referência − lucro do mesmo trimestre do ano anterior) ÷ PL de referência, só com `data_entrega` ≤ t. Trimestre sem valor isolado, ano anterior ausente, PL ≤ 0, insumo vazio ou balanço velho = vazio. Mesmo valor para as classes da empresa; bancos entram | C |
+| `dy_12m` | Soma de `valor_por_acao` com `data_com` em (t − 12 meses, t] ÷ `fechamento(t)`, ticker atual e antigos da mesma classe; sem provento = 0,0 com preço válido (D8). Sem preço ou com retorno suspeito nas 20 sessões até t = vazio | D |
+| `fato_relevante_cvm` | 1 se a empresa tem `categoria = 'Fato Relevante'` em `v1-raw_ipe_docs`, fora reapresentações, com pregão de referência t (23:59:59 da `data_entrega`); senão 0. Vazio antes da cobertura, em `experimento.periodos_sem_coleta_cvm` e no último pregão sem `--proximo` | E |
+| `controle_sorteado` | Uniforme em [0, 1) por pregão, `np.random.default_rng([treino.semente, ordinal da data])`, sobre os tickers do dia em ordem alfabética. Só depende de semente, data e tickers do dia | Controle |
+
+**Entrega de fim de semana:** `dias_desde_resultado` e `fato_relevante_cvm` seguem a noite do pregão (E11): sábado depois de t sexta vale em t. `var_lucro_aa` só usa `data_entrega` ≤ t, então a mesma entrega só muda o valor na segunda. Ao vivo, balanços e documentos são lidos até D − 1 dia; proventos, até t. Com `--proximo`, o dataset segue a mesma regra.
 
 **Alvo:** `alvo` (7.1).
 
@@ -640,17 +647,23 @@ Com ~1 ano de histórico, a etapa 6 é **só teste de funcionamento** (3.4): o r
 - **C2 Diagnóstico:** seção "Notícias por mês": avisa mês completo abaixo de `experimento.noticias_mes_fracao_minima` (25%) da mediana dos 12 meses anteriores e período cadastrado que voltou a ter notícias. Só nota.
 - **C3 Início do treino:** `treino.inicio_experimento: "2021-01-01"` (F4). O desenvolvimento vai de 01/2021 a 06/2026.
 - **C4 Cópias:** o momento de publicação mais cedo vence, entre origens e dentro da mesma origem; probabilidade e hora real só desempatam no mesmo momento (E10). Consequência aceita: cópia mais cedo sem probabilidade fica e a posterior com probabilidade sai.
-- **C5 Teste de vazamento:** `tests/test_vazamento_experimento.py` cobre vários pregões, mudança só em t+1, mudança depois de t+1, cópia futura entre origens, cópia depois do corte que mudaria o pregão; o dataset não lê proventos nem ações emitidas (desde 02/11/2026 lê `v1-indices`, para o SMLL).
+- **C5 Teste de vazamento:** `tests/test_vazamento_experimento.py` cobre vários pregões, mudança só em t+1, mudança depois de t+1, cópia futura entre origens, cópia depois do corte que mudaria o pregão; o dataset lê `v1-indices` (SMLL), `v1-proventos` e `v1-raw_ipe_docs`, e não lê `v1-acoes_emitidas`. Desde 02/11/2026 o teste também cobre balanços, proventos e documentos futuros, inclusive trimestre antigo entregue depois de t, reapresentação futura e o sorteio do controle.
 
 **Acréscimo de 01/11/2026 (rank da quantidade e versão de preparação)**
 - **V1 `noticias_dia_qtd` em rank** (7.3, E5). O CSV continua bruto; os motivos do top usam o valor bruto.
 - **V2 `noticias_dia_extremo` em rank:** só variante testada no desenvolvimento (coluna `noticias_dia_extremo_rank`, criada em `preparar`); entra no lugar da bruta se o AUC médio por pregão subir mais de `treino.ganho_minimo_bloco`. Os motivos falam sempre da coluna do dataset.
-- **V3 `versao_preparacao`** (`preparacao.VERSAO_PREPARACAO`, hoje 3): sobe quando mudam ranks, colunas ou regras que afetam os valores. Vai no JSON do dataset e nos metadados do modelo. O treino recusa dataset de outra versão.
+- **V3 `versao_preparacao`** (`preparacao.VERSAO_PREPARACAO`, hoje 4): sobe quando mudam ranks, colunas ou regras que afetam os valores. Vai no JSON do dataset e nos metadados do modelo. O treino recusa dataset de outra versão.
 - **V4 Trava sem parar a publicação:** modelo 3 ou modelo 1 de outra versão: **só o top 5 fica de fora**, com aviso no `execucao` e sem registro; os outros pacotes saem normalmente. Com o top não publicado (8.5) a rodada fica `ok`; com o top publicado, `parcial`.
 
 **Acréscimo de 02/11/2026 (protocolo de variáveis, blocos A e B; `docs/protocolo_variaveis.md`)**
-- **Q1 Colunas:** 7.3, "Colunas do protocolo"; `VERSAO_PREPARACAO` = 3. A comparação do TCC continua modelo 3 × modelo 1 com as notícias atuais.
+- **Q1 Colunas:** 7.3, "Colunas do protocolo"; `VERSAO_PREPARACAO` = 4. A comparação do TCC continua modelo 3 × modelo 1 com as notícias atuais.
 - **Q2 SMLL:** sem SMLL na `v1-indices`, `exposicao_small` fica vazia, com aviso no `execucao` e `smll_pregoes = 0` no JSON do dataset. Sem a tabela `v1-indices`, a leitura para (seção 2.2), como nas outras tabelas do contrato.
+
+**Acréscimo de 02/11/2026 (protocolo, blocos C, D, E e controle)**
+- **Q3 Leitura:** o dataset passa a ler `v1-proventos` (tickers originais) e `v1-raw_ipe_docs`; continua sem ler `v1-acoes_emitidas`. A proteção contra o futuro fica dentro de cada conta, além do corte da leitura.
+- **Q4 Reapresentações:** em `v1-balancos`, a coleta guarda só a última versão e move `data_entrega`. Por isso `dias_desde_resultado` ignora atraso acima de 180 dias, e uma reapresentação de até 180 dias não se distingue de entrega normal. Regerar o dataset depois de uma reapresentação pode mudar valores antigos dessa empresa (a linha some do passado): não é vazamento, porque nunca se usa valor com `data_entrega` depois de t. Em `v1-raw_ipe_docs`, cada versão tem protocolo e data próprios: só a apresentação original marca `fato_relevante_cvm`.
+- **Q5 Cobertura da CVM:** começa na menor `data_entrega` de qualquer categoria. Documento em dia sem pregão vai para o último pregão antes, mesmo que esse pregão esteja vazio (ex.: entrega em 01/01/2024 cai em 28/12/2023).
+- **Q6 Controle:** semente = `treino.semente`. Se aprovado nos critérios 1 a 4, a rodada é inválida (`docs/protocolo_variaveis.md`).
 
 ---
 

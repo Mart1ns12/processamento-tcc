@@ -16,6 +16,7 @@ CONTRATO_AUSENTE_ESPERADO = {
 }
 AUXILIAR_AUSENTE_ESPERADO = {
     "staging_article_sentiment", "v1-painel_execucoes", "v1-painel_etapas", "v1-raw_b3_cadastro",
+    "v1-raw_ipe_docs",
 }
 
 
@@ -90,7 +91,7 @@ def test_secao_existencia_conjunto_de_existentes():
 def test_secao_existencia_conta_tabela_ausente():
     secao, _ = c.secao_existencia(_ler_existencia, MAPA)
     ausentes = [d for d in secao["divergencias"] if d["tema"] == "tabela_ausente"]
-    assert len(ausentes) == 10
+    assert len(ausentes) == 11
     contrato = {d["tabela"] for d in ausentes} & CONTRATO_AUSENTE_ESPERADO
     assert contrato == CONTRATO_AUSENTE_ESPERADO
     assert {d["tabela"] for d in ausentes} - CONTRATO_AUSENTE_ESPERADO == AUXILIAR_AUSENTE_ESPERADO

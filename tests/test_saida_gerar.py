@@ -413,6 +413,9 @@ def test_gerar_passa_ao_dataset_os_indices_so_ate_t(banco_teste, tmp_path, model
     assert indices is not None and not indices.empty
     smll = indices.loc[indices["indice"] == "SMLL", "data"]
     assert smll.max() == pd.Timestamp("2025-10-21")   # t é 21/10; o SMLL de 22/10 não entra
+    assert chamadas[0].proventos["data_com"].max() <= pd.Timestamp("2025-10-21")
+    assert chamadas[0].documentos_cvm["data_entrega"].max() <= pd.Timestamp("2025-10-21")
+    assert chamadas[0].exclusoes is not None
 
 
 def test_gerar_sem_tabela_de_indices_para_como_as_outras_tabelas(banco_teste, tmp_path, modelos_dir):
@@ -421,6 +424,13 @@ def test_gerar_sem_tabela_de_indices_para_como_as_outras_tabelas(banco_teste, tm
     pasta = tmp_path / "saida" / D.isoformat()
     assert _execucao(pasta)["status"] == "falhou"
     assert not (pasta / "mercado_dia.json").exists()
+
+
+def test_gerar_sem_tabela_de_documentos_para_como_as_outras_tabelas(banco_teste, tmp_path, modelos_dir):
+    with pytest.raises(ErroSaida):
+        _gerar(tmp_path, banco_teste(omitir=frozenset({"v1-raw_ipe_docs"})), modelos=modelos_dir)
+    pasta = tmp_path / "saida" / D.isoformat()
+    assert _execucao(pasta)["status"] == "falhou"
 
 
 def test_aviso_de_smll_so_quando_nao_ha_smll(banco_teste, tmp_path, modelos_dir):

@@ -213,9 +213,10 @@ def gerar(d: date, *, ler=None, pasta_saida: Path | None = None, pasta_modelos: 
             precos=ins.precos, cadastro=ins.cadastro, noticias=ins.noticias,
             balancos=ins.balancos if ins.balancos_resultado is None else ins.balancos_resultado,
             universo=universo(), mudancas=ins.mudancas, indices=ins.indices,
+            proventos=ins.proventos, documentos_cvm=ins.documentos_cvm, exclusoes=ins.exclusoes,
         )
         df, info = montar_dataset(dados, ins.cal, versao_noticias="todas", proximo_ao_vivo=d,
-                                  params=params_exp, params_precos=params_precos)
+                                  params=params_exp, params_precos=params_precos, params_fund=params_fund)
         if info["sem_probabilidade"] > 0:   # uma vez só: o dataset é cacheado
             avisos.append(AVISO_SEM_PROBABILIDADE.format(k=info["sem_probabilidade"]))
         if info["smll_pregoes"] == 0:       # uma vez só: o dataset é cacheado

@@ -237,7 +237,7 @@ def test_periodo_sem_coleta_deixa_noticias_vazias_e_conta_no_info(caso):
 
 def test_info_traz_a_versao_de_preparacao_e_o_csv_guarda_a_qtd_bruta(caso):
     assert caso["info"]["versao_preparacao"] == VERSAO_PREPARACAO
-    assert len(COLUNAS_DATASET) == len(set(COLUNAS_DATASET)) == 36
+    assert len(COLUNAS_DATASET) == len(set(COLUNAS_DATASET)) == 41
     qtd = caso["df"]["noticias_dia_qtd"].dropna()
     assert (qtd == qtd.round()).all() and qtd.max() >= 1   # contagem bruta: o rank só vem em `preparar`
 

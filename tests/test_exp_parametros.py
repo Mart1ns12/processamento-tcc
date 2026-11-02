@@ -33,6 +33,7 @@ _BLOCO_VALIDO = """experimento:
   janela_dias_entre_origens: 1
   titulo_palavras_min_entre_origens: 5
   periodos_sem_coleta: []
+  periodos_sem_coleta_cvm: []
   noticias_mes_fracao_minima: 0.25
   principais:
     origens: ["cvm_ipe"]
@@ -65,6 +66,9 @@ def test_arquivo_real_carrega_os_valores_do_plano():
     assert params.tipos_principais == ("reportagem",)
     assert params.papeis_principais == ("protagonista", "citada_com_fato")
     assert params.periodos_sem_coleta == ((date(2025, 1, 1), date(2025, 7, 31)),)
+    assert params.periodos_sem_coleta_cvm == (
+        (date(2023, 1, 1), date(2023, 12, 31)), (date(2025, 1, 1), date(2025, 7, 31)),
+    )
 
 
 def test_calendario_continua_carregando_com_o_bloco_experimento():
@@ -164,3 +168,16 @@ def test_mascara_sem_coleta_limites_inclusivos():
     datas = ["2024-12-30", "2025-01-02", "2025-07-31", "2025-08-01"]
     assert mascara_sem_coleta(datas, periodos).tolist() == [False, True, True, False]
     assert mascara_sem_coleta(datas, ()).tolist() == [False] * 4
+
+
+def test_periodos_sem_coleta_cvm_sem_a_chave_da_erro(tmp_path):
+    caminho = _escrever(tmp_path, _BLOCO_VALIDO.replace("  periodos_sem_coleta_cvm: []\n", ""))
+    with pytest.raises(ErroParametrosExperimento, match="periodos_sem_coleta_cvm"):
+        carregar_parametros_experimento(caminho)
+
+
+def test_periodos_sem_coleta_cvm_invalido_cita_a_chave(tmp_path):
+    caminho = _escrever(tmp_path, _BLOCO_VALIDO.replace(
+        "periodos_sem_coleta_cvm: []", 'periodos_sem_coleta_cvm: [{inicio: "2025-02-01", fim: "2025-01-01"}]'))
+    with pytest.raises(ErroParametrosExperimento, match="periodos_sem_coleta_cvm"):
+        carregar_parametros_experimento(caminho)

@@ -217,6 +217,7 @@ def test_ler_insumos_cortes_do_banco_de_teste(banco_teste):
     assert ins.balancos["data_entrega"].max() == pd.Timestamp("2025-08-10")
     assert ins.proventos["data_com"].max() == pd.Timestamp("2025-08-20")
     assert (ins.noticias["momento_ref"] <= pd.Timestamp("2025-10-22 08:00", tz=fontes.SP)).all()
+    assert ins.documentos_cvm["data_entrega"].max() == pd.Timestamp("2025-10-21")
     assert instantes(ins, AGORA) == (GERADO, DADOS_ATE)
 
 

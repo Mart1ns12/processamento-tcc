@@ -14,6 +14,7 @@ from processamento.experimento.parametros import ParametrosExperimento
 from processamento.fatos import precos as fatos_precos
 from processamento.fatos.indices import grade_de_indices
 from processamento.fatos.precos import ParametrosPrecos
+from processamento.fatos.proventos import ligar_proventos, somas_na_janela
 
 
 def _distancia(g: pd.DataFrame, ref: pd.DataFrame) -> pd.DataFrame:
@@ -116,6 +117,42 @@ def serie_smll(indices, cal) -> pd.Series:
     if indices is None or indices.empty:
         return pd.Series(np.nan, index=fatos_precos.indice_pregoes(cal), dtype=float, name="SMLL")
     return grade_de_indices(indices, cal, ("SMLL",))["SMLL"]
+
+
+DY_SESSOES_SUSPEITA = 20
+
+
+def dy_12m(ligados, g_fech, suspeitos, meses, sessoes=DY_SESSOES_SUSPEITA):
+    """Proventos com data_com em (t − meses, t] ÷ fechamento(t). Sem provento = 0,0 com preço válido (D8).
+
+    NaN sem preço (ou ≤ 0) e com retorno suspeito nas `sessoes` até t: o `fechamento` pode estar errado.
+    """
+    somas = pd.DataFrame({t: somas_na_janela(ligados, t, g_fech.index, meses) for t in g_fech.columns},
+                         index=g_fech.index, columns=g_fech.columns, dtype=float)
+    return (somas / g_fech).where(g_fech > 0).mask(fatos_precos.suspeita_na_janela(suspeitos, sessoes))
+
+
+def dy_12m_de_proventos(proventos, cadastro, mudancas, precos, cal, tickers, meses, params_precos: ParametrosPrecos):
+    """Grade de `dy_12m` a partir das tabelas. `proventos` com tickers ORIGINAIS (`unir_mudancas=False`); None = tudo NaN."""
+    g_fech = fatos_precos.grade_de_precos(precos, cal, "fechamento", tickers)
+    if proventos is None:
+        return g_fech * np.nan
+    g_aj = fatos_precos.grade_de_precos(precos, cal, "fechamento_ajustado", tickers)
+    suspeitos = fatos_precos.retornos_suspeitos(
+        g_aj, params_precos.retorno_suspeito_min, params_precos.retorno_suspeito_max,
+        params_precos.base_defasagem_max_pregoes,
+    )
+    return dy_12m(ligar_proventos(proventos, cadastro, mudancas), g_fech, suspeitos, meses)
+
+
+def controle_sorteado(modelo: pd.DataFrame, semente: int) -> pd.Series:
+    """Uniforme em [0, 1) por pregão, sobre os tickers do dia em ordem alfabética. Só depende de (semente, data, tickers do dia)."""
+    saida = pd.Series(np.nan, index=modelo.index, dtype=float)
+    for data, grupo in modelo.groupby("data", sort=False):
+        ordem = grupo.sort_values("ticker")
+        rng = np.random.default_rng([semente, pd.Timestamp(data).toordinal()])
+        saida.loc[ordem.index] = rng.random(len(ordem))
+    return saida
 
 
 def variaveis_de_preco(

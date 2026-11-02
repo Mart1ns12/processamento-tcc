@@ -5,7 +5,7 @@ pregão × ação do universo do modelo. `montar_dataset` é pura: recebe DataFr
 `DadosExperimento`) e devolve DataFrames, sem banco ou rede. Ausência é NaN, nunca 0. Os ranks
 ficam para `preparacao.preparar`, que roda só sobre as linhas daqui.
 
-`executar` e `main` (fase 9) são a parte com I/O: leem a coleta só por `fontes.py` (preços, cadastro, notícias, balanços e índices, para o SMLL), montam o
+`executar` e `main` (fase 9) são a parte com I/O: leem a coleta só por `fontes.py` (preços, cadastro, notícias, balanços, proventos, documentos da CVM e índices), montam o
 dataset e gravam o CSV e o JSON em `saida/experimento/` (fora do git).
 Uso: `python -m processamento.experimento.dataset [--versao todas|principais|hora_real_noite] [--ate AAAA-MM-DD] [--proximo AAAA-MM-DD] [--pasta PASTA]`.
 """
@@ -16,7 +16,7 @@ import argparse
 import hashlib
 import json
 from dataclasses import asdict, dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Callable
 
@@ -24,12 +24,13 @@ import numpy as np
 import pandas as pd
 
 from processamento import calendario, fontes
-from processamento.exclusoes import carregar_exclusoes
+from processamento.exclusoes import Exclusoes, carregar_exclusoes
 from processamento.experimento.alvo import alvos
 from processamento.experimento.noticias import VERSOES, preparar_noticias
 from processamento.experimento.parametros import (
     ParametrosExperimento,
     carregar_parametros_experimento,
+    carregar_parametros_treino,
     mascara_sem_coleta,
 )
 from processamento.experimento.preparacao import (
@@ -39,9 +40,16 @@ from processamento.experimento.preparacao import (
     IDENTIFICACAO,
     VERSAO_PREPARACAO,
 )
-from processamento.experimento.resultados import dias_de_resultado
+from processamento.experimento.resultados import (
+    dias_de_resultado,
+    dias_desde_resultado,
+    fato_relevante_cvm,
+    inicio_cobertura_cvm,
+    var_lucro_aa,
+)
 from processamento.experimento.tom import COLUNAS_NOTICIAS, variaveis_de_noticias
-from processamento.experimento.variaveis import serie_smll, variaveis_de_preco
+from processamento.experimento.variaveis import controle_sorteado, dy_12m_de_proventos, serie_smll, variaveis_de_preco
+from processamento.fatos.fundamentos import ParametrosFundamentos, carregar_parametros_fundamentos
 from processamento.fatos.precos import ParametrosPrecos, carregar_parametros_precos, indice_pregoes, mapas_cadastro
 from processamento.tickers import ligar_a_cnpj, mapas_por_empresa
 from processamento.universo import montar_universo
@@ -62,6 +70,9 @@ class DadosExperimento:
     universo: pd.DataFrame
     mudancas: dict[str, str]
     indices: pd.DataFrame | None = None   # v1-indices já cortada em t (SMLL de exposicao_small); None = sem SMLL
+    proventos: pd.DataFrame | None = None        # tickers ORIGINAIS (unir_mudancas=False); None = dy_12m vazia
+    documentos_cvm: pd.DataFrame | None = None   # v1-raw_ipe_docs; None = fato_relevante_cvm vazia
+    exclusoes: Exclusoes | None = None           # cnpjs_sem_balanco (dias_desde_resultado, var_lucro_aa); None = nenhuma
 
 
 def _mascara(modelo: pd.DataFrame, cal: list, tickers: list[str]) -> pd.DataFrame:
@@ -88,6 +99,16 @@ def _juntar(base: pd.DataFrame, longos: list[pd.DataFrame]) -> pd.DataFrame:
     return df
 
 
+def _juntar_por_empresa(base: pd.DataFrame, grades: dict[str, pd.DataFrame]) -> pd.DataFrame:
+    """Encadeia grades pregão × empresa à `base`, em (data, empresa): o mesmo valor para todas as classes."""
+    df = base
+    for nome, g in grades.items():
+        longo = (g.rename_axis(index="data", columns="empresa").reset_index()
+                 .melt(id_vars="data", var_name="empresa", value_name=nome))
+        df = df.merge(longo, on=["data", "empresa"], how="left")
+    return df
+
+
 def montar_dataset(
     dados: DadosExperimento,
     cal: list,
@@ -96,6 +117,8 @@ def montar_dataset(
     proximo_ao_vivo=None,
     params: ParametrosExperimento | None = None,
     params_precos: ParametrosPrecos | None = None,
+    params_fund: ParametrosFundamentos | None = None,
+    semente: int | None = None,
 ) -> tuple[pd.DataFrame, dict]:
     """Dataset do experimento: uma linha por pregão × ação do universo do modelo, em `COLUNAS_DATASET`.
 
@@ -108,6 +131,8 @@ def montar_dataset(
     """
     params = carregar_parametros_experimento() if params is None else params
     params_precos = carregar_parametros_precos() if params_precos is None else params_precos
+    params_fund = carregar_parametros_fundamentos() if params_fund is None else params_fund
+    semente = carregar_parametros_treino().semente if semente is None else semente
     cal = list(cal)
     setor_de, cnpj_de = mapas_cadastro(dados.cadastro)
 
@@ -125,6 +150,8 @@ def montar_dataset(
         dados.precos, cal, tickers, mascara, setor_de, cnpj_de, params, params_precos, smll=smll
     )
     grades.update(alvos(dados.precos, cal, tickers, params_precos))
+    grades["dy_12m"] = dy_12m_de_proventos(dados.proventos, dados.cadastro, dados.mudancas, dados.precos, cal, tickers,
+                                           params_fund.meses_janela, params_precos)
     df = _juntar(modelo, _grades_em_longo(grades))
 
     nots, info_nots = preparar_noticias(
@@ -140,6 +167,17 @@ def montar_dataset(
     resultado, info_res = dias_de_resultado(dados.balancos, cal, proximo_ao_vivo)
     marcados = pd.MultiIndex.from_frame(resultado[["data", "empresa"]])
     df["dia_resultado"] = pd.MultiIndex.from_frame(df[["data", "empresa"]]).isin(marcados)
+    sem_balanco = (dados.exclusoes or Exclusoes()).cnpjs_sem_balanco
+    empresas = sorted(modelo["empresa"].unique())
+    df = _juntar_por_empresa(df, {
+        "dias_desde_resultado": dias_desde_resultado(dados.balancos, cal, empresas, params_fund.balanco_idade_max_meses,
+                                                     sem_balanco, proximo_ao_vivo),
+        "var_lucro_aa": var_lucro_aa(dados.balancos, cal, empresas, params_fund.balanco_idade_max_meses, sem_balanco),
+        "fato_relevante_cvm": fato_relevante_cvm(dados.documentos_cvm, cal, empresas, params.periodos_sem_coleta_cvm,
+                                                 proximo_ao_vivo),
+    })
+    df["controle_sorteado"] = controle_sorteado(df[["data", "ticker"]], semente)
+    cobertura_cvm = inicio_cobertura_cvm(dados.documentos_cvm)
 
     df = df.sort_values(["data", "ticker"]).reset_index(drop=True)[COLUNAS_DATASET]
     info = {
@@ -157,6 +195,9 @@ def montar_dataset(
         "setor_herdado": {t: herdados[t][1] for t in sorted(herdados) if herdados[t][1] is not None},
         "smll_pregoes": int(smll.notna().sum()),
         "smll_ate": None if smll.notna().sum() == 0 else smll.last_valid_index().date().isoformat(),
+        "pregoes_sem_coleta_cvm": int(mascara_sem_coleta(cal, params.periodos_sem_coleta_cvm).sum()),
+        "cvm_cobertura_inicio": None if cobertura_cvm is None else cobertura_cvm.date().isoformat(),
+        "semente_controle": semente,
     }
     return df, info
 
@@ -229,7 +270,9 @@ def executar(
 ) -> Path:
     """Lê a coleta, monta o dataset e grava em `pasta`. Devolve o caminho do CSV.
 
-    `ate` é o último pregão: filtra preços (e portanto `cal`) e balanços. `proximo` é o próximo
+    `ate` é o último pregão: corta preços (e portanto `cal`), proventos e índices. Balanços e documentos da CVM vão
+    até `proximo − 1 dia` se houver `proximo` (entrega de fim de semana cai na noite de t; a de D fica fora), senão
+    até `ate`. As contas filtram de novo por dentro. `proximo` é o próximo
     pregão: as notícias são cortadas em `corte_manha(proximo)` e a noite do último pregão fecha.
     Sem `proximo`, a noite do último pregão fica aberta e as notícias não são cortadas.
     `ler` injetado (testes) pula a conexão e a checagem READ ONLY.
@@ -244,6 +287,9 @@ def executar(
         raise ValueError("--proximo precisa ser depois do último pregão do dataset")
     params = carregar_parametros_experimento()
     params_precos = carregar_parametros_precos()
+    params_fund = carregar_parametros_fundamentos()
+    corte_entregas = proximo - timedelta(days=1) if proximo is not None else ate
+    exclusoes = carregar_exclusoes()
     cadastro = fontes.ler_tabela("cadastro", ler=ler)
     composicao = fontes.ler_composicao(ler=ler, existe=existe_composicao)
     dados = DadosExperimento(
@@ -254,10 +300,13 @@ def executar(
             ler=ler,
             com_url_resolvida=True,
         ),
-        balancos=fontes.ler_tabela("balancos", ate=ate, ler=ler),
-        universo=montar_universo(cal, cadastro, precos, carregar_exclusoes(), composicao),
+        balancos=fontes.ler_tabela("balancos", ate=corte_entregas, ler=ler),
+        universo=montar_universo(cal, cadastro, precos, exclusoes, composicao),
         mudancas=fontes.ler_mudancas(ler),
         indices=fontes.ler_tabela("indices", ate=ate, ler=ler),
+        proventos=fontes.ler_tabela("proventos", ate=ate, ler=ler, unir_mudancas=False),
+        documentos_cvm=fontes.ler_tabela("raw_ipe_docs", ate=corte_entregas, ler=ler),
+        exclusoes=exclusoes,
     )
     df, info = montar_dataset(
         dados,
@@ -266,12 +315,13 @@ def executar(
         proximo_ao_vivo=proximo,
         params=params,
         params_precos=params_precos,
+        params_fund=params_fund,
     )
     if info["smll_pregoes"] == 0:
         print(AVISO_SMLL_AUSENTE)
     info = {
         **info,
-        "parametros": {"experimento": asdict(params), "precos": asdict(params_precos)},
+        "parametros": {"experimento": asdict(params), "precos": asdict(params_precos), "fundamentos": asdict(params_fund)},
     }
     return salvar_dataset(df, info, pasta)
 

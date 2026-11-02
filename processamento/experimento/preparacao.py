@@ -14,8 +14,15 @@ COMPLEMENTARES_PRECO = ["dist_max_52s", "dist_min_52s", "amplitude", "ret_vs_set
 COLUNAS_PRECO = ESSENCIAIS_PRECO + COMPLEMENTARES_PRECO
 BLOCO_A = ["posicao_fechamento", "mom_12_1", "liquidez_20d", "ret_idio_5d"]
 BLOCO_B = ["momento_setor_5d", "exposicao_small"]
-BLOCOS_PROTOCOLO = {"bloco_a": BLOCO_A, "bloco_b": BLOCO_B}   # protocolo_variaveis.md; fora de BLOCOS_COMPLEMENTARES de propósito
-COLUNAS_PROTOCOLO = BLOCO_A + BLOCO_B
+BLOCO_C = ["dias_desde_resultado", "var_lucro_aa"]
+BLOCO_D = ["dy_12m"]
+BLOCO_E = ["fato_relevante_cvm"]
+CONTROLE = ["controle_sorteado"]
+BLOCOS_PROTOCOLO = {   # protocolo_variaveis.md; fora de BLOCOS_COMPLEMENTARES de propósito
+    "bloco_a": BLOCO_A, "bloco_b": BLOCO_B, "bloco_c": BLOCO_C, "bloco_d": BLOCO_D, "bloco_e": BLOCO_E,
+    "controle": CONTROLE,
+}
+COLUNAS_PROTOCOLO = BLOCO_A + BLOCO_B + BLOCO_C + BLOCO_D + BLOCO_E + CONTROLE
 NOTICIAS_DIA = ["noticias_dia_qtd", "noticias_dia_tom", "noticias_dia_extremo", "mudanca_tom"]
 COMPLEMENTARES_NOTICIAS = ["tom_setor", "tom_mercado"]
 # A quantidade de notícias muda de regime entre os anos: entra como rank do pregão, como as de preço (o CSV guarda o bruto).
@@ -26,7 +33,7 @@ EXTREMO_RANK = "noticias_dia_extremo_rank"
 COLUNA_BRUTA = {EXTREMO_RANK: "noticias_dia_extremo"}   # coluna preparada -> coluna do dataset (motivos do top)
 # Sobe quando mudam os ranks, as colunas ou as regras que afetam os valores do dataset: dataset e modelo de outra
 # versão não valem. 2 = regras de 01/11/2026 (cobertura, cópias pelo momento, noticias_dia_qtd em rank).
-VERSAO_PREPARACAO = 3   # 3 = blocos A e B do protocolo, em 02/11/2026
+VERSAO_PREPARACAO = 4   # 3 = blocos A e B; 4 = blocos C, D, E e controle, em 02/11/2026
 COLUNAS_ALVO = ["alvo", "alvo_abertura", "alvo_abertura_valido", "ret_t1", "ret_ibov_t1"]
 BLOCOS_COMPLEMENTARES = {
     "preco_contexto": ["dist_max_52s", "dist_min_52s", "amplitude", "ret_vs_setor"],
@@ -57,7 +64,7 @@ def rank_no_pregao(df: pd.DataFrame, colunas: list[str]) -> pd.DataFrame:
 
 
 def preparar(dataset: pd.DataFrame) -> pd.DataFrame:
-    """Ranks das 19 variáveis de preço, volume e mercado (blocos A e B incluídos) e de `noticias_dia_qtd`; acrescenta `EXTREMO_RANK`.
+    """Ranks das variáveis de preço, volume e mercado, das colunas do protocolo e de `noticias_dia_qtd`; acrescenta `EXTREMO_RANK`.
 
     Identificação, as outras colunas de notícias e o alvo não mudam.
     """

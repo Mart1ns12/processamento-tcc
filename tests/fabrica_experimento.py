@@ -12,6 +12,7 @@ from zoneinfo import ZoneInfo
 import numpy as np
 import pandas as pd
 
+from fabrica_fundamentos import _a, balanco_de, documentos_de, proventos_de
 from fabrica_precos import cadastro_de, indices_de, precos_de, pregoes_uteis, serie_por_retornos
 from processamento import calendario, fontes
 from processamento.exclusoes import Exclusoes
@@ -93,6 +94,8 @@ def dados_de(
     exclusoes: Exclusoes | None = None,
     mudancas: dict | None = None,
     indices: pd.DataFrame | None = None,
+    proventos: pd.DataFrame | None = None,
+    documentos_cvm: pd.DataFrame | None = None,
 ) -> DadosExperimento:
     """`DadosExperimento` com o universo refeito para estes preços e este calendário."""
     universo = montar_universo(list(cal), cadastro, precos, exclusoes or Exclusoes())
@@ -104,7 +107,15 @@ def dados_de(
         universo=universo,
         mudancas=mudancas or {},
         indices=indices,
+        proventos=proventos,
+        documentos_cvm=documentos_cvm,
     )
+
+
+def dados_do_mundo(m: dict, cadastro: pd.DataFrame | None = None) -> DadosExperimento:
+    """`dados_de` com todas as tabelas de um mundo (`mundo`, `cortado`, `alterado` etc.)."""
+    return dados_de(m["cal"], m["precos"], CADASTRO_MUNDO if cadastro is None else cadastro, m["noticias"], m["balancos"],
+                    indices=m.get("indices"), proventos=m.get("proventos"), documentos_cvm=m.get("documentos"))
 
 
 # ---------------------------------------------------------------- mundo de 300 pregões (vazamento)
@@ -174,19 +185,64 @@ def _indices_do_mundo(cal: list) -> pd.DataFrame:
     return indices_de([(d.isoformat(), "SMLL", v) for d, v in zip(cal, serie)])
 
 
-def _balancos_do_mundo(cal: list) -> pd.DataFrame:
-    """Balanços do CNPJ "1" (cal[5]) e do CNPJ "2" (cal[200]); todos antes de t."""
-    return pd.DataFrame({
-        "cnpj": ["1", "2"],
-        "tipo": ["ITR", "ITR"],
-        "data_entrega": [pd.Timestamp(cal[5]), pd.Timestamp(cal[200])],
-    })
+AP = "AP - Apresentação"
+FATO = "Fato Relevante"
+
+
+def _balancos_do_mundo() -> pd.DataFrame:
+    """CNPJ 1, 2 e 3: ITR e DFP de 2024 e 2025 e o 1º tri de 2026, todos entregues antes de t.
+
+    k = base × (ano − 2023). Trimestres: k, k + 1, k + 2; 9 meses: 3k + 3; DFP: 4k + 6 (4º tri = k + 3). PL = 1000.
+    CNPJ 2 sem o 1º tri de 2025: em t não tem ano anterior. CNPJ 4 sem balanço.
+    """
+    partes = []
+    for cnpj, base in (("1", 10.0), ("2", 20.0), ("3", 30.0)):
+        linhas = []
+        for ano in (2024, 2025, 2026):
+            k = base * (ano - 2023)
+            linhas.append(_a("ITR", f"{ano}-01-01", f"{ano}-03-31", f"{ano}-05-10", 1, 1, k, 1000.0))
+            if ano == 2026:
+                break
+            linhas.append(_a("ITR", f"{ano}-04-01", f"{ano}-06-30", f"{ano}-08-09", 1, 1, k + 1, 1000.0))
+            linhas.append(_a("ITR", f"{ano}-07-01", f"{ano}-09-30", f"{ano}-11-09", 1, 1, k + 2, 1000.0))
+            linhas.append(_a("ITR", f"{ano}-01-01", f"{ano}-09-30", f"{ano}-11-09", 1, 1, 3 * k + 3, 1000.0))
+            linhas.append(_a("DFP", f"{ano}-01-01", f"{ano}-12-31", f"{ano + 1}-03-16", 1, 1, 4 * k + 6, 1000.0))
+        if cnpj == "2":
+            linhas = [x for x in linhas
+                      if not (x["data_inicio_periodo"] == "2025-01-01" and x["data_fim_periodo"] == "2025-03-31")]
+        partes.append(balanco_de(cnpj, linhas))
+    return pd.concat(partes, ignore_index=True)
+
+
+def linha_entregue_em(cnpj: str, dia, lucro: float) -> pd.DataFrame:
+    """ITR de 3 meses do trimestre que contém `dia`, entregue em `dia`, com PL 500: novidade a partir daí."""
+    fim = pd.Timestamp(dia) + pd.offsets.QuarterEnd(1)
+    ini = fim - pd.DateOffset(months=3) + pd.offsets.MonthBegin(0)
+    return balanco_de(cnpj, [_a("ITR", f"{ini:%Y-%m-%d}", f"{fim:%Y-%m-%d}", f"{pd.Timestamp(dia):%Y-%m-%d}", 1, 1, lucro, 500.0)])
+
+
+def _proventos_do_mundo(cal: list) -> pd.DataFrame:
+    """AAAA3, AAAA4 e BBBB3 pagam a cada 60 pregões, inclusive depois de t. CCCC3 e DDDD3 nunca pagam."""
+    linhas = [("AAAA3", "DIVIDENDO", "2025-01-15", 0.4, None), ("AAAA4", "DIVIDENDO", "2025-01-15", 0.3, None)]
+    for i in range(30, N_MUNDO, 60):
+        dia = cal[i].isoformat()
+        linhas += [("AAAA3", "DIVIDENDO", dia, 0.5, None), ("AAAA4", "JCP", dia, 0.6, None), ("BBBB3", "DIVIDENDO", dia, 0.2, None)]
+    return proventos_de(linhas)
+
+
+def _documentos_do_mundo(cal: list) -> pd.DataFrame:
+    """Cobertura desde 2021. Fatos relevantes do CNPJ 1 (índices 3 + 7k) e do CNPJ 2 (5 + 11k). CNPJ 3 e 4 sem nenhum."""
+    linhas = [("cob", "1", "Comunicado ao Mercado", "2021-01-04", AP, 1)]
+    linhas += [(f"a{i}", "1", FATO, cal[i], AP, 1) for i in range(3, N_MUNDO, 7)]
+    linhas += [(f"b{i}", "2", FATO, cal[i], AP, 1) for i in range(5, N_MUNDO, 11)]
+    return documentos_de(linhas)
 
 
 def mundo() -> dict:
-    """Mundo de 300 pregões (a partir de 2025-06-02) com preços, notícias, balanços e índices (SMLL).
+    """Mundo de 300 pregões (a partir de 2025-06-02) com preços, notícias, balanços, índices (SMLL), proventos e
+    documentos da CVM.
 
-    Devolve `cal`, `precos`, `noticias`, `balancos`, `indices`, `t` (cal[260]) e `t1` (cal[261]).
+    Devolve `cal`, `precos`, `noticias`, `balancos`, `indices`, `proventos`, `documentos`, `t` (cal[260]) e `t1` (cal[261]).
     """
     rng = np.random.default_rng(7)
     cal = pregoes_uteis(N_MUNDO, "2025-06-02")
@@ -197,30 +253,38 @@ def mundo() -> dict:
         "cal": cal,
         "precos": precos,
         "noticias": noticias,
-        "balancos": _balancos_do_mundo(cal),
+        "balancos": _balancos_do_mundo(),
         "indices": _indices_do_mundo(cal),
+        "proventos": _proventos_do_mundo(cal),
+        "documentos": _documentos_do_mundo(cal),
         "t": t,
         "t1": t1,
     }
 
 
 def cortado(m: dict) -> dict:
-    """Só o que se saberia no fim de t (preços, balanços e índices até t; notícias até 08:00 de t1)."""
+    """Só o que se saberia no fim de t: preços, índices e proventos até t; notícias até 08:00 de t1; balanços e
+    documentos da CVM até t+1 − 1 dia (como ao vivo, com `--proximo`)."""
     t, t1 = m["t"], m["t1"]
     corte_t = pd.Timestamp(t)
     corte_noticia = calendario.corte_manha(t1)
+    corte_entregas = pd.Timestamp(t1)
     precos = m["precos"][m["precos"]["data"] <= corte_t].reset_index(drop=True)
     noticias = m["noticias"][m["noticias"]["momento_ref"] <= corte_noticia].reset_index(drop=True)
-    balancos = m["balancos"][m["balancos"]["data_entrega"] <= corte_t].reset_index(drop=True)
+    balancos = m["balancos"][m["balancos"]["data_entrega"] < corte_entregas].reset_index(drop=True)
     indices = m["indices"][m["indices"]["data"] <= corte_t].reset_index(drop=True)
+    proventos = m["proventos"][m["proventos"]["data_com"] <= corte_t].reset_index(drop=True)
+    documentos = m["documentos"][m["documentos"]["data_entrega"] < corte_entregas].reset_index(drop=True)
     cal = [d for d in m["cal"] if d <= t]
-    return {"cal": cal, "precos": precos, "noticias": noticias, "balancos": balancos, "indices": indices}
+    return {"cal": cal, "precos": precos, "noticias": noticias, "balancos": balancos, "indices": indices,
+            "proventos": proventos, "documentos": documentos}
 
 
 def alterado(m: dict) -> dict:
     """Mundo cheio com o futuro de t alterado: preços após t ×3 (volume ×10, índices inclusos),
     SMLL após t ×3, notícias após 08:00 de t1 com pp e pn trocados, notícias novas às 08:00:01 de t1,
-    um cvm_ipe datado de t1 e um balanço do CNPJ "1" entregue em t1."""
+    um cvm_ipe datado de t1, um balanço do CNPJ "1" entregue em t1, proventos em t1 e em t1 + 30 dias,
+    e documentos da CVM em t1 (CNPJ 3) e em t1 + 2 dias (CNPJ 4)."""
     t, t1 = m["t"], m["t1"]
     corte_t = pd.Timestamp(t)
     precos = m["precos"].copy()
@@ -245,11 +309,18 @@ def alterado(m: dict) -> dict:
     novas.append(("cvm-t1", "AAAA3", None, t1, 0.5, 0.2, "cvm_ipe", "protagonista", "comunicado"))
     noticias = pd.concat([noticias, noticias_de(novas)], ignore_index=True)
 
-    balancos = pd.concat(
-        [m["balancos"], pd.DataFrame({"cnpj": ["1"], "tipo": ["ITR"], "data_entrega": [pd.Timestamp(t1)]})],
-        ignore_index=True,
-    )
-    return {"cal": m["cal"], "precos": precos, "noticias": noticias, "balancos": balancos, "indices": indices}
+    # linha_entregue_em, e não a linha antiga só com cnpj/tipo/data: sem período válido ela sairia da conta
+    balancos = pd.concat([m["balancos"], linha_entregue_em("1", t1, 999.0)], ignore_index=True)
+    proventos = pd.concat([m["proventos"], proventos_de([
+        ("AAAA3", "DIVIDENDO", pd.Timestamp(t1).strftime("%Y-%m-%d"), 50.0, None),
+        ("BBBB3", "DIVIDENDO", (corte_t + pd.Timedelta(days=30)).strftime("%Y-%m-%d"), 50.0, None),
+    ])], ignore_index=True)
+    documentos = pd.concat([m["documentos"], documentos_de([
+        ("fut-t1", "3", FATO, t1, AP, 1),
+        ("fut-depois", "4", FATO, pd.Timestamp(t1) + pd.Timedelta(days=2), AP, 1),
+    ])], ignore_index=True)
+    return {"cal": m["cal"], "precos": precos, "noticias": noticias, "balancos": balancos, "indices": indices,
+            "proventos": proventos, "documentos": documentos}
 
 
 def em_t(m: dict, indice: int) -> dict:
@@ -282,8 +353,7 @@ def so_t1_alterado(m: dict) -> dict:
     indices = m["indices"].copy()
     linhas_smll = (indices["data"] == t1) & (indices["indice"] == "SMLL")
     indices.loc[linhas_smll, "valor"] = indices.loc[linhas_smll, "valor"] * 1.05
-    return {"cal": m["cal"], "precos": precos, "noticias": m["noticias"], "balancos": m["balancos"],
-            "indices": indices}
+    return {**m, "precos": precos, "indices": indices}
 
 
 def depois_de_t1_alterado(m: dict) -> dict:
@@ -300,8 +370,7 @@ def depois_de_t1_alterado(m: dict) -> dict:
     indices = m["indices"].copy()
     linhas_smll = (indices["data"] > t1) & (indices["indice"] == "SMLL")
     indices.loc[linhas_smll, "valor"] = indices.loc[linhas_smll, "valor"] * 3
-    return {"cal": m["cal"], "precos": precos, "noticias": m["noticias"], "balancos": m["balancos"],
-            "indices": indices}
+    return {**m, "precos": precos, "indices": indices}
 
 
 def mexer_no_futuro(m, *, so_t1=False, acoes_preco=1.0, acoes_volume=1.0, smll=1.0, ibov=1.0) -> dict:

@@ -5,6 +5,7 @@ leitor `ler` (conexão somente leitura, ou um leitor de teste). Cortes:
 - preços com `ate = D − 1 dia`; t = último pregão lido (`cal[-1]`);
 - balanços, proventos e índices até t (proventos sem unir as mudanças de ticker: `ligar_proventos` faz isso);
 - `balancos_resultado`: balanços até D − 1 dia, só para `dia_resultado` (entrega no fim de semana cai na noite de t);
+- documentos da CVM até D − 1 dia, como balancos_resultado.
 - notícias até `corte_manha(D)`; cadastro, ações emitidas e mudanças de ticker sem corte.
 """
 
@@ -44,6 +45,7 @@ class Insumos:
     exclusoes: Exclusoes
     noticias_ignoradas: dict[str, int] = field(default_factory=dict)   # origem -> notícias descartadas
     balancos_resultado: pd.DataFrame | None = None   # até D − 1 dia, só para `dia_resultado`; None = usa `balancos`
+    documentos_cvm: pd.DataFrame | None = None   # até D − 1 dia, só para `fato_relevante_cvm`
 
 
 def ler_insumos(d: date, ler: Callable[..., pd.DataFrame], existe_composicao: bool | None = None) -> Insumos:
@@ -68,6 +70,7 @@ def ler_insumos(d: date, ler: Callable[..., pd.DataFrame], existe_composicao: bo
         mudancas=mudancas,
         balancos=balancos,
         balancos_resultado=balancos_resultado,
+        documentos_cvm=fontes.ler_tabela("raw_ipe_docs", ate=d - timedelta(days=1), ler=ler),
         acoes_emitidas=fontes.ler_tabela("acoes_emitidas", ler=ler),
         proventos=fontes.ler_tabela("proventos", ate=t, ler=ler, unir_mudancas=False),
         indices=fontes.ler_tabela("indices", ate=t, ler=ler),

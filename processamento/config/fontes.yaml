@@ -99,3 +99,7 @@ auxiliares:
   raw_b3_cadastro:            # códigos de negociação atuais por empresa (other_codes = lista JSON de tickers)
     nome_real: v1-raw_b3_cadastro
     colunas: {cnpj: cnpj, issuing_company: issuing_company, other_codes: other_codes}
+  raw_ipe_docs:               # documentos da CVM (fato_relevante_cvm); leitura estrita: sem `opcional`
+    nome_real: v1-raw_ipe_docs
+    chave: [protocolo_entrega]
+    colunas: {protocolo_entrega: protocolo_entrega, cnpj: cnpj, categoria: categoria, data_entrega: data_entrega, tipo_apresentacao: tipo_apresentacao, versao: versao}

@@ -305,3 +305,11 @@ def mundo() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.
         ignore_index=True,
     )
     return cadastro, balancos, acoes, proventos, precos, CAL, dict(MUDANCAS)
+
+
+def documentos_de(linhas: list[tuple]) -> pd.DataFrame:
+    """Linhas de `v1-raw_ipe_docs`: (protocolo, cnpj, categoria, data_entrega, tipo_apresentacao, versao)."""
+    colunas = ["protocolo_entrega", "cnpj", "categoria", "data_entrega", "tipo_apresentacao", "versao"]
+    df = pd.DataFrame(linhas, columns=colunas)
+    df["data_entrega"] = pd.to_datetime(df["data_entrega"])
+    return df

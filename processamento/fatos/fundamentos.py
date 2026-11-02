@@ -232,6 +232,11 @@ def quantidade_suspeita(vm: tuple[float, str], foto: FotoBalanco, limite: float,
     return p < limite and p * 1000 <= teto_x1000
 
 
+def limite_do_balanco(data_fim_periodo, meses: int) -> pd.Timestamp:
+    """Último dia em que o balanço vale: fim do mês de (data_fim_periodo + `meses` meses)."""
+    return pd.Timestamp(data_fim_periodo).normalize() + pd.DateOffset(months=meses) + pd.offsets.MonthEnd(0)
+
+
 def balanco_velho(data_fim_periodo, t, meses: int) -> bool:
     """True se o balanço de referência é velho em t: fim do mês de (data_fim_periodo + `meses` meses) < t.
 
@@ -240,8 +245,7 @@ def balanco_velho(data_fim_periodo, t, meses: int) -> bool:
     """
     if data_fim_periodo is None or pd.isna(data_fim_periodo):
         return False
-    limite = pd.Timestamp(data_fim_periodo).normalize() + pd.DateOffset(months=meses) + pd.offsets.MonthEnd(0)
-    return bool(limite < pd.Timestamp(t).normalize())
+    return bool(limite_do_balanco(data_fim_periodo, meses) < pd.Timestamp(t).normalize())
 
 
 def foto_dentro_do_prazo(foto: FotoBalanco, t, meses: int) -> FotoBalanco:

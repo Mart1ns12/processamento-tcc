@@ -61,7 +61,7 @@ Código em `experimento/alvo.py`. Todos usam `fechamento_ajustado` (aj). t+1 é 
 
 ## 4. Variáveis
 
-São 36 colunas (`COLUNAS_DATASET`, em `dataset.py`). **O CSV guarda os valores brutos:** o rank é aplicado depois, em `preparacao.preparar`, com a mesma função no treino e na previsão.
+São 41 colunas (`COLUNAS_DATASET`, em `dataset.py`). **O CSV guarda os valores brutos:** o rank é aplicado depois, em `preparacao.preparar`, com a mesma função no treino e na previsão.
 
 - **Rank:** `(posição média − 1) / (n − 1)` dentro do pregão, entre as ações do universo, antes de tirar as linhas sem alvo. Vazio continua vazio; um único valor vira 0,5.
 - **`noticias_dia_qtd` também entra em rank.** As outras 5 de notícias ficam brutas.
@@ -96,7 +96,7 @@ São 36 colunas (`COLUNAS_DATASET`, em `dataset.py`). **O CSV guarda os valores 
 
 ### Fundamentos
 
-**Nenhuma variável.** O dataset não usa P/L, P/VP, ROE, margens, endividamento nem proventos; essas contas são só do painel. De balanços, usa apenas `data_entrega`, para `dia_resultado`. Proventos entram só de forma implícita, no `fechamento_ajustado`.
+Só as colunas do protocolo (abaixo): `dias_desde_resultado`, `var_lucro_aa` e `dy_12m`. P/L, P/VP, ROE, margens e endividamento continuam só no painel. `v1-acoes_emitidas` não é lida.
 
 ### Notícias
 
@@ -136,6 +136,11 @@ Só entram nos testes de bloco de `docs/protocolo_variaveis.md`.
 | `ret_idio_5d` | `ret_5d` − `beta` × retorno de 5 pregões do IBOV | Base as-of até 5 pregões | A |
 | `momento_setor_5d` | Média de `ret_5d` das outras empresas do setor; cada empresa 1 voto | Dia t | B |
 | `exposicao_small` | Beta contra (ret SMLL − ret IBOV) × esse fator em t | 120 pregões, mínimo 60 pares | B |
+| `dias_desde_resultado` | Pregões desde a última entrega válida; entrega em t = 0 | Atraso até 180 dias; balanço velho = vazio | C |
+| `var_lucro_aa` | (Lucro do trimestre − mesmo trimestre do ano anterior) / PL | `data_entrega` ≤ t; PL ≤ 0 = vazio | C |
+| `dy_12m` | Proventos em (t − 12 meses, t] / fechamento(t) | Suspeito nas 20 sessões = vazio; sem provento = 0 | D |
+| `fato_relevante_cvm` | 1 ou 0 no pregão de referência da entrega | Vazio sem cobertura ou com janela aberta | E |
+| `controle_sorteado` | Uniforme [0, 1) por pregão | Semente `treino.semente` | Controle |
 
 ### Alvo
 
@@ -153,8 +158,11 @@ Só entram nos testes de bloco de `docs/protocolo_variaveis.md`.
 | Fim de semana e feriado | Vai para o último pregão antes, até 08:00 do próximo | `calendario.py:297-302` |
 | Última data, sem `--proximo` | Janela aberta: as 6 colunas de notícias ficam vazias | `dataset.py:122`, `tom.py:135-151` |
 | Última data, ao vivo | Notícias cortadas em 08:00 de D; `proximo_ao_vivo = D` | `saida/insumos.py:57`, `saida/gerar.py:213` |
-| Balanço | `data_entrega` às 23:59:59 cai na noite daquela data; só marca `dia_resultado`. Ao vivo, lido até D − 1 dia | `experimento/resultados.py`, `saida/insumos.py` |
-| Proventos | Não são lidos; só o efeito no preço ajustado | |
+| Balanço: `dia_resultado`, `dias_desde_resultado` | `data_entrega` às 23:59:59, na noite daquela data. Ao vivo, lido até D − 1 dia | `experimento/resultados.py`, `saida/insumos.py` |
+| Balanço: `var_lucro_aa` | Só `data_entrega` ≤ t, por dentro da conta; fim de semana vale no pregão seguinte | `resultados.var_lucro_aa` |
+| Proventos | `data_com` em (t − 12 meses, t], por dentro da conta. Ao vivo, lidos até t | `fatos/proventos.somas_na_janela` |
+| Documentos da CVM | `data_entrega` às 23:59:59, como notícia sem hora. Ao vivo, lidos até D − 1 dia; última data sem `--proximo` = vazio | `resultados.fato_relevante_cvm` |
+| `controle_sorteado` | Só semente, data e tickers do dia | `variaveis.controle_sorteado` |
 | Rank | Só linhas do mesmo pregão | `preparacao.py:28-34` |
 
 **"Só data" não adianta informação:** a data vem de Los Angeles, e qualquer instante depois das 08:00 de São Paulo já é o dia seguinte em Los Angeles.
@@ -173,10 +181,11 @@ Só entram nos testes de bloco de `docs/protocolo_variaveis.md`.
 | Rank antes de tirar linhas sem alvo | `test_exp_preparacao.py::test_preparar_faz_rank_antes_de_descartar_sem_alvo` |
 | Entrega de balanço | `test_exp_resultados.py` |
 | Embargo e separação treino/teste | `test_treino_validacao.py::test_caso2_nenhuma_data_de_teste_no_treino_e_embargo_respeitado` |
-| Dataset inteiro: 4 datas de t, mudança só em t+1, mudança depois de t+1, dados não lidos, cópias posteriores | `test_vazamento_experimento.py` |
+| Dataset inteiro: 4 datas de t, mudança só em t+1, depois de t+1, dados lidos, cópias, balanços, proventos e documentos futuros, controle | `test_vazamento_experimento.py` |
+| Colunas C, D, E e controle: gabaritos | `test_exp_protocolo_cde.py` |
 | Teste final e teste ao vivo | `test_treino_trava.py::test_veneno_do_teste_ao_vivo_nao_muda_nada`, `::test_segunda_chamada_do_teste_final_e_bloqueada` |
 
-**Vazamento do dataset inteiro:** `test_vazamento_experimento.py` compara as linhas de t entre o cenário cortado em t e o cenário com o futuro alterado (preços, volumes, notícias e balanço), antes e depois dos ranks.
+**Vazamento do dataset inteiro:** `test_vazamento_experimento.py` compara as linhas de t entre o cenário cortado em t e o cenário com o futuro alterado (preços, volumes, índices, notícias, balanço, proventos e documentos da CVM), antes e depois dos ranks.
 
 **O que não é "conhecido na data", mesmo sem vazar preço:**
 
@@ -257,6 +266,13 @@ Notícia da empresa vale para todas as suas classes: PETR3 e PETR4 recebem os me
 | `volume_relativo` e `amplitude` no suspeito | Não mudam | Não usam o ajustado |
 | Fator sem cotação em t | `exposicao_*` vazia | |
 | Sem setor ou sem outra empresa | `ret_vs_setor` e `tom_setor` vazios | |
+| Empresa sem entrega válida até t | `dias_desde_resultado` vazia | Ausência, nunca 0 |
+| Balanço velho em t, ou `cnpjs_sem_balanco` | `dias_desde_resultado` e `var_lucro_aa` vazias | Mesma regra do painel |
+| Sem ano anterior, sem trimestre isolado, PL ≤ 0 ou insumo vazio | `var_lucro_aa` vazia | |
+| Sem provento em 12 meses, com preço | `dy_12m` = 0 | Não pagar é um fato (D8) |
+| Sem preço ou suspeito nas 20 sessões | `dy_12m` vazia | O `fechamento` pode vir errado |
+| Pregão em `experimento.periodos_sem_coleta_cvm` ou antes da cobertura | `fato_relevante_cvm` vazia | Não houve coleta, logo não é "sem fato" |
+| Última data sem `--proximo` | `fato_relevante_cvm` vazia | Janela aberta |
 
 **O que é descartado:**
 
@@ -264,7 +280,9 @@ Notícia da empresa vale para todas as suas classes: PETR3 e PETR4 recebem os me
 |---|---|
 | Linha fora do universo | Nunca entra no dataset |
 | Notícia `errada`, cópia repetida, ou fora do calendário | Na preparação |
-| Balanço com período inválido | `dias_de_resultado` |
+| Balanço com período inválido | `dias_de_resultado`, `dias_desde_resultado`, `var_lucro_aa` |
+| Entrega com atraso acima de 180 dias | Só em `dias_desde_resultado` |
+| Reapresentação de documento da CVM | `fato_relevante_cvm` |
 | Linha sem `alvo` | Treino e avaliação (continua no CSV) |
 | Linha antes da cobertura; teste final e embargo | Na leitura do treino |
 
@@ -318,13 +336,17 @@ Todos em `processamento/config/parametros.yaml`, salvo aviso.
 | `fase1.volume_pregoes` | 20 | `volume_relativo` |
 | `fase1.beta_pregoes` / `beta_minimo` | 252 / 120 | `beta` |
 | `fase1.base_defasagem_max_pregoes` | 5 | `ret_*`, `ret_vs_setor`, suspeitos |
-| `fase1.retorno_suspeito_min` / `_max` | −0,75 / +1,00 | Máscaras e alvo |
+| `fase1.retorno_suspeito_min` / `_max` | −0,75 / +1,00 | Máscaras, alvo e `dy_12m` |
+| `experimento.periodos_sem_coleta_cvm` | 2023-01-01 a 2023-12-31; 2025-01-01 a 2025-07-31 | `fato_relevante_cvm` vazia |
+| `fundamentos.meses_janela` | 12 | `dy_12m` |
+| `fundamentos.balanco_idade_max_meses` | 15 | `dias_desde_resultado`, `var_lucro_aa` |
+| `treino.semente` | 20261023 | `controle_sorteado` |
 
 **Sem efeito no dataset:** `fase1.setor_excluir` (a `ret_vs_setor` sempre exclui a empresa inteira), `fase1.setor_minimo` e `fase1.retorno_suspeito_pregoes_nivel`.
 
 **Afetam quais linhas o treino usa (não o CSV):** `treino.inicio_experimento`, `treino.treino_minimo_meses`, `treino.embargo_pregoes`, `treino.teste_final.*`.
 
-**Fora do `parametros.yaml`:** `fontes.yaml` (`origens_ignoradas: []`, `origens_so_data: [google_news]`, `papeis_ignorados: [errada]`) e `exclusoes.yaml` (`tickers_excluidos`).
+**Fora do `parametros.yaml`:** `fontes.yaml` (`origens_ignoradas: []`, `origens_so_data: [google_news]`, `papeis_ignorados: [errada]`, auxiliar `raw_ipe_docs`) e `exclusoes.yaml` (`tickers_excluidos`, `cnpjs_sem_balanco`).
 
 ## 10. Limitações e pontos em aberto
 

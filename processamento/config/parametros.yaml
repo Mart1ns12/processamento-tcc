@@ -190,6 +190,10 @@ experimento:
   # DATAS ENTRE ASPAS. Rever quando a coleta preencher (o diagnóstico avisa, seção "Notícias por mês").
   periodos_sem_coleta:
     - {inicio: "2025-01-01", fim: "2025-07-31"}
+  # Só para a CVM (fato_relevante_cvm): pregões sem documentos coletados ficam vazios, nunca 0. Não mexe nas notícias.
+  periodos_sem_coleta_cvm:
+    - {inicio: "2023-01-01", fim: "2023-12-31"}
+    - {inicio: "2025-01-01", fim: "2025-07-31"}
   noticias_mes_fracao_minima: 0.25   # diagnóstico: mês abaixo desta fração da mediana dos 12 meses anteriores gera aviso
   principais:
     origens: ["cvm_ipe"]

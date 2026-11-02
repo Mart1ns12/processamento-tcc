@@ -36,7 +36,7 @@ Um bloco só é aprovado se cumprir **todos** os critérios que se aplicam a ele
 | 4 | Top 5 | Taxa de acerto não cai mais que 0,5 ponto percentual | Todos |
 | 5 | Dependência de regime | Ganho positivo também em 2023–2024, período sem `wordpress` | Bloco E |
 
-**Critério 5 no bloco E:** `fato_relevante_cvm` fica vazio em 2023, então na prática esse critério mede 2024.
+**Critério 5 no bloco E:** `fato_relevante_cvm` fica vazio em 2023, então esse critério mede só os pregões de 2024. O ganho de 2023 aparece no relatório, mas não decide: nesse ano a variável não existe, e o valor seria só ruído.
 
 **Controle:** o `controle_sorteado` passa pelos critérios 1 a 4 e **não pode ser aprovado**. Se for, a rodada é considerada inválida: nenhum bloco é adotado e o fato é relatado para investigar a causa.
 
@@ -59,4 +59,90 @@ Um bloco só é aprovado se cumprir **todos** os critérios que se aplicam a ele
 
 ## 6. Busca pelo melhor modelo
 
-A registrar antes de rodar, depois da Parte B da implementação.
+**Plano registrado antes de rodar; ainda não implementado.** Vale só depois de uma rodada válida do protocolo, só no desenvolvimento, com o conjunto de colunas congelado e sem o bloco E.
+
+**Candidatos, do mais simples para o mais complexo:**
+
+| Ordem | Modelo | Papel |
+|---|---|---|
+| 0 | XGBoost do ponto de partida (`max_depth` 3, `min_child_weight` 50) | Referência: fica se ninguém passar |
+| 1 | Regressão logística (C = 1) | Candidato |
+| 2 a 4 | XGBoost: 2/200, 2/50, 3/200 | Candidatos |
+| 5 a 8 | LightGBM, mesmos parâmetros: 2/200, 2/50, 3/200, 3/50 | Candidatos |
+| 9 | Média dos ranks por pregão dos modelos 0, 8 e 1 | Só relato: não pode vencer |
+
+A grade continua com as 4 combinações de `max_depth` {2, 3} × `min_child_weight` {50, 200}. O número de árvores e a taxa de aprendizado ficam fixos. A combinação não pode vencer porque não tem probabilidade calibrável nem motivos únicos, e exigiria 3 retreinos por mês. Se passar, é um achado relatado.
+
+**Quando um candidato é aprovado.** Todos os itens, contra a referência, nas mesmas dobras e linhas, usando as colunas do modelo 3:
+
+| # | Critério | Limite |
+|---|---|---|
+| 1 | Ganho de AUC médio por pregão | Maior que +0,005 |
+| 2 | Intervalo do ganho (pareado, bootstrap circular em blocos de 5 pregões, 10 mil reamostragens) | IC de 99,5% acima de 0, para compensar até 10 comparações |
+| 3 | Robustez por ano | Ganho positivo em pelo menos 4 dos 6 anos, e nenhum ano abaixo de −0,005 |
+| 4 | Top 5 | Taxa de acerto não cai mais que 0,5 ponto percentual |
+
+**Como sai o vencedor:**
+
+1. Nenhum aprovado: fica a referência.
+2. Com aprovados: "melhor" é o de maior ganho. Vence o mais simples entre os aprovados cuja diferença para o melhor não é clara (IC de 99,5% da diferença tocando ou cruzando 0).
+3. O modelo 1 não influencia a escolha. As referências da seção 7.5 da especificação são relatadas e não mudam o vencedor.
+
+**Efeito da escolha:**
+
+- A comparação do TCC continua sendo modelo 3 × modelo 1, sempre com a mesma família e os mesmos hiperparâmetros nos dois.
+- As referências continuam sendo o acaso, a regra da volatilidade e a regressão logística. O modelo escolhido só "ganha" se superar as três. Se a logística vencer, o XGBoost do ponto de partida passa a ser a terceira referência.
+- Esta regra substitui a da decisão F7 (maior AUC da grade) quando for implementada.
+- Top 5 ao vivo, motivos, calibração e arquivos em `modelos/`: sem mudança se o vencedor for XGBoost. Se não for, nada entra em produção antes de ajustar o código e a especificação, e isso é registrado.
+- Relatam-se todos os candidatos, inclusive os reprovados. O teste final continua de uso único, no fim, com a configuração congelada.
+
+**Tempo estimado:** a soma de 10 walk-forwards, acaso e avaliação dá de ~22 a ~35 minutos, conforme o número de colunas.
+
+## 7. Executor do protocolo
+
+**Plano registrado antes de rodar; ainda não implementado.** Ele faz, nesta ordem, nas mesmas dobras e linhas e com os hiperparâmetros do ponto de partida:
+
+1. Seleção atual dos blocos `preco_contexto`, `macro` e `noticias_contexto`, sem grade, para definir as bases.
+2. Controle e blocos A a E, cada um sozinho contra a sua base.
+3. Teste conjunto dos blocos A a D aprovados, se forem 2 ou mais.
+4. Aplicação automática dos critérios, decisão e relatório.
+
+**Travas: o executor recusa rodar, sem gravar nada, quando:**
+
+- o início do teste final é depois de 23/06/2026, ou o teste final já foi usado;
+- o dataset é de outra `versao_preparacao` ou tem sha256 diferente;
+- os anos das dobras não são de 2021 a 2026, ou uma coluna nova está toda vazia;
+- o registro de tentativas foi adulterado.
+
+Ele só lê o período de desenvolvimento, não abre o teste final e não grava em `modelos/`.
+
+**Como os critérios são aplicados:**
+
+| Ponto | Regra |
+|---|---|
+| Comparação com limite | Sem arredondar. Ganho igual a 0,005 reprova; IC tocando 0 reprova; ano em −0,005 exato passa; ano em −0,0051 reprova |
+| Top 5 | Conta exata de acertos. Queda de exatamente 0,5 ponto passa |
+| Anos | O ano é o da data do pregão. 2021 (abril a dezembro) e 2026 (janeiro a junho) contam como anos normais, sem peso: são sempre 6 anos. Ganho igual a zero não conta como positivo |
+| Critério 5 | Média do ganho nos pregões de 2024; o relatório mostra 2023 só para constar |
+| Bloco E | Testado uma vez contra o modelo 3 da seleção atual, sem A a D. Aprovado, vira versão separada, fora da comparação do TCC |
+| Modelo 3 | Os blocos A a D adotados entram no modelo 1 e são herdados pelo modelo 3 (decisão F6) |
+| `noticias_dia_extremo` em rank | Não é testada pelo executor; a base usa a coluna atual |
+| Teste conjunto | Com 0 ou 1 bloco aprovado, não se aplica. Com 2 ou mais e falha, fica só o de maior ganho; no empate, o primeiro na ordem A a D |
+| Controle aprovado | Rodada inválida: nenhum bloco adotado, nada congelado, o conjunto não roda, e tudo é relatado |
+| Contagem de testes | O IC de 99% fica fixo; o relatório mostra quantos testes foram feitos |
+
+**Registro de tentativas:** `docs/protocolo_tentativas.jsonl`, só com acréscimo e encadeado por hash.
+
+- A abertura é gravada antes de treinar, então rodadas interrompidas aparecem.
+- Da segunda rodada em diante é obrigatório informar o motivo.
+- Rodada com as mesmas entradas fica marcada como repetição e o resultado é conferido.
+- Mudar as seções 3 a 5 ou os limites depois da primeira rodada completa invalida a rodada.
+- Vale a última rodada válida. Todas continuam no relatório, e o registro deve ser versionado no git após cada rodada.
+
+**Relatório:** `docs/protocolo_rodada_NNN.md`, nunca sobrescrito. Traz o sha256 do dataset, o hash dos parâmetros, das regras e do código, a semente e as versões. Traz também os critérios de todos os testes, o ganho por ano, a cobertura das colunas novas, a decisão e todas as tentativas anteriores. Rodada válida gera também `docs/protocolo_congelado_rodada_NNN.json`.
+
+**Determinismo:** semente única e uma só thread. As mesmas entradas têm de dar o mesmo resultado; se não derem, o relatório avisa em destaque.
+
+**Tempo estimado:** até 12 walk-forwards de XGBoost, de ~30 a ~48 minutos, conforme o número de colunas.
+
+**Antes da primeira rodada:** conferir no banco (só leitura) as reapresentações e os CNPJs de `v1-raw_ipe_docs` e os proventos de JBSS3/JBSS32, que podem gerar 0 falso em `fato_relevante_cvm` e `dy_12m`.

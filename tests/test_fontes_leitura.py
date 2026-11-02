@@ -327,3 +327,21 @@ def test_composicao_usa_ler_mudancas_sem_a_troca_para_bdr(monkeypatch):
     ler = _ler_composicao_falso(COLUNAS_COMPOSICAO_REAIS, linhas, [])
     out = fontes.ler_composicao(ler=ler, existe=True)
     assert out["ticker"].tolist() == ["JBSS3", "MOTV3"]
+
+
+def test_raw_ipe_docs_le_corta_na_entrega_e_normaliza(banco_teste):
+    docs = fontes.ler_tabela("raw_ipe_docs", ate=date(2025, 10, 20), ler=banco_teste())
+    assert docs["protocolo_entrega"].tolist() == ["IPE0001", "IPE0002"]
+    assert docs["data_entrega"].max() == pd.Timestamp("2025-10-20")
+    assert docs["versao"].tolist() == [1, 1]
+
+
+def test_raw_ipe_docs_sem_tabela_para_com_erro_legivel(banco_teste):
+    with pytest.raises(fontes.ErroLeitura, match="v1-raw_ipe_docs"):
+        fontes.ler_tabela("raw_ipe_docs", ler=banco_teste(omitir=frozenset({"v1-raw_ipe_docs"})))
+
+
+def test_raw_ipe_docs_sem_coluna_para_com_erro_legivel(banco_teste):
+    ler = banco_teste(alterar={"v1-raw_ipe_docs": lambda df: df.drop(columns="categoria")})
+    with pytest.raises(fontes.ErroLeitura, match="sem a coluna categoria"):
+        fontes.ler_tabela("raw_ipe_docs", ler=ler)

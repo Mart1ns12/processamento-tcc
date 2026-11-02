@@ -21,10 +21,12 @@ from fabrica_treino import dataset_sintetico, params_teste
 from processamento.experimento.preparacao import VERSAO_PREPARACAO
 from processamento import fontes
 from processamento.experimento import modelos, preparacao
+from processamento.experimento.dataset import DadosExperimento, montar_dataset
 from processamento.experimento.modelos import CHAVES_METADADOS
 from processamento.saida.gerar import gerar
 from processamento.saida.insumos import ler_insumos
 from processamento.saida.parametros import carregar_parametros_saida
+from processamento.universo import montar_universo
 
 D = date(2025, 10, 22)
 PARAMS = params_teste()
@@ -84,6 +86,11 @@ def _cdi_de_22(df: pd.DataFrame) -> pd.DataFrame:
     return _linhas(df, [{"data": FUTURO, "indice": "CDI", "valor": "0.09"}])
 
 
+def _documento_de_22(df: pd.DataFrame) -> pd.DataFrame:
+    return _linhas(df, [{"protocolo_entrega": "IPE9022", "cnpj": "33000167000101", "categoria": "Fato Relevante",
+                         "data_entrega": FUTURO, "tipo_apresentacao": "AP - Apresentação", "versao": "1"}])
+
+
 def _noticia(id_: str, ticker: str, hora: str, prob: str = "0.99", titulo: str = "Noticia futura") -> dict:
     return {"id": id_, "ticker": ticker, "data_hora_publicacao": f"{FUTURO}T{hora}-03:00",
             "data_hora_coleta": "2026-09-07T17:38:43-03:00", "titulo": titulo, "fonte": "Fonte exemplo",
@@ -108,6 +115,7 @@ def _envenenado(banco_teste, extra_noticias=None):
         "v1-precos": _precos_de_22, "v1-balancos": _balanco_de_22, "v1-proventos": _provento_de_22,
         "v1-indices": lambda df: _linhas(_cdi_de_22(df), [{"data": FUTURO, "indice": "SMLL", "valor": "99999"}]),
         "v1-noticias": (lambda df: extra_noticias(_noticias_de_22(df))) if extra_noticias else _noticias_de_22,
+        "v1-raw_ipe_docs": _documento_de_22,
     }
     return banco_teste(alterar=alterar)
 
@@ -214,3 +222,92 @@ def test_cdi_do_dia_e_o_de_t(banco_teste, tmp_path, modelos_dir):
     mercado = _registros(pasta, "mercado_dia")[0]
     assert mercado["cdi_data"] == "2025-10-21"
     assert mercado["cdi_dia"]["valor"] == pytest.approx(0.0006, rel=1e-9)
+
+
+# ---------------------------------------------------------------- colunas do protocolo ao vivo (sem modelo)
+
+def _dataset_ao_vivo(d: date, ler) -> tuple:
+    ins = ler_insumos(d, ler, existe_composicao=False)
+    universo = montar_universo(ins.cal, ins.cadastro, ins.precos, ins.exclusoes, ins.composicao)
+    dados = DadosExperimento(
+        precos=ins.precos, cadastro=ins.cadastro, noticias=ins.noticias, balancos=ins.balancos_resultado,
+        universo=universo, mudancas=ins.mudancas, indices=ins.indices, proventos=ins.proventos,
+        documentos_cvm=ins.documentos_cvm, exclusoes=ins.exclusoes,
+    )
+    return ins, montar_dataset(dados, ins.cal, versao_noticias="todas", proximo_ao_vivo=d)[0]
+
+
+def _do_dia(df: pd.DataFrame, dia, ticker: str) -> pd.Series:
+    return df[(df["data"] == pd.Timestamp(dia)) & (df["ticker"] == ticker)].iloc[0]
+
+
+def test_insumos_cortam_documentos_em_d_menos_1_e_proventos_em_t(banco_teste):
+    ins = ler_insumos(D, _envenenado(banco_teste), existe_composicao=False)
+    assert ins.documentos_cvm["data_entrega"].max() == pd.Timestamp("2025-10-21")
+    assert "IPE9022" not in set(ins.documentos_cvm["protocolo_entrega"])
+    assert ins.proventos["data_com"].max() <= pd.Timestamp(ins.t)
+
+
+def test_colunas_novas_de_t_iguais_com_e_sem_veneno(banco_teste):
+    ins, limpo = _dataset_ao_vivo(D, banco_teste())
+    _, sujo = _dataset_ao_vivo(D, _envenenado(banco_teste))
+
+    def linhas(df):
+        return df[df["data"] == pd.Timestamp(ins.t)].reset_index(drop=True)
+
+    pd.testing.assert_frame_equal(linhas(limpo), linhas(sujo), rtol=1e-12, atol=1e-12)
+    pd.testing.assert_frame_equal(
+        linhas(preparacao.preparar(limpo.copy())), linhas(preparacao.preparar(sujo.copy())), rtol=1e-12, atol=1e-12
+    )
+    petr4 = _do_dia(limpo, ins.t, "PETR4")
+    assert petr4["fato_relevante_cvm"] == 0
+    assert petr4["dy_12m"] == pytest.approx(0.05, abs=1e-12)
+    assert _do_dia(limpo, "2025-10-20", "PETR4")["fato_relevante_cvm"] == 1
+
+
+def test_prova_de_efeito_o_veneno_aparece_quando_o_pregao_de_22_entra(banco_teste):
+    _, df = _dataset_ao_vivo(date(2025, 10, 23), _envenenado(banco_teste))
+    petr4 = _do_dia(df, "2025-10-22", "PETR4")
+    assert petr4["fato_relevante_cvm"] == 1
+    assert petr4["dias_desde_resultado"] == 0
+    assert petr4["var_lucro_aa"] == pytest.approx((999999 - 30) / 999999, abs=1e-12)
+    assert pd.isna(petr4["dy_12m"])   # preço 99 contra 10: retorno suspeito
+
+
+def _abev3_com_preco_em_21(df):
+    """Em tests/dados/precos.csv a ABEV3 está sem ajustado em 21/10 (fora do universo); estes testes precisam da linha."""
+    df = df.copy()
+    df.loc[(df["ticker"] == "ABEV3") & (df["data"].astype(str).str[:10] == "2025-10-21"), "fechamento_ajustado"] = "10.00"
+    return df
+
+
+def test_ao_vivo_documento_antes_de_d_cai_em_t_e_o_de_d_fica_fora(banco_teste):
+    d = date(2025, 10, 24)   # sem pregão entre t (21/10) e D, como um fim de semana
+
+    def documentos(df):
+        return _linhas(df, [
+            {"protocolo_entrega": "IPE9023", "cnpj": "07526557000100", "categoria": "Fato Relevante",
+             "data_entrega": "2025-10-23", "tipo_apresentacao": "AP - Apresentação", "versao": "1"},
+            {"protocolo_entrega": "IPE9024", "cnpj": "11111111000111", "categoria": "Fato Relevante",
+             "data_entrega": "2025-10-24", "tipo_apresentacao": "AP - Apresentação", "versao": "1"},
+        ])
+
+    ins, df = _dataset_ao_vivo(d, banco_teste(alterar={"v1-raw_ipe_docs": documentos, "v1-precos": _abev3_com_preco_em_21}))
+    assert ins.t == date(2025, 10, 21)
+    assert "IPE9023" in set(ins.documentos_cvm["protocolo_entrega"])
+    assert "IPE9024" not in set(ins.documentos_cvm["protocolo_entrega"])
+    assert _do_dia(df, ins.t, "ABEV3")["fato_relevante_cvm"] == 1
+    assert _do_dia(df, ins.t, "NOVA3")["fato_relevante_cvm"] == 0
+
+
+def test_ao_vivo_balanco_entregue_antes_de_d_marca_dias_e_o_de_d_nao(banco_teste):
+    linha = {"tipo_documento": "ITR", "data_inicio_periodo": "2025-07-01", "data_fim_periodo": "2025-09-30",
+             "receita_liquida": "1", "lucro_bruto": "1", "lucro_liquido": "1", "patrimonio_liquido": "1"}
+
+    def balancos(df):
+        return _linhas(df, [{**linha, "cnpj": "07526557000100", "data_entrega": "2025-10-20"},
+                            {**linha, "cnpj": "11111111000111", "data_entrega": FUTURO}])
+
+    ins, df = _dataset_ao_vivo(D, banco_teste(alterar={"v1-balancos": balancos, "v1-precos": _abev3_com_preco_em_21}))
+    assert _do_dia(df, ins.t, "ABEV3")["dias_desde_resultado"] == 1
+    assert pd.isna(_do_dia(df, ins.t, "NOVA3")["dias_desde_resultado"])

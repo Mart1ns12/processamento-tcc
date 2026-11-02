@@ -30,6 +30,7 @@ _CHAVES = {
     "janela_dias_entre_origens",
     "titulo_palavras_min_entre_origens",
     "periodos_sem_coleta",
+    "periodos_sem_coleta_cvm",
     "noticias_mes_fracao_minima",
     "principais",
 }
@@ -93,6 +94,7 @@ class ParametrosExperimento:
     tipos_principais: tuple[str, ...]
     papeis_principais: tuple[str, ...]
     periodos_sem_coleta: tuple[tuple[date, date], ...] = ()
+    periodos_sem_coleta_cvm: tuple[tuple[date, date], ...] = ()
     noticias_mes_fracao_minima: float = 0.25
 
 
@@ -206,6 +208,9 @@ def carregar_parametros_experimento(caminho: str | None = None) -> ParametrosExp
         tipos_principais=_lista_de_textos(principais["tipos_conteudo"], "experimento.principais.tipos_conteudo"),
         papeis_principais=_lista_de_textos(principais["papeis"], "experimento.principais.papeis"),
         periodos_sem_coleta=_periodos_sem_coleta(bloco["periodos_sem_coleta"]),
+        periodos_sem_coleta_cvm=_periodos_sem_coleta(
+            bloco["periodos_sem_coleta_cvm"], "experimento.periodos_sem_coleta_cvm"
+        ),
         noticias_mes_fracao_minima=_real(
             bloco["noticias_mes_fracao_minima"], "experimento.noticias_mes_fracao_minima", True
         ),
@@ -271,9 +276,8 @@ def _data_em_texto(valor: object, onde: str) -> date:
         raise ErroParametrosExperimento(f"{onde}: data inválida {valor!r} ({erro})") from erro
 
 
-def _periodos_sem_coleta(valor: object) -> tuple[tuple[date, date], ...]:
+def _periodos_sem_coleta(valor: object, onde: str = "experimento.periodos_sem_coleta") -> tuple[tuple[date, date], ...]:
     """Lista (pode ser vazia) de {inicio, fim}, com datas entre aspas e inicio <= fim."""
-    onde = "experimento.periodos_sem_coleta"
     if not isinstance(valor, list):
         raise ErroParametrosExperimento(f"{onde} deve ser uma lista de {{inicio, fim}} (vazia = nenhum período)")
     periodos = []

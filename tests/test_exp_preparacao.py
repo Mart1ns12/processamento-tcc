@@ -206,6 +206,10 @@ def test_blocos_do_protocolo():
     assert BLOCOS_PROTOCOLO == {
         "bloco_a": ["posicao_fechamento", "mom_12_1", "liquidez_20d", "ret_idio_5d"],
         "bloco_b": ["momento_setor_5d", "exposicao_small"],
+        "bloco_c": ["dias_desde_resultado", "var_lucro_aa"],
+        "bloco_d": ["dy_12m"],
+        "bloco_e": ["fato_relevante_cvm"],
+        "controle": ["controle_sorteado"],
     }
 
 
@@ -235,7 +239,7 @@ def test_protocolo_fora_dos_grupos_so_no_rank():
     assert not set(COLUNAS_PROTOCOLO) & set(ESSENCIAIS_PRECO + COMPLEMENTARES_PRECO + NOTICIAS_DIA)
     assert set(COLUNAS_PROTOCOLO) <= set(COLUNAS_RANK)
     assert not set(COLUNAS_PROTOCOLO) & set(COLUNAS_BRUTAS)
-    assert VERSAO_PREPARACAO == 3
+    assert VERSAO_PREPARACAO == 4
 
 
 _BASE_PROTOCOLO = [("AAAA3", 0.10, 1.0), ("BBBB3", 0.10, NAN), ("CCCC3", NAN, 0.0),
@@ -270,3 +274,26 @@ def test_protocolo_rank_no_pregao_antes_de_tirar_sem_alvo(coluna):
 
     # a entrada de preparar continua bruta
     pd.testing.assert_series_equal(df[coluna], entrada)
+
+
+def test_colunas_cde_e_controle_fora_dos_modelos_e_no_rank():
+    novas = ["dias_desde_resultado", "var_lucro_aa", "dy_12m", "fato_relevante_cvm", "controle_sorteado"]
+    assert set(novas) <= set(COLUNAS_PROTOCOLO) and set(novas) <= set(COLUNAS_RANK)
+    assert not set(novas) & set(COLUNAS_BRUTAS)
+    for modelo in ("1", "3"):
+        for comb in _combinacoes_validas(modelo):
+            assert not set(colunas_do_modelo(modelo, comb)) & set(novas), (modelo, comb)
+
+
+def test_fato_relevante_binario_vira_rank_com_empate_e_vazio():
+    df = _dataset([
+        {"data": "2026-06-18", "ticker": "AAAA3", "fato_relevante_cvm": 1.0},
+        {"data": "2026-06-18", "ticker": "BBBB3", "fato_relevante_cvm": 0.0},
+        {"data": "2026-06-18", "ticker": "CCCC3", "fato_relevante_cvm": 0.0},
+        {"data": "2026-06-18", "ticker": "DDDD3", "fato_relevante_cvm": NAN},
+        {"data": "2026-06-19", "ticker": "AAAA3", "fato_relevante_cvm": 0.0},
+        {"data": "2026-06-19", "ticker": "BBBB3", "fato_relevante_cvm": 0.0},
+    ])
+    prep = preparar(df)["fato_relevante_cvm"].tolist()
+    assert prep[:3] == [1.0, 0.25, 0.25] and pd.isna(prep[3])
+    assert prep[4:] == [0.5, 0.5]
