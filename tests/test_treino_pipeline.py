@@ -12,7 +12,7 @@ import pytest
 from fabrica_treino import dataset_sintetico, gravar_versoes, params_teste
 from processamento import fontes
 from processamento.experimento import dataset, modelos, treino
-from processamento.experimento.preparacao import COLUNAS_PROTOCOLO, COLUNAS_RANK
+from processamento.experimento.preparacao import BLOCOS_PROTOCOLO, COLUNAS_PROTOCOLO, COLUNAS_RANK, colunas_do_modelo
 from processamento.experimento.preparacao import VERSAO_PREPARACAO as preparacao_atual
 
 
@@ -194,3 +194,70 @@ def test_sha_alterado_devolve_2(ambiente, capsys):
         arquivo.write("\n")
     assert treino.main(_argv(ambiente), params=params_teste()) == 2
     assert "sha256" in capsys.readouterr().out
+
+
+# --- Fase 2.4: --configuracao (a configuração congelada vai ao treino de desenvolvimento) ------------
+
+
+def _gravar_congelado(amb, caminho, **trocas):
+    """JSON de configuração congelada no formato do protocolo, com o sha256 do CSV 'todas' de `amb`.
+
+    Blocos de preço e de notícias, mais o bloco A nas duas colunas; hiperparâmetros fora da grade de teste.
+    `trocas` sobrescreve campos (sha256_dataset, familia...).
+    """
+    csv = treino.localizar_datasets(amb["datasets"], None)["todas"]
+    _, info = treino.ler_desenvolvimento(csv, params_teste())
+    congelado = {
+        "blocos_preco": ["preco_contexto"],
+        "noticias_contexto": True,
+        "colunas_1": colunas_do_modelo("1", ("preco_contexto",)) + BLOCOS_PROTOCOLO["bloco_a"],
+        "colunas_3": colunas_do_modelo("3", ("preco_contexto", "noticias_contexto")) + BLOCOS_PROTOCOLO["bloco_a"],
+        "colunas_3e": None,
+        "hiperparametros": {**params_teste().xgboost, "max_depth": 3, "min_child_weight": 200},
+        "extremo_em_rank": False,
+        "sha256_dataset": info["sha256"],
+        "rodada": 1,
+    }
+    congelado.update(trocas)
+    caminho.write_text(json.dumps(congelado, ensure_ascii=False, indent=2), encoding="utf-8")
+    return caminho
+
+
+def test_configuracao_congela_colunas_e_hiperparametros(ambiente, tmp_path):
+    caminho = _gravar_congelado(ambiente, tmp_path / "congelado.json")
+    assert treino.main(_argv(ambiente, "--configuracao", str(caminho)), params=params_teste()) == 0
+    congelado = json.loads(caminho.read_text(encoding="utf-8"))
+    meta3 = json.loads((ambiente["modelos"] / "xgb-2026-01.meta.json").read_text(encoding="utf-8"))
+    meta1 = json.loads((ambiente["modelos"] / "xgb-m1-2026-01.meta.json").read_text(encoding="utf-8"))
+    assert meta3["colunas"] == congelado["colunas_3"]
+    assert set(BLOCOS_PROTOCOLO["bloco_a"]) <= set(meta3["colunas"])
+    assert meta1["colunas"] == congelado["colunas_1"]
+    assert meta3["hiperparametros"] == congelado["hiperparametros"]
+    assert meta3["blocos"] == {"blocos_preco": ["preco_contexto"], "noticias_contexto": True}
+
+
+def test_configuracao_nao_roda_a_selecao(ambiente, tmp_path, monkeypatch):
+    caminho = _gravar_congelado(ambiente, tmp_path / "congelado.json")
+
+    def proibido(*args, **kwargs):
+        raise AssertionError("com --configuracao não pode haver seleção de configuração")
+
+    monkeypatch.setattr(treino, "selecionar_configuracao", proibido)
+    assert treino.main(_argv(ambiente, "--configuracao", str(caminho)), params=params_teste()) == 0
+
+
+def test_configuracao_de_outro_dataset_devolve_2(ambiente, tmp_path, capsys):
+    caminho = _gravar_congelado(ambiente, tmp_path / "congelado.json", sha256_dataset="0" * 64)
+    assert treino.main(_argv(ambiente, "--configuracao", str(caminho)), params=params_teste()) == 2
+    assert "sha256" in capsys.readouterr().out
+
+
+def test_configuracao_de_familia_lgbm_devolve_2(ambiente, tmp_path, capsys):
+    caminho = _gravar_congelado(ambiente, tmp_path / "congelado.json", familia="lgbm")
+    assert treino.main(_argv(ambiente, "--configuracao", str(caminho)), params=params_teste()) == 2
+    assert "lgbm" in capsys.readouterr().out
+
+
+def test_configuracao_inexistente_devolve_2(ambiente, tmp_path, capsys):
+    assert treino.main(_argv(ambiente, "--configuracao", str(tmp_path / "nao_existe.json")), params=params_teste()) == 2
+    assert "configuração não encontrada" in capsys.readouterr().out

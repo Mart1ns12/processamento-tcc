@@ -31,7 +31,7 @@ from processamento.experimento.parametros import ParametrosTreino, carregar_para
 MODELOS_AVALIADOS = ("modelo_1", "modelo_3", "logistica", "volatilidade", "modelo_3_principais", "modelo_3_hora_real_noite")
 TIPOS_DATASET = ("todas", "principais", "hora_real_noite")
 _RE_NOME_CSV = re.compile(r"^dataset-(todas|principais|hora_real_noite)-(\d{4}-\d{2}-\d{2})\.csv$")
-_TIPOS_MODELO = ("xgb", "logistica", "volatilidade")
+_TIPOS_MODELO = ("xgb", "lgbm", "logistica", "volatilidade")
 _COLUNAS_TEXTO = {"ticker": str, "empresa": str, "setor": str, "universo": str}
 COLUNAS_PREVISAO = [
     "data", "ticker", "dobra", "score", "alvo", "alvo_abertura", "alvo_abertura_valido",
@@ -125,7 +125,7 @@ def preparar_dev(df: pd.DataFrame) -> tuple[pd.DataFrame, list[date]]:
 
 
 def prever_walk_forward(prep, dobras, colunas, tipo: str, params: ParametrosTreino, hiper: dict | None = None) -> pd.DataFrame:
-    """Score de cada linha de teste com alvo, dobra a dobra. `tipo`: "xgb", "logistica" ou "volatilidade".
+    """Score de cada linha de teste com alvo, dobra a dobra. `tipo`: "xgb", "lgbm", "logistica" ou "volatilidade".
 
     `hiper` é o dicionário do XGBoost (padrão: `params.xgboost`). A regra da volatilidade não treina,
     mas usa as mesmas linhas das outras, para que todos os modelos avaliem o mesmo conjunto.
@@ -141,6 +141,9 @@ def prever_walk_forward(prep, dobras, colunas, tipo: str, params: ParametrosTrei
         if tipo == "xgb":
             ajuste = modelos.treinar_xgb(treino[colunas], treino["alvo"], hiper, params.semente)
             score = modelos.prob_xgb(ajuste, teste[colunas])
+        elif tipo == "lgbm":
+            ajuste = modelos.treinar_lgbm(treino[colunas], treino["alvo"], hiper, params.semente)
+            score = modelos.prob_lgbm(ajuste, teste[colunas])
         elif tipo == "logistica":
             ajuste = modelos.treinar_logistica(treino[colunas], treino["alvo"], params.logistica_c, params.semente)
             score = modelos.prob_logistica(ajuste, teste[colunas])
@@ -666,10 +669,12 @@ def _avaliar(lidos: dict, params: ParametrosTreino, modo: str, fim: date | None,
     dobras = _dobras(cal, params, modo, fim)
     if not dobras:
         raise ErroPreRequisito("não há dobras para avaliar (histórico curto para treino_minimo_meses)")
-    if modo == "desenvolvimento":
+    if congelada is not None:      # teste final, ou desenvolvimento com --configuracao
+        cfg, tentativas = congelada, pd.DataFrame(columns=_COLUNAS_TENTATIVA)
+    elif modo == "desenvolvimento":
         cfg, tentativas = selecionar_configuracao(prep, dobras, params)
     else:
-        cfg, tentativas = congelada, pd.DataFrame(columns=_COLUNAS_TENTATIVA)
+        raise ErroPreRequisito("teste final sem configuração congelada")
     hiper = cfg["hiperparametros"]
     c1, c3 = cfg["colunas_1"], cfg["colunas_3"]
     pred: dict[str, pd.DataFrame | None] = {
@@ -863,6 +868,29 @@ def _configuracao_congelada(pasta_modelos: Path, params: ParametrosTreino) -> di
     }
 
 
+def _ler_configuracao(caminho: Path, sha256: str | None) -> dict:
+    """Configuração congelada pelo protocolo ou pela busca (`docs/protocolo_congelado_rodada_NNN.json`),
+    para o treino de desenvolvimento (`--configuracao`).
+
+    Recusa outro dataset (sha256 diferente) e outra família que não XGBoost. Arquivo sem `familia` é do
+    protocolo, que só congela XGBoost. Devolve as mesmas chaves de `_configuracao_congelada`.
+    """
+    caminho = Path(caminho)
+    if not caminho.is_file():
+        raise ErroPreRequisito(f"configuração não encontrada: {caminho}")
+    congelado = json.loads(caminho.read_text(encoding="utf-8"))
+    if congelado.get("sha256_dataset") != sha256:
+        raise ErroPreRequisito(f"a configuração {caminho.name} é de outro dataset (sha256 diferente)")
+    familia = congelado.get("familia", "xgb")
+    if familia != "xgb":
+        raise ErroPreRequisito(f"família {familia!r} ainda não tem treino de desenvolvimento (só xgb)")
+    chaves = ("blocos_preco", "noticias_contexto", "hiperparametros", "colunas_1", "colunas_3")
+    faltam = [c for c in chaves if c not in congelado]
+    if faltam:
+        raise ErroPreRequisito(f"{caminho.name} não tem {', '.join(faltam)}")
+    return {c: congelado[c] for c in chaves}
+
+
 def _previsoes(pred: dict) -> pd.DataFrame:
     partes = [pred[nome].assign(modelo=nome) for nome in MODELOS_AVALIADOS if pred.get(nome) is not None]
     return pd.concat(partes, ignore_index=True)[_COLUNAS_PREVISAO_CSV]
@@ -927,17 +955,21 @@ def executar(
     teste_final: bool = False,
     params: ParametrosTreino | None = None,
     registro: Path | None = None,
+    configuracao: Path | None = None,
 ) -> Path:
     """Treino e avaliação; grava as saídas e devolve o caminho do relatório.
 
     Desenvolvimento (padrão): walk-forward no período de desenvolvimento, modelos provisórios em
-    `pasta_modelos` e saídas em `pasta_saida/dev-<data>/`. Teste final (`teste_final=True`): só com a
+    `pasta_modelos` e saídas em `pasta_saida/dev-<data>/`. Com `configuracao` (JSON congelado pelo protocolo
+    ou pela busca), a configuração é a dele, sem seleção. Teste final (`teste_final=True`): só com a
     trava aberta; configuração congelada dos `.meta.json`; saídas em `pasta_saida/teste-final-<data>/`
     e o registro de uso único em `registro`. A trava é conferida antes de qualquer leitura ou gravação.
     """
     params = carregar_parametros_treino() if params is None else params
     registro = REGISTRO_TESTE_FINAL if registro is None else Path(registro)
     conferir_trava(teste_final, params.teste_final_liberado, params.teste_final_fim, registro)
+    if teste_final and configuracao is not None:
+        raise ErroPreRequisito("--configuracao não vale no teste final: a configuração vem dos .meta.json")
     arquivos = localizar_datasets(Path(pasta_datasets), data)
     data_dataset = _data_do_arquivo(arquivos["todas"])
     if teste_final:
@@ -949,6 +981,8 @@ def executar(
         leitor = partial(ler_desenvolvimento, params=params)
 
     lidos = {nome: None if arquivos[nome] is None else leitor(arquivos[nome]) for nome in TIPOS_DATASET}
+    if modo == "desenvolvimento" and configuracao is not None:
+        congelada = _ler_configuracao(configuracao, lidos["todas"][1].get("sha256"))
     res = _avaliar(lidos, params, modo, fim, congelada)
     df_todas, info_todas = lidos["todas"]
     universo = sorted({str(u) for u in _dev(df_todas, params)["universo"].dropna()})
@@ -986,6 +1020,9 @@ def main(argv=None, params: ParametrosTreino | None = None, registro: Path | Non
                         help="pasta dos modelos (padrão: modelos)")
     parser.add_argument("--teste-final", action="store_true",
                         help="roda o teste final (uso único; exige a trava aberta)")
+    parser.add_argument("--configuracao", type=Path, default=None,
+                        help="JSON de configuração congelada (protocolo ou busca) para o desenvolvimento; "
+                             "recusado no teste final")
     args = parser.parse_args(argv)
     try:
         caminho = executar(
@@ -996,6 +1033,7 @@ def main(argv=None, params: ParametrosTreino | None = None, registro: Path | Non
             teste_final=args.teste_final,
             params=params,
             registro=registro,
+            configuracao=args.configuracao,
         )
     except ErroTravaTesteFinal as e:
         print(f"{e}. Nada foi gravado.")

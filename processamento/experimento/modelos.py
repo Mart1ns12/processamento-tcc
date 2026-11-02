@@ -93,6 +93,24 @@ def prob_logistica(pipe: Pipeline, X: pd.DataFrame) -> np.ndarray:
     return pipe.predict_proba(X.astype(float))[:, 1]
 
 
+def treinar_lgbm(X: pd.DataFrame, y: pd.Series, hiper: dict, semente: int):
+    """LightGBM com os mesmos hiperparâmetros do XGBoost, 1 thread e determinístico. NaN é tratado sozinho."""
+    import lightgbm as lgb   # só a busca precisa: a rotina diária não depende disso
+    modelo = lgb.LGBMClassifier(
+        n_estimators=hiper["n_estimators"], max_depth=hiper["max_depth"], num_leaves=2 ** hiper["max_depth"],
+        learning_rate=hiper["learning_rate"], subsample=hiper["subsample"], subsample_freq=1,
+        colsample_bytree=hiper["colsample_bytree"], min_sum_hessian_in_leaf=hiper["min_child_weight"],
+        min_child_samples=1, reg_lambda=hiper["reg_lambda"], random_state=semente, n_jobs=1,
+        deterministic=True, force_row_wise=True, verbosity=-1,
+    )
+    return modelo.fit(X.astype(float), y.astype(int))
+
+
+def prob_lgbm(modelo, X: pd.DataFrame) -> np.ndarray:
+    """Probabilidade da classe 1 do LightGBM."""
+    return modelo.predict_proba(X.astype(float))[:, 1]
+
+
 def score_volatilidade(preparado: pd.DataFrame) -> np.ndarray:
     """Regra da volatilidade: 1 − rank de `volatilidade_20d` no pregão (mais calma = maior score).
 

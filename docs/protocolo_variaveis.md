@@ -59,7 +59,7 @@ Um bloco só é aprovado se cumprir **todos** os critérios que se aplicam a ele
 
 ## 6. Busca pelo melhor modelo
 
-**Plano registrado antes de rodar; ainda não implementado.** Vale só depois de uma rodada válida do protocolo, só no desenvolvimento, com o conjunto de colunas congelado e sem o bloco E.
+**Implementado em `processamento/experimento/busca*.py`; ainda não rodado.** Comando: `python -m processamento.experimento.busca_execucao --data AAAA-MM-DD --congelado docs/protocolo_congelado_rodada_NNN.json --motivo "..."`. Vale só depois de uma rodada válida do protocolo, só no desenvolvimento, com o conjunto de colunas congelado e sem o bloco E. Mudar esta seção ou os limites depois da primeira busca completa invalida a rodada, e ela não gera configuração final.
 
 **Candidatos, do mais simples para o mais complexo:**
 
@@ -92,7 +92,7 @@ A grade continua com as 4 combinações de `max_depth` {2, 3} × `min_child_weig
 
 - A comparação do TCC continua sendo modelo 3 × modelo 1, sempre com a mesma família e os mesmos hiperparâmetros nos dois.
 - As referências continuam sendo o acaso, a regra da volatilidade e a regressão logística. O modelo escolhido só "ganha" se superar as três. Se a logística vencer, o XGBoost do ponto de partida passa a ser a terceira referência.
-- Esta regra substitui a da decisão F7 (maior AUC da grade) quando for implementada.
+- Esta regra substitui a da decisão F7 (maior AUC da grade) quando o treino recebe `--configuracao` com a configuração final. Sem essa opção, o treino continua como antes.
 - Top 5 ao vivo, motivos, calibração e arquivos em `modelos/`: sem mudança se o vencedor for XGBoost. Se não for, nada entra em produção antes de ajustar o código e a especificação, e isso é registrado.
 - Relatam-se todos os candidatos, inclusive os reprovados. O teste final continua de uso único, no fim, com a configuração congelada.
 

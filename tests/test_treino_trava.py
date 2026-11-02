@@ -214,3 +214,14 @@ def test_liberado_sem_a_opcao_roda_o_desenvolvimento_sem_registro(ambiente):
     assert codigo == 0
     assert not ambiente["registro"].exists()
     assert any(p.name.startswith("dev-") for p in ambiente["saida"].iterdir())
+
+
+def test_teste_final_recusa_configuracao(ambiente, tmp_path, capsys):
+    """`--configuracao` não vale no teste final: a configuração vem dos .meta.json. Recusa antes de ler."""
+    caminho = tmp_path / "congelado.json"
+    caminho.write_text("{}", encoding="utf-8")
+    argv = _argv(ambiente, "--teste-final", "--configuracao", str(caminho))
+    assert treino.main(argv, params=_params_liberado()) == 2
+    assert "--configuracao" in capsys.readouterr().out
+    assert not ambiente["registro"].exists()
+    assert list(ambiente["saida"].glob("teste-final-*")) == []

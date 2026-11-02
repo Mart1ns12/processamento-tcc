@@ -10,9 +10,11 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from processamento.experimento import dataset, modelos
+from fabrica_treino import dataset_sintetico, gravar_versoes, params_teste
+from processamento.experimento import dataset, modelos, treino, validacao
 from processamento.experimento.preparacao import (
     VERSAO_PREPARACAO,
+    colunas_do_modelo,
     COLUNAS_ALVO,
     COLUNAS_BRUTAS,
     COLUNAS_RANK,
@@ -203,3 +205,70 @@ def test_score_volatilidade_top_via_avaliacao():
     top5 = avaliacao.resumo_diario(df, 5)
     assert top5["acerto_top"].iloc[0] == pytest.approx(0.6, abs=1e-12)
     assert top5["excesso_top"].iloc[0] == pytest.approx(0.006, abs=1e-12)
+
+
+# --- Fase 2.1: LightGBM (só a busca usa; a rotina diária não depende dele) -----------------------
+
+HIPER_LGBM = {
+    "n_estimators": 50, "max_depth": 3, "learning_rate": 0.03, "subsample": 0.8,
+    "colsample_bytree": 0.8, "min_child_weight": 50, "reg_lambda": 5,
+}
+
+
+def test_prob_lgbm_entre_0_e_1_com_nan():
+    X, y = _dados_sinteticos()
+    modelo = modelos.treinar_lgbm(X, y, HIPER_LGBM, semente=0)
+    p = modelos.prob_lgbm(modelo, X)
+    assert p.shape == (2000,)
+    assert np.isfinite(p).all()
+    assert ((p >= 0) & (p <= 1)).all()
+
+
+def test_lgbm_duas_execucoes_dao_o_mesmo_array():
+    X, y = _dados_sinteticos()
+    primeira = modelos.prob_lgbm(modelos.treinar_lgbm(X, y, HIPER_LGBM, semente=0), X)
+    segunda = modelos.prob_lgbm(modelos.treinar_lgbm(X, y, HIPER_LGBM, semente=0), X)
+    assert np.array_equal(primeira, segunda)
+
+
+def test_modelos_nao_importa_lightgbm_no_topo():
+    """A rotina diária importa `modelos`: o import de lightgbm tem de ficar dentro de `treinar_lgbm`."""
+    import ast
+    from pathlib import Path
+
+    arvore = ast.parse(Path(modelos.__file__).read_text(encoding="utf-8"))
+    topo = [n for n in arvore.body if isinstance(n, (ast.Import, ast.ImportFrom))]
+    nomes = {a.name.split(".")[0] for n in topo for a in n.names}
+    nomes |= {(n.module or "").split(".")[0] for n in topo if isinstance(n, ast.ImportFrom)}
+    assert "lightgbm" not in nomes
+
+
+@pytest.fixture(scope="module")
+def dev_lgbm(tmp_path_factory):
+    """Dataset sintético de desenvolvimento, preparado com as dobras (uma vez por módulo)."""
+    pasta = tmp_path_factory.mktemp("lgbm")
+    gravados = gravar_versoes(pasta, dataset_sintetico(), versoes=("todas",))
+    params = params_teste()
+    df_dev, _ = treino.ler_desenvolvimento(gravados["todas"], params)
+    prep, cal = treino.preparar_dev(df_dev)
+    dobras = validacao.dobras_walk_forward(cal, params.treino_minimo_meses, params.embargo_pregoes)
+    return prep, dobras, params
+
+
+def test_prever_lgbm_tem_as_mesmas_linhas_que_xgb(dev_lgbm):
+    prep, dobras, params = dev_lgbm
+    colunas = colunas_do_modelo("3", ("preco_contexto", "macro", "noticias_contexto"))
+    xgb = treino.prever_walk_forward(prep, dobras, colunas, "xgb", params)
+    lgbm = treino.prever_walk_forward(prep, dobras, colunas, "lgbm", params)
+    assert len(lgbm) == len(xgb) > 0
+    assert lgbm[["data", "ticker", "dobra"]].reset_index(drop=True).equals(
+        xgb[["data", "ticker", "dobra"]].reset_index(drop=True))
+    assert lgbm["score"].between(0, 1).all()
+
+
+def test_requirements_fixa_lightgbm():
+    from pathlib import Path
+
+    raiz = Path(__file__).resolve().parents[1]
+    linhas = (raiz / "requirements.txt").read_text(encoding="utf-8").splitlines()
+    assert "lightgbm==4.7.0" in linhas

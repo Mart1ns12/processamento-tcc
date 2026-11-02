@@ -667,6 +667,7 @@ Com ~1 ano de histórico, a etapa 6 é **só teste de funcionamento** (3.4): o r
 
 **Acréscimo de 02/11/2026 (executor do protocolo; `docs/protocolo_variaveis.md`, seção 7)**
 - **Q7 Executor:** `python -m processamento.experimento.protocolo_execucao`, em `experimento/protocolo.py` (regras), `protocolo_registro.py`, `protocolo_relatorio.py` e `protocolo_execucao.py`. Só lê o CSV de desenvolvimento; não abre o teste final, não grava em `modelos/` e não lê o banco. `avaliacao.ic_bootstrap_blocos` ganhou `percentis` (padrão igual) e `treino.selecionar_blocos` foi extraída de `selecionar_configuracao`, sem mudar resultados.
+- **Q9 Busca:** `python -m processamento.experimento.busca_execucao`, em `experimento/busca.py` (regra) e `busca_execucao.py`, com as regras de `docs/protocolo_variaveis.md`, seção 6. Exige a configuração congelada de uma rodada válida; só lê o CSV de desenvolvimento e não grava em `modelos/`. `modelos.py` e `prever_walk_forward` ganharam o LightGBM (`lightgbm==4.7.0`; só a busca importa). `treino --configuracao` usa a configuração final no desenvolvimento em vez de `selecionar_configuracao` (só família XGBoost por enquanto; recusado no teste final). Sem a opção, nada muda.
 - **Q8 `var_lucro_aa`:** conta própria de lucro e PL por empresa em `experimento/resultados.py`, ~50 vezes mais rápida, com a mesma regra de `fatos/trimestres.py`. `tests/test_exp_var_lucro_equivalencia.py` compara as duas: mudança na regra de trimestres precisa valer nas duas.
 
 ---
