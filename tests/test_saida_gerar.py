@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import shutil
 from datetime import date
 from pathlib import Path
 
@@ -17,6 +18,7 @@ import pytest
 
 from fabrica_saida import AGORA
 from fabrica_treino import dataset_sintetico, params_teste
+from processamento.experimento.preparacao import VERSAO_PREPARACAO
 from processamento import fontes
 from processamento.experimento import modelos, preparacao
 from processamento.experimento import dataset as exp_dataset
@@ -60,7 +62,7 @@ def _salvar_modelos(pasta: Path, inverter: bool = False) -> None:
     for modelo_id, nome in (("3", "xgb-2025-10"), ("1", "xgb-m1-2025-10")):
         colunas = preparacao.colunas_do_modelo(modelo_id)
         modelo = modelos.treinar_xgb(treino[colunas], alvo, PARAMS.xgboost, PARAMS.semente)
-        meta = {chave: None for chave in CHAVES_METADADOS}
+        meta = {**{chave: None for chave in CHAVES_METADADOS}, "versao_preparacao": VERSAO_PREPARACAO}
         meta.update(modelo=modelo_id, colunas=colunas, provisorio=True, calibracao={"aprovada": False},
                     universo="composicao_atual")
         modelos.salvar_modelo(modelo, meta, pasta, nome)
@@ -476,3 +478,89 @@ def test_p5_limpar_pacotes_so_os_nomes_da_8_5(tmp_path):
     (estado / "acoes.json").write_text("{}", encoding="utf-8")
     assert _limpar_pacotes(estado, proibida=estado) == []
     assert (estado / "acoes.json").is_file()
+
+
+# ---------------------------------------------------------------- trava de versão: só o top fica de fora
+
+
+def _modelos_de_outra_versao(origem: Path, destino: Path, nomes=("xgb-2025-10", "xgb-m1-2025-10")) -> Path:
+    shutil.copytree(origem, destino)
+    for nome in nomes:
+        caminho = destino / f"{nome}.meta.json"
+        meta = json.loads(caminho.read_text(encoding="utf-8"))
+        meta.pop("versao_preparacao")   # modelo anterior à trava
+        caminho.write_text(json.dumps(meta), encoding="utf-8")
+    return destino
+
+
+def test_modelo_de_outra_versao_com_top_nao_publicado_manda_os_sete_e_a_rodada_fica_ok(banco_teste, tmp_path, modelos_dir):
+    antigos = _modelos_de_outra_versao(modelos_dir, tmp_path / "antigos")
+    pasta = _gerar(tmp_path, banco_teste(), modelos=antigos, usar_estado=True, params_saida=SAIDA_NAO)
+
+    assert {p.name for p in pasta.iterdir()} == {f"{nome}.json" for nome in [*SETE, "execucao"]}
+    ex = _execucao(pasta)
+    assert ex["status"] == "ok"
+    assert [p["pacote"] for p in ex["pacotes_enviados"]] == SETE
+    assert any("outra versão de preparação" in aviso for aviso in ex["avisos"])
+    assert not (tmp_path / "registros" / "2025-10-22.top.json").exists()
+
+
+def test_modelo_de_outra_versao_com_top_publicado_manda_o_resto_e_a_rodada_fica_parcial(banco_teste, tmp_path, modelos_dir):
+    antigos = _modelos_de_outra_versao(modelos_dir, tmp_path / "antigos")
+    pasta = _gerar(tmp_path, banco_teste(), modelos=antigos, params_saida=SAIDA_SIM)
+
+    esperados = [nome for nome in ORDEM_PACOTES if nome != "experimento_top"]
+    assert {p.name for p in pasta.iterdir()} == {f"{nome}.json" for nome in [*esperados, "execucao"]}
+    ex = _execucao(pasta)
+    assert ex["status"] == "parcial"
+    assert [p["pacote"] for p in ex["pacotes_enviados"]] == esperados
+    assert any("outra versão de preparação" in aviso for aviso in ex["avisos"])
+
+
+def test_so_o_modelo_sombra_de_outra_versao_tambem_tira_o_top(banco_teste, tmp_path, modelos_dir):
+    antigos = _modelos_de_outra_versao(modelos_dir, tmp_path / "antigos", nomes=("xgb-m1-2025-10",))
+    pasta = _gerar(tmp_path, banco_teste(), modelos=antigos, params_saida=SAIDA_NAO)
+
+    assert [p["pacote"] for p in _execucao(pasta)["pacotes_enviados"]] == SETE
+    assert not (tmp_path / "registros" / "2025-10-22.top.json").exists()
+
+
+def test_pacotes_de_fatos_sao_iguais_com_modelo_de_outra_versao(banco_teste, tmp_path, modelos_dir):
+    antigos = _modelos_de_outra_versao(modelos_dir, tmp_path / "antigos")
+    atual = _gerar(tmp_path / "a", banco_teste(), modelos=modelos_dir, params_saida=SAIDA_NAO)
+    velho = _gerar(tmp_path / "b", banco_teste(), modelos=antigos, params_saida=SAIDA_NAO)
+    for nome in SETE:
+        assert _ler_json(atual, nome) == _ler_json(velho, nome), nome
+
+
+# ---------------------------------------------------------------- dia_resultado ao vivo (E11)
+
+
+def test_insumos_balancos_ate_t_e_para_dia_de_resultado_ate_a_vespera_de_d(banco_teste, monkeypatch):
+    from datetime import timedelta
+
+    import pandas as pd
+
+    from processamento import fontes
+    from processamento.saida.insumos import ler_insumos
+
+    ler = banco_teste()
+    original = fontes.ler_tabela
+    precos = original("precos", ler=ler)
+    t = precos.loc[precos["ticker"] == "IBOV", "data"].max().date()
+    d = t + timedelta(days=3)   # entre t e D há dias sem pregão (como um fim de semana)
+    sabado = pd.Timestamp(t + timedelta(days=1))
+    base = original("balancos", ler=ler).iloc[:2].copy()
+    assert len(base) == 2
+    base["data_entrega"] = [pd.Timestamp(t), sabado]
+
+    def lendo(tabela, *, desde=None, ate=None, ler=None, unir_mudancas=True):
+        if tabela == "balancos":
+            return base[base["data_entrega"] <= pd.Timestamp(ate)].reset_index(drop=True)
+        return original(tabela, desde=desde, ate=ate, ler=ler, unir_mudancas=unir_mudancas)
+
+    monkeypatch.setattr(fontes, "ler_tabela", lendo)
+    ins = ler_insumos(d, ler, existe_composicao=False)
+    assert ins.t == t
+    assert ins.balancos["data_entrega"].tolist() == [pd.Timestamp(t)]
+    assert ins.balancos_resultado["data_entrega"].tolist() == [pd.Timestamp(t), sabado]

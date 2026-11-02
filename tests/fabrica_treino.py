@@ -16,7 +16,7 @@ import pandas as pd
 from fabrica_precos import pregoes_uteis
 from processamento.experimento import dataset
 from processamento.experimento.parametros import carregar_parametros_treino
-from processamento.experimento.preparacao import COLUNAS_RANK
+from processamento.experimento.preparacao import COLUNAS_RANK, VERSAO_PREPARACAO
 from processamento.experimento.tom import COLUNAS_NOTICIAS
 
 TICKERS = [f"{letra * 4}3" for letra in "ABCDEFGHIJKL"]
@@ -93,6 +93,7 @@ def gravar_versoes(pasta: Path, df: pd.DataFrame, versoes: tuple[str, ...] = VER
         atual = df.copy() if versao == "todas" else _perturbar_noticias(df, np.random.default_rng(1000 + i))
         info = {
             "versao_noticias": versao,
+            "versao_preparacao": VERSAO_PREPARACAO,
             "linhas": len(atual),
             "pregoes": int(atual["data"].nunique()),
             "cobertura_inicio": inicio,

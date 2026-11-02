@@ -88,9 +88,9 @@ def _url_util(*valores) -> str | None:
 def remover_entre_origens(df: pd.DataFrame, params: ParametrosExperimento) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Tira as cópias da mesma notícia entre origens diferentes. Devolve (df sem as removidas, pares).
 
-    Candidatas: origem diferente de cvm_ipe. Quem fica, na ordem de prioridade: a `data_publicacao` mais antiga
-    (uma cópia posterior ao corte nunca muda o passado; sem data vai por último); na mesma data, com probabilidade
-    antes de sem; `precisao_hora == "hora"` antes (sem a coluna, não conta); menor `momento_ref`; menor `id`.
+    Candidatas: origem diferente de cvm_ipe. Quem fica, na ordem de prioridade: o menor `momento_ref` (a hora real,
+    ou 23:59:59 da data sem hora: uma cópia posterior nunca muda o passado); no mesmo momento, com probabilidade
+    antes de sem; `precisao_hora == "hora"` antes (sem a coluna, não conta); menor `id`.
     Percorre as candidatas nessa ordem e cai a linha que casa com uma linha JÁ MANTIDA de OUTRA origem:
     - título (só com `deduplicar_titulo`): mesma empresa, mesmo `normalizar_titulo`, com pelo menos
       `titulo_palavras_min_entre_origens` palavras (no título normalizado) e |data_publicacao| até
@@ -149,8 +149,7 @@ def remover_entre_origens(df: pd.DataFrame, params: ParametrosExperimento) -> tu
         grupo |= com_titulo.groupby(["empresa", "tn"])["origem"].transform("nunique").reindex(w.index) > 1
     com_url = w[w["uk"].notna()]
     grupo |= com_url.groupby(["empresa", "uk"])["origem"].transform("nunique").reindex(w.index) > 1
-    w["dia_ordem"] = pd.to_numeric(w["dia"]).fillna(float("inf"))
-    g = w[grupo].sort_values(["dia_ordem", "sem_prob", "nao_hora", "momento", "id"], kind="mergesort")
+    g = w[grupo].sort_values(["momento", "sem_prob", "nao_hora", "id"], kind="mergesort")
 
     mantidas_t: dict = {}
     mantidas_u: dict = {}
@@ -196,8 +195,8 @@ def remover_entre_origens(df: pd.DataFrame, params: ParametrosExperimento) -> tu
 def deduplicar(noticias: pd.DataFrame, params: ParametrosExperimento) -> tuple[pd.DataFrame, dict]:
     """Uma linha por (empresa, id). Com `deduplicar_titulo`, também uma por (empresa, dia, título)
     entre as notícias que não são de cvm_ipe (com `deduplicar_entre_origens`, a chave tem a origem: só
-    cópias de uma mesma origem). Entre as cópias, fica a que tem probabilidade (prob_positivo e
-    prob_negativo não nulos), se houver; depois a de menor momento_ref (empate: menor id). Sem as colunas de
+    cópias de uma mesma origem). Entre as cópias, fica a de menor momento_ref; no mesmo momento, a que tem
+    probabilidade (prob_positivo e prob_negativo não nulos), depois o menor id. Sem as colunas de
     probabilidade, só vale o momento_ref. Com `deduplicar_entre_origens`, depois tira as cópias entre origens
     diferentes (`remover_entre_origens`). Contagens: duplicadas_id, duplicadas_titulo, duplicadas_titulo_mesmo_dia,
     duplicadas_titulo_janela e duplicadas_url (as três últimas são 0 com a regra desligada)."""
@@ -211,7 +210,7 @@ def deduplicar_com_pares(noticias: pd.DataFrame, params: ParametrosExperimento) 
     if {"prob_positivo", "prob_negativo"} <= set(noticias.columns):
         sem_prob = noticias["prob_positivo"].isna() | noticias["prob_negativo"].isna()
         noticias = noticias.assign(_sem_prob=sem_prob.astype(int))
-        ordem = ["_sem_prob", *ordem]
+        ordem = ["momento_ref", "_sem_prob", "id"]
     ordenadas = noticias.sort_values(ordem).reset_index(drop=True)
     df = ordenadas.drop_duplicates(["empresa", "id"], keep="first")
     duplicadas_id = len(ordenadas) - len(df)

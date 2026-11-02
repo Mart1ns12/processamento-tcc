@@ -12,6 +12,7 @@ import pytest
 
 from processamento.experimento import dataset, modelos
 from processamento.experimento.preparacao import (
+    VERSAO_PREPARACAO,
     COLUNAS_ALVO,
     COLUNAS_BRUTAS,
     COLUNAS_RANK,
@@ -95,6 +96,7 @@ def _metadados(X):
     return {
         "modelo": "3",
         "versao_noticias": "v-teste",
+        "versao_preparacao": VERSAO_PREPARACAO,
         "colunas": list(X.columns),
         "blocos": ("preco_contexto",),
         "hiperparametros": HIPER,

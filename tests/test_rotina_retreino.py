@@ -70,6 +70,7 @@ def _meta_dev(modelo, colunas, params, calibracao):
     meta.update({
         "modelo": modelo,
         "versao_noticias": "todas",
+        "versao_preparacao": preparacao.VERSAO_PREPARACAO,
         "colunas": colunas,
         "blocos": {"blocos_preco": [], "noticias_contexto": False},
         "hiperparametros": params.xgboost,

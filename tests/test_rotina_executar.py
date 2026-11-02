@@ -18,6 +18,7 @@ import sqlalchemy
 
 from fabrica_rotina import RelogioFalso, etapas, execucao, linha_do_tempo, painel
 from fabrica_treino import dataset_sintetico, params_teste
+from processamento.experimento.preparacao import VERSAO_PREPARACAO
 from processamento import fontes
 from processamento.diagnostico.esperado import ETAPAS_COLETA
 from processamento.experimento import modelos, preparacao
@@ -62,7 +63,7 @@ def _salvar_modelos(pasta: Path, mes: str) -> None:
     for modelo_id, nome in (("3", f"xgb-{mes}"), ("1", f"xgb-m1-{mes}")):
         colunas = preparacao.colunas_do_modelo(modelo_id)
         modelo = modelos.treinar_xgb(treino[colunas], treino["alvo"], PARAMS.xgboost, PARAMS.semente)
-        meta = {chave: None for chave in CHAVES_METADADOS}
+        meta = {**{chave: None for chave in CHAVES_METADADOS}, "versao_preparacao": VERSAO_PREPARACAO}
         meta.update(modelo=modelo_id, colunas=colunas, provisorio=True, calibracao={"aprovada": False},
                     universo="composicao_atual")
         modelos.salvar_modelo(modelo, meta, pasta, nome)

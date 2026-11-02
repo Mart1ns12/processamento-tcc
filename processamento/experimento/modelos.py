@@ -20,11 +20,12 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline, make_pipeline
 from sklearn.preprocessing import StandardScaler
 
-from processamento.experimento import dataset
+from processamento.experimento import dataset, preparacao
 
 TAMANHO_BLOCO = 1024 * 1024
 CHAVES_METADADOS = (
     "modelo",
+    "versao_preparacao",
     "versao_noticias",
     "colunas",
     "blocos",
@@ -101,6 +102,11 @@ def score_volatilidade(preparado: pd.DataFrame) -> np.ndarray:
     return np.where(np.isnan(score), 0.5, score)
 
 
+def preparacao_compativel(meta: dict | None) -> bool:
+    """O modelo foi treinado com a preparação atual? Sem a chave nos metadados (modelo antigo), não."""
+    return meta is not None and meta.get("versao_preparacao") == preparacao.VERSAO_PREPARACAO
+
+
 def sha256_arquivo(caminho: Path) -> str:
     """SHA-256 do arquivo, lido em blocos de 1 MiB."""
     h = hashlib.sha256()
@@ -110,7 +116,7 @@ def sha256_arquivo(caminho: Path) -> str:
     return h.hexdigest()
 
 
-_PREFIXOS_MODELO = {"1": "xgb-m1-", "3": "xgb-", "3b": "xgb-m3b-"}
+_PREFIXOS_MODELO = {"1": "xgb-m1-", "3": "xgb-"}
 
 
 def nome_modelo(mes: str, modelo: str = "3") -> str:

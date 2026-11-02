@@ -11,7 +11,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from processamento.experimento import avaliacao, modelos
+from processamento.experimento import avaliacao, modelos, preparacao
 from processamento.experimento.parametros import ParametrosTreino
 
 MEDIA_DE_REFERENCIA = 0.5
@@ -98,9 +98,10 @@ def top_do_dia(
     colunas = metadados["colunas"]
     X = preparado_dia[colunas]
     prob = modelos.prob_xgb(modelo, X)
-    contrib = modelos.contribuicoes(modelo, X)
+    # os motivos falam das colunas do dataset, mesmo se o modelo usa uma variante preparada
+    contrib = modelos.contribuicoes(modelo, X).rename(columns=preparacao.COLUNA_BRUTA)
     aprovada = metadados["calibracao"]["aprovada"]
-    brutos = bruto_dia[colunas]
+    brutos = bruto_dia[[preparacao.COLUNA_BRUTA.get(c, c) for c in colunas]]
 
     ranking = _ranking(preparado_dia, prob, params.topk[0])
     itens = []

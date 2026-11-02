@@ -63,7 +63,7 @@ def _sem_campos_do_dataset(metricas):
 def _envenenar(df, mascara):
     """Cópia com as linhas marcadas estragadas (mesmo veneno de test_treino_pipeline.py)."""
     saida = df.copy()
-    cols = list(COLUNAS_RANK) + list(dataset.COLUNAS_NOTICIAS)
+    cols = list(dict.fromkeys([*COLUNAS_RANK, *dataset.COLUNAS_NOTICIAS]))
     saida.loc[mascara, cols] = saida.loc[mascara, cols] * -1
     saida.loc[mascara, "alvo"] = 1 - saida.loc[mascara, "alvo"]
     saida.loc[mascara, "ret_t1"] = 99.0

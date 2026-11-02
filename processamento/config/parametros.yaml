@@ -169,8 +169,8 @@ fundamentos:
   pvp_minimo_plausivel: 0.05    # P/VP calculado abaixo disto = quantidade de ações suspeita (v1-acoes_emitidas em milhares em ~25 empresas; seção 10)
   pvp_maximo_plausivel_x1000: 20.0  # P/VP × 1000 acima disto: multiplicar as ações por 1000 daria P/VP implausível, logo a quantidade não está em milhares
   balanco_idade_max_meses: 15   # balanço de referência com data_fim_periodo + N meses antes de t = velho: P/L, P/VP, ROE, margens, EBITDA, endividamento e payout 12m indisponíveis (seção 6)
-# Fase 2: dataset do experimento (seção 7.3; plano da etapa 5). Volatilidade, volume, beta e
-# setor_excluir vêm do bloco fase1 (mesma conta do painel).
+# Fase 2: dataset do experimento (seção 7.3; plano da etapa 5). Volatilidade, volume e beta vêm do bloco
+# fase1 (mesma conta do painel). A ret_vs_setor sempre exclui a empresa inteira (E14): fase1.setor_excluir não vale aqui.
 experimento:
   retornos: {ret_1d: 1, ret_5d: 5, ret_20d: 20}
   exposicao_pregoes: 120
@@ -195,7 +195,7 @@ experimento:
     origens: ["cvm_ipe"]
     tipos_conteudo: ["reportagem"]
     papeis: ["protagonista", "citada_com_fato"]
-# Fase 2: treino e avaliação (seções 7.4–7.7; plano da etapa 6). Com ~1 ano de histórico: SÓ TESTE DE FUNCIONAMENTO.
+# Fase 2: treino e avaliação (seções 7.4–7.7; plano da etapa 6). Com modelo_oficial false: SÓ TESTE DE FUNCIONAMENTO.
 treino:
   semente: 20261023
   inicio_experimento: "2021-01-01"  # "AAAA-MM-DD" ou "cobertura" = cobertura_inicio do JSON do dataset (1ª data com notícias)

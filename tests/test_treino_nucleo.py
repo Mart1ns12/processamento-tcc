@@ -114,7 +114,9 @@ def test_selecionar_configuracao_roda_duas_vezes_igual(dev):
     segunda, tab2 = treino.selecionar_configuracao(prep, dobras, params)
     assert primeira == segunda
     pd.testing.assert_frame_equal(tab1, tab2)
-    assert set(primeira) == {"blocos_preco", "noticias_contexto", "hiperparametros", "colunas_1", "colunas_3"}
+    assert set(primeira) == {
+        "blocos_preco", "noticias_contexto", "extremo_em_rank", "hiperparametros", "colunas_1", "colunas_3",
+    }
     assert set(primeira["blocos_preco"]) <= {"preco_contexto", "macro"}
     assert isinstance(primeira["noticias_contexto"], bool)
     assert primeira["hiperparametros"]["max_depth"] == 2
@@ -151,3 +153,39 @@ def test_avaliar_sem_colunas_grava_none(dev):
     pred = treino.prever_walk_forward(prep, dobras, colunas_do_modelo("1"), "volatilidade", params)
     bloco = treino.avaliar(pred, params, treino.calcular_acaso(pred, params))
     assert bloco["colunas"] is None
+
+
+# ---------------------------------------------------------------- versão de preparação e extremo em rank
+
+
+@pytest.mark.parametrize("versao", [None, 1])
+def test_csv_de_outra_versao_de_preparacao_pede_regerar(tmp_path, versao):
+    import json
+
+    csv = gravar_versoes(tmp_path, dataset_sintetico(), versoes=("todas",))["todas"]
+    caminho = csv.with_suffix(".json")
+    info = json.loads(caminho.read_text(encoding="utf-8"))
+    if versao is None:
+        info.pop("versao_preparacao")
+    else:
+        info["versao_preparacao"] = versao
+    caminho.write_text(json.dumps(info), encoding="utf-8")
+    with pytest.raises(treino.ErroDataset, match="regenere"):
+        treino.ler_desenvolvimento(csv, params_teste())
+
+
+@pytest.mark.parametrize("ganho, adotado", [(0.01, True), (0.004, False), (0.0, False)])
+def test_extremo_em_rank_so_entra_se_o_ganho_passar_do_minimo(monkeypatch, ganho, adotado):
+    from processamento.experimento import preparacao
+
+    monkeypatch.setattr(treino, "prever_walk_forward", lambda prep, dobras, colunas, tipo, params, hiper=None: colunas)
+    monkeypatch.setattr(
+        treino, "auc_medio_wf", lambda colunas: 0.5 + (ganho if preparacao.EXTREMO_RANK in colunas else 0.0)
+    )
+    cfg, tentativas = treino.selecionar_configuracao(None, [], params_teste())
+    assert cfg["extremo_em_rank"] is adotado
+    assert (preparacao.EXTREMO_RANK in cfg["colunas_3"]) is adotado
+    assert ("noticias_dia_extremo" in cfg["colunas_3"]) is not adotado
+    assert preparacao.EXTREMO_RANK not in cfg["colunas_1"]
+    linha = tentativas[tentativas["descricao"] == "noticias_dia_extremo em rank"]
+    assert len(linha) == 1 and bool(linha["aceito"].iloc[0]) is adotado

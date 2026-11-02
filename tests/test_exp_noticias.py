@@ -217,25 +217,34 @@ def test_cvm_ipe_com_mesmo_titulo_no_dia_nao_deduplica():
     assert info["duplicadas_titulo"] == 0
 
 
-def test_copia_com_probabilidade_vence_a_sem_probabilidade_mais_cedo():
+def test_copia_mais_cedo_vence_mesmo_sem_probabilidade():
     linhas = [
         nota(8, "XXXX3", hora="2026-06-18 09:00:00", titulo="Teste F", pp=None, pn=None),
         nota(9, "XXXX3", hora="2026-06-18 10:00:00", titulo="Teste F", pp=0.5, pn=0.2),
     ]
     saida, info = deduplicar(com_empresa(linhas), PARAMS)
-    assert list(saida["id"]) == [9]
+    assert list(saida["id"]) == [8]
     assert info == {**_ZERO_ENTRE, "duplicadas_id": 0, "duplicadas_titulo": 1}
     assert "_sem_prob" not in saida.columns
 
 
-def test_copia_com_probabilidade_vence_tambem_pelo_id_da_mesma_noticia():
+def test_mesmo_momento_a_copia_com_probabilidade_desempata():
+    linhas = [
+        nota(7, "XXXX3", hora="2026-06-18 09:00:00", titulo="Teste H", pp=None, pn=None),
+        nota(8, "XXXX3", hora="2026-06-18 09:00:00", titulo="Teste H", pp=0.5, pn=0.2),
+    ]
+    saida, _ = deduplicar(com_empresa(linhas), PARAMS)
+    assert list(saida["id"]) == [8]
+
+
+def test_mesmo_id_em_duas_classes_fica_a_mais_cedo():
     linhas = [
         nota(10, "XXXX3", hora="2026-06-18 09:00:00", pp=0.5, pn=None),
         nota(10, "XXXX4", hora="2026-06-18 10:00:00", pp=0.4, pn=0.1),
     ]
     saida, info = deduplicar(com_empresa(linhas), PARAMS)
     assert list(saida["id"]) == [10]
-    assert saida.iloc[0]["ticker"] == "XXXX4"
+    assert saida.iloc[0]["ticker"] == "XXXX3"
     assert info == {**_ZERO_ENTRE, "duplicadas_id": 1, "duplicadas_titulo": 0}
 
 
@@ -526,14 +535,29 @@ def test_entre_origens_mesma_origem_mesmo_dia_fica_uma():
     assert info["duplicadas_titulo"] == 1 and info["duplicadas_titulo_mesmo_dia"] == 0
 
 
-def test_entre_origens_wp_sem_probabilidade_perde_para_gn_com():
+def test_entre_origens_wp_mais_cedo_vence_mesmo_sem_probabilidade():
+    # WP às 10:00 contra GN só-data (23:59:59): o momento mais cedo vence
     linhas = [
         hora_wp(22, "2026-10-27", "10:00:00", pp=None, pn=None),
         so_data_gn(21, "2026-10-27"),
     ]
     saida, info = deduplicar(com_empresa(linhas), PARAMS)
-    assert list(saida["id"]) == [21]
+    assert list(saida["id"]) == [22]
     assert info["duplicadas_titulo_mesmo_dia"] == 1
+
+
+def test_entre_origens_mesmo_momento_probabilidade_e_hora_real_desempatam():
+    # WP às 23:59:59 (hora real) e GN só-data (23:59:59): mesmo momento
+    com_prob = [hora_wp(22, "2026-10-27", "23:59:59", pp=None, pn=None), so_data_gn(21, "2026-10-27")]
+    assert list(deduplicar(com_empresa(com_prob), PARAMS)[0]["id"]) == [21]  # probabilidade primeiro
+    com_hora = [hora_wp(22, "2026-10-27", "23:59:59"), so_data_gn(21, "2026-10-27")]
+    assert list(deduplicar(com_empresa(com_hora), PARAMS)[0]["id"]) == [22]  # depois a hora real
+
+
+def test_entre_origens_copia_de_07h_da_data_seguinte_nao_vence_a_de_mesma_data_mais_cedo():
+    # WP 07:00 de 27/10 é anterior à GN só-data de 27/10 (23:59:59): fica a WP, publicada antes
+    linhas = [so_data_gn(21, "2026-10-27"), hora_wp(22, "2026-10-27", "07:00:00")]
+    assert list(deduplicar(com_empresa(linhas), PARAMS)[0]["id"]) == [22]
 
 
 def test_entre_origens_empresa_pelo_cnpj_une_codigos_diferentes():

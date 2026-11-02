@@ -14,7 +14,7 @@ from fabrica_precos import pregoes_uteis
 from processamento.exclusoes import Exclusoes
 from processamento.experimento.dataset import COLUNAS_DATASET, DadosExperimento, montar_dataset
 from processamento.experimento.parametros import carregar_parametros_experimento
-from processamento.experimento.preparacao import COLUNAS_ALVO, COLUNAS_BRUTAS, preparar
+from processamento.experimento.preparacao import COLUNAS_ALVO, COLUNAS_BRUTAS, VERSAO_PREPARACAO, preparar
 from processamento.experimento.tom import COLUNAS_NOTICIAS
 from processamento.universo import montar_universo
 
@@ -49,7 +49,7 @@ def test_linhas_so_do_universo_do_modelo(caso):
 def test_colunas_e_mapeamento_de_notícias(caso):
     df = caso["df"]
     assert list(df.columns) == COLUNAS_DATASET
-    assert set(COLUNAS_NOTICIAS) == set(COLUNAS_BRUTAS)
+    assert set(COLUNAS_NOTICIAS) == set(COLUNAS_BRUTAS) | {"noticias_dia_qtd"}
     assert set(df["universo"]) == {"composicao_atual"}
     assert df["dia_resultado"].dtype == bool
 
@@ -226,3 +226,10 @@ def test_periodo_sem_coleta_deixa_noticias_vazias_e_conta_no_info(caso):
     assert df.loc[df["data"] == pd.Timestamp(cal[19]), "noticias_dia_qtd"].notna().all()
     # preço e alvo não mudam
     assert dentro["ret_1d"].notna().any()
+
+
+def test_info_traz_a_versao_de_preparacao_e_o_csv_guarda_a_qtd_bruta(caso):
+    assert caso["info"]["versao_preparacao"] == VERSAO_PREPARACAO
+    assert len(COLUNAS_DATASET) == len(set(COLUNAS_DATASET)) == 30
+    qtd = caso["df"]["noticias_dia_qtd"].dropna()
+    assert (qtd == qtd.round()).all() and qtd.max() >= 1   # contagem bruta: o rank só vem em `preparar`

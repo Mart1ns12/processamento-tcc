@@ -64,6 +64,7 @@ def _metadados_retreino(modelo: str, colunas: list[str], dev: dict, calibracao: 
     provisorio = not params.modelo_oficial
     return treino._para_json({
         "modelo": modelo,
+        "versao_preparacao": preparacao.VERSAO_PREPARACAO,
         "versao_noticias": "todas",
         "colunas": list(colunas),
         "blocos": {"blocos_preco": congelada["blocos_preco"], "noticias_contexto": congelada["noticias_contexto"]},

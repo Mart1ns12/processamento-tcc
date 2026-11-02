@@ -348,3 +348,40 @@ def test_copia_futura_com_mesma_url_nao_muda_linhas_de_t():
     # a cópia de t+3 sai pela URL (resolved_url da google, link da wordpress), sem janela de data
     assert info_base["duplicadas_url"] == 0
     assert info_futuro["duplicadas_url"] == 1
+
+
+# ---------------------------------------------------------------- cópia posterior ao corte não muda o pregão de t
+
+
+def _copias_em_torno_do_corte(t1, origem_cedo, origem_tarde):
+    """Cópia às 07:00 de t+1 (ainda na janela de t), sem probabilidade, e cópia às 10:00 de t+1 (já na de t+1), com."""
+    cedo = noticias_de(
+        [("c-cedo", "AAAA3", _instante_sp(t1, "07:00:00"), t1, np.nan, np.nan, origem_cedo, "protagonista", "reportagem")],
+        campos={"c-cedo": {"titulo": TITULO_COPIA}},
+    )
+    tarde = noticias_de(
+        [("c-tarde", "AAAA3", _instante_sp(t1, "10:00:00"), t1, 0.9, 0.05, origem_tarde, "protagonista", "reportagem")],
+        campos={"c-tarde": {"titulo": TITULO_COPIA}},
+    )
+    return cedo, tarde
+
+
+@pytest.mark.parametrize(
+    "origem_cedo, origem_tarde",
+    [("wordpress", "google_news"), ("google_news", "google_news")],
+    ids=["entre_origens", "mesma_origem"],
+)
+def test_copia_depois_do_corte_com_probabilidade_nao_tira_a_de_antes_do_corte(origem_cedo, origem_tarde):
+    m = _mundo_do_caso("T_INDICE")
+    t, t1 = m["t"], m["t1"]
+    cedo, tarde = _copias_em_torno_do_corte(t1, origem_cedo, origem_tarde)
+    so_cedo = _com_noticias(m, cedo)
+    com_tarde = _com_noticias(so_cedo, tarde)
+    df_cedo, _ = _montar(so_cedo)
+    df_tarde, _ = _montar(com_tarde)
+    df_sem, _ = _montar(m)
+    pd.testing.assert_frame_equal(_linhas(df_cedo, t), _linhas(df_tarde, t), rtol=1e-12, atol=1e-12)
+    # a cópia de 07:00 conta em t, e a posterior não muda isso
+    assert _valor(df_tarde, t, "AAAA3", "noticias_dia_qtd") == _valor(df_sem, t, "AAAA3", "noticias_dia_qtd") + 1
+    # e a de 10:00, mais tarde, sai: t+1 fica igual a sem ela
+    assert _valor(df_tarde, t1, "AAAA3", "noticias_dia_qtd") == _valor(df_cedo, t1, "AAAA3", "noticias_dia_qtd")

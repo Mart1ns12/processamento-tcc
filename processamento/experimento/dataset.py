@@ -32,7 +32,7 @@ from processamento.experimento.parametros import (
     carregar_parametros_experimento,
     mascara_sem_coleta,
 )
-from processamento.experimento.preparacao import COLUNAS_ALVO, COLUNAS_RANK, IDENTIFICACAO
+from processamento.experimento.preparacao import COLUNAS_ALVO, COLUNAS_PRECO, IDENTIFICACAO, VERSAO_PREPARACAO
 from processamento.experimento.resultados import dias_de_resultado
 from processamento.experimento.tom import COLUNAS_NOTICIAS, variaveis_de_noticias
 from processamento.experimento.variaveis import variaveis_de_preco
@@ -40,7 +40,7 @@ from processamento.fatos.precos import ParametrosPrecos, carregar_parametros_pre
 from processamento.tickers import ligar_a_cnpj, mapas_por_empresa
 from processamento.universo import montar_universo
 
-COLUNAS_DATASET = IDENTIFICACAO + COLUNAS_NOTICIAS + COLUNAS_RANK + COLUNAS_ALVO
+COLUNAS_DATASET = IDENTIFICACAO + COLUNAS_NOTICIAS + COLUNAS_PRECO + COLUNAS_ALVO
 
 
 @dataclass(frozen=True)
@@ -141,6 +141,7 @@ def montar_dataset(
         "linhas": len(df),
         "pregoes": len(cal),
         "versao_noticias": versao_noticias,
+        "versao_preparacao": VERSAO_PREPARACAO,
         "inicio_janela_efetivo": "fechamento" if versao_noticias == "hora_real_noite" else params.inicio_janela,
         "cobertura_inicio": None if cobertura is None else cobertura.date().isoformat(),
         "pregoes_sem_coleta": int(mascara_sem_coleta(cal, params.periodos_sem_coleta).sum()),

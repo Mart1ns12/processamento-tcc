@@ -13,6 +13,7 @@ from fabrica_treino import dataset_sintetico, gravar_versoes, params_teste
 from processamento import fontes
 from processamento.experimento import dataset, modelos, treino
 from processamento.experimento.preparacao import COLUNAS_RANK
+from processamento.experimento.preparacao import VERSAO_PREPARACAO as preparacao_atual
 
 
 @pytest.fixture(autouse=True)
@@ -75,7 +76,7 @@ def _envenenar(df, mascara):
     """Cópia com as linhas marcadas estragadas: variáveis brutas e de notícias com sinal trocado,
     alvo invertido e ret_t1 = 99. Se o treino olhasse essas linhas, o resultado mudaria."""
     saida = df.copy()
-    cols = list(COLUNAS_RANK) + list(dataset.COLUNAS_NOTICIAS)
+    cols = list(dict.fromkeys([*COLUNAS_RANK, *dataset.COLUNAS_NOTICIAS]))
     saida.loc[mascara, cols] = saida.loc[mascara, cols] * -1
     saida.loc[mascara, "alvo"] = 1 - saida.loc[mascara, "alvo"]
     saida.loc[mascara, "ret_t1"] = 99.0
@@ -106,7 +107,8 @@ def test_dev_grava_arquivos_e_modelos_provisorios(ambiente):
     meta = json.loads((ambiente["modelos"] / "xgb-2026-01.meta.json").read_text(encoding="utf-8"))
     assert all(chave in meta for chave in modelos.CHAVES_METADADOS)
     assert meta["provisorio"] is True
-    assert meta["aviso"] == "modelo provisório: treinado com ~1 ano; só teste de funcionamento"
+    assert meta["aviso"] == "modelo provisório (treino.modelo_oficial: false): só teste de funcionamento"
+    assert meta["versao_preparacao"] == preparacao_atual
     assert meta["teste_final"] == {"inicio": "2026-01-02", "fim": None, "usado": False}
 
 

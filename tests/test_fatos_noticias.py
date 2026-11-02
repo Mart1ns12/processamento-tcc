@@ -216,20 +216,17 @@ def test_probabilidade_ausente_gera_status_indisponivel():
     assert resumo["tom_medio"][1] == "indisponivel"
 
 
-def test_copia_com_probabilidade_vence_no_painel_e_o_resumo_sai_ok():
-    # Cópia de n05 (mesma empresa, mesmo dia, mesmo título) às 09:00 sem probabilidade: a deduplicação fica com a
-    # de 19:42, que tem probabilidade; o resumo do dia sai "ok" (sem a regra, a cópia de 09:00 ficaria "indisponivel")
+def test_copia_mais_cedo_vence_no_painel_mesmo_sem_probabilidade():
+    # Cópia de n05 (mesma empresa, mesmo dia, mesmo título) às 09:00 sem probabilidade: o momento mais cedo vence
     noticias = _noticias_do_plano()
     copia = noticias[noticias["id"] == "n05"].assign(
         id="n12", momento_ref=sp("2026-10-22 09:00:00"), data_hora_publicacao=sp("2026-10-22 09:00:00"),
         prob_positivo=NAN, prob_negativo=NAN,
     )
     janela = _janela(pd.concat([noticias, copia], ignore_index=True))
-    assert "n12" not in ids_da_empresa(janela, "1")
-    assert janela.set_index("id").loc["n05", "status"] == "ok"
+    assert "n12" in ids_da_empresa(janela, "1") and "n05" not in ids_da_empresa(janela, "1")
     resumo = resumo_noticias(_da_empresa(janela, "1"), True)
-    assert resumo["quantidade"] == (7.0, "ok")
-    assert resumo["tom_medio"][1] == "ok"
+    assert resumo["tom_medio"][1] == "indisponivel"   # sem probabilidade: ausência, nunca neutra (E10)
 
 
 def test_gn_e_wp_duplicadas_aparecem_uma_vez_e_fica_a_wp():

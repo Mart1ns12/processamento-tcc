@@ -11,6 +11,7 @@ from processamento.experimento.preparacao import (
     BLOCOS_COMPLEMENTARES,
     COLUNAS_ALVO,
     COLUNAS_BRUTAS,
+    EXTREMO_RANK,
     COLUNAS_RANK,
     COMPLEMENTARES_NOTICIAS,
     ESSENCIAIS_PRECO,
@@ -110,7 +111,7 @@ def test_preparar_mantem_colunas_de_noticia_e_alvo():
     prep = preparar(df)
     colunas = COLUNAS_BRUTAS + COLUNAS_ALVO + IDENTIFICACAO
     pd.testing.assert_frame_equal(prep[colunas], df[colunas])
-    assert list(prep.columns) == list(df.columns)
+    assert list(prep.columns) == [*df.columns, EXTREMO_RANK]
 
 
 def test_preparar_falta_coluna_levanta_erro():
@@ -122,7 +123,8 @@ def test_preparar_falta_coluna_levanta_erro():
 def test_colunas_do_modelo_por_modelo():
     assert colunas_do_modelo("1") == ESSENCIAIS_PRECO
     assert colunas_do_modelo("3") == ESSENCIAIS_PRECO + NOTICIAS_DIA
-    assert colunas_do_modelo("3b") == colunas_do_modelo("3")
+    with pytest.raises(ValueError, match="modelo desconhecido"):
+        colunas_do_modelo("3b")   # "3b" é só uma avaliação das previsões do modelo 3 (F12)
 
 
 def test_colunas_do_modelo_blocos_na_ordem_dada():
@@ -159,3 +161,33 @@ def test_linhas_modelo_3b_so_dias_de_resultado():
     res = linhas_modelo_3b(preparar(df))
     assert res["ticker"].tolist() == ["AAAA3"]
     assert res["data"].tolist() == [pd.Timestamp("2026-06-18")]
+
+
+def test_noticias_dia_qtd_entra_em_rank_no_pregao_e_as_outras_de_noticia_ficam_brutas():
+    df = _dataset([
+        {"data": "2026-06-18", "ticker": "AAAA3", "noticias_dia_qtd": 2.0, "noticias_dia_tom": 0.3, "noticias_dia_extremo": 0.9},
+        {"data": "2026-06-18", "ticker": "BBBB3", "noticias_dia_qtd": 0.0, "noticias_dia_tom": NAN},
+        {"data": "2026-06-18", "ticker": "CCCC3", "noticias_dia_qtd": 0.0, "noticias_dia_tom": NAN},
+        {"data": "2026-06-18", "ticker": "DDDD3", "noticias_dia_qtd": NAN, "noticias_dia_tom": NAN},
+        {"data": "2026-06-19", "ticker": "AAAA3", "noticias_dia_qtd": 0.0},
+        {"data": "2026-06-19", "ticker": "BBBB3", "noticias_dia_qtd": 0.0},
+    ])
+    prep = preparar(df)
+    # 18/06: válidos 2, 0, 0 -> posições médias 3; 1,5; 1,5 -> 1; 0,25; 0,25. Vazio continua vazio (período sem coleta).
+    assert prep["noticias_dia_qtd"].iloc[:3].tolist() == [1.0, 0.25, 0.25]
+    assert pd.isna(prep["noticias_dia_qtd"].iloc[3])
+    # 19/06: todas zeradas -> empate no meio
+    assert prep["noticias_dia_qtd"].iloc[4:].tolist() == [0.5, 0.5]
+    assert prep["noticias_dia_tom"].iloc[0] == 0.3
+    assert prep["noticias_dia_extremo"].iloc[0] == 0.9   # a variante em rank fica em outra coluna
+
+
+def test_extremo_rank_e_uma_coluna_a_parte():
+    df = _dataset([
+        {"data": "2026-06-18", "ticker": "AAAA3", "noticias_dia_extremo": -0.9},
+        {"data": "2026-06-18", "ticker": "BBBB3", "noticias_dia_extremo": 0.1},
+        {"data": "2026-06-18", "ticker": "CCCC3", "noticias_dia_extremo": NAN},
+    ])
+    prep = preparar(df)
+    assert prep[EXTREMO_RANK].iloc[:2].tolist() == [0.0, 1.0]
+    assert pd.isna(prep[EXTREMO_RANK].iloc[2])

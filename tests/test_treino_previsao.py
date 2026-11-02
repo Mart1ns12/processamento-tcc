@@ -267,3 +267,24 @@ def test_top_sombra_modelo_k_distintos_na_ordem_da_prob():
     prob = modelos.prob_xgb(modelo, dia[colunas])
     esperado = [t for _, t in sorted(zip(-prob, dia["ticker"]))][:k]
     assert tickers == esperado
+
+
+def test_motivos_com_extremo_em_rank_falam_da_coluna_do_dataset():
+    import dataclasses
+
+    from fabrica_treino import dataset_sintetico, params_teste
+    from processamento.experimento import modelos, preparacao, previsao
+
+    bruto = dataset_sintetico(n_pregoes=130, n_tickers=12)
+    prep = preparacao.preparar(bruto)
+    treino = preparacao.linhas_de_treino(prep)
+    colunas = [
+        preparacao.EXTREMO_RANK if c == "noticias_dia_extremo" else c for c in preparacao.colunas_do_modelo("3")
+    ]
+    params = dataclasses.replace(params_teste(), motivos_qtd=len(colunas))
+    modelo = modelos.treinar_xgb(treino[colunas], treino["alvo"], params.xgboost, params.semente)
+    dia = prep["data"].max()
+    mascara = prep["data"] == dia
+    itens = previsao.top_do_dia(prep[mascara], bruto[mascara], modelo, {"colunas": colunas, "calibracao": {"aprovada": False}}, params)
+    fatores = {m["fator"] for m in itens[0]["motivos"]}
+    assert "noticias_dia_extremo" in fatores and preparacao.EXTREMO_RANK not in fatores

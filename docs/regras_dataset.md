@@ -1,10 +1,8 @@
 # Regras do dataset do experimento
 
-Fotografia de 01/11/2026, feita **só lendo** o código, a `ESPECIFICACAO.md` e os relatórios em `docs/`. Nada foi rodado: nem banco, nem dataset, nem testes. Os números vêm de `docs/diagnostico_banco.md`, `docs/validacao_wordpress.md` e `docs/medicao_dedup_origens.md`, e são contagens brutas do banco, antes dos filtros, salvo aviso.
+Regras do código em 01/11/2026, depois das correções das partes A e B da revisão (seção 11). Os números vêm de `docs/diagnostico_banco.md`, `docs/validacao_wordpress.md` e `docs/medicao_dedup_origens.md`, medidos **antes** dessas correções, e são contagens brutas do banco, antes dos filtros, salvo aviso.
 
-Onde código e especificação divergem, vale a descrição do código, e a divergência está na seção 11.
-
-> **Os CSVs em `saida/experimento/` não seguem estas regras.** O mais novo (`dataset-todas-2026-10-23.csv`, gravado em 24/10) é anterior à união das origens, ao filtro de papel e à máscara dos suspeitos: o JSON dele traz `cobertura_inicio = 2024-01-01` e não tem `papel_ignoradas`. O relatório `treino/dev-2026-10-23` também é anterior a essas regras.
+> **Os CSVs em `saida/experimento/` e os modelos em `modelos/` não seguem estas regras** e são de outra versão de preparação: o treino recusa esses CSVs (é preciso regenerar as 3 versões), e o modelo `xgb-2026-06` deixa o top 5 de fora, com aviso, até o próximo treino. O relatório `treino/dev-2026-10-23` também é anterior a estas regras.
 
 ---
 
@@ -38,8 +36,8 @@ Tickers antigos da composição passam pela `v1-mudancas_ticker` (`fontes.py:869
 | Período | Início | Fim | Regra no código |
 |---|---|---|---|
 | Linhas do dataset | 30/12/2019 (1º preço) | Último pregão lido, ou `--ate` | `dataset.py:224-225` |
-| Linhas usadas no treino | `cobertura_inicio` (`treino.inicio_experimento`) | | `treino.py:112`. Esperado ~01/2021 ao regenerar (seção 11, D2) |
-| Desenvolvimento | Igual ao anterior | Antes de 23/06/2026, menos 1 pregão de embargo | `validacao.py:57-62` |
+| Linhas usadas no treino | 2021-01-01 (`treino.inicio_experimento`) | | 1º pregão em 04/01/2021; 1ª dobra de teste em 04/2021 |
+| Desenvolvimento | 2021-01-01 | Antes de 23/06/2026, menos 1 pregão de embargo (~5,5 anos) | `validacao.py:57-62` |
 | Teste final | 23/06/2026 | `treino.teste_final.fim`, hoje vazio = **trava ativa** | Só linhas com t+1 ≤ `fim`; uso único |
 | Teste ao vivo | Linha do `fim` em diante | | Top 5 gravado no dia da geração |
 
@@ -66,6 +64,7 @@ Código em `experimento/alvo.py`. Todos usam `fechamento_ajustado` (aj). t+1 é 
 São 30 colunas (`dataset.py:39`). **O CSV guarda os valores brutos:** o rank é aplicado depois, em `preparacao.preparar`, com a mesma função no treino e na previsão.
 
 - **Rank:** `(posição média − 1) / (n − 1)` dentro do pregão, entre as ações do universo, antes de tirar as linhas sem alvo. Vazio continua vazio; um único valor vira 0,5.
+- **`noticias_dia_qtd` também entra em rank.** As outras 5 de notícias ficam brutas.
 - **Coluna "Modelo":** **M1** = modelo 1 e 3; **M3** = só modelo 3; **Bloco** = candidata, entra só se o AUC médio por pregão subir mais de 0,005; **Não** = nunca é entrada.
 
 ### Identificação
@@ -99,13 +98,13 @@ São 30 colunas (`dataset.py:39`). **O CSV guarda os valores brutos:** o rank é
 
 **Nenhuma variável.** O dataset não usa P/L, P/VP, ROE, margens, endividamento nem proventos; essas contas são só do painel. De balanços, usa apenas `data_entrega`, para `dia_resultado`. Proventos entram só de forma implícita, no `fechamento_ajustado`.
 
-### Notícias (todas brutas, sem rank)
+### Notícias
 
 | Coluna | Fórmula, com score = `prob_positivo − prob_negativo` | Janela e mínimo | Modelo |
 |---|---|---|---|
-| `noticias_dia_qtd` | Nº de notícias da empresa, inclusive sem score | Janela do modelo | M3 |
+| `noticias_dia_qtd` | Nº de notícias da empresa, inclusive sem score; **em rank** no modelo | Janela do modelo | M3 |
 | `noticias_dia_tom` | Média dos scores | Janela do modelo | M3 |
-| `noticias_dia_extremo` | Score de maior módulo, com sinal; empate = média | Janela do modelo | M3 |
+| `noticias_dia_extremo` | Score de maior módulo, com sinal; empate = média. Bruta, ou em rank (`noticias_dia_extremo_rank`) se o desenvolvimento aceitar | Janela do modelo | M3 |
 | `mudanca_tom` | Tom de t − média dos scores da empresa antes de t, com peso por notícia | 30 pregões anteriores, sem t; mínimo 5 notícias com score | M3 |
 | `tom_mercado` | Média dos scores das empresas do universo, cada `id` uma vez | Janela do modelo | Bloco `noticias_contexto` |
 
@@ -141,7 +140,7 @@ CDI, IPCA, IDIV, SMLL, IFIX e IVVB11 **não entram**. O IBOV entra só no `beta`
 | Fim de semana e feriado | Vai para o último pregão antes, até 08:00 do próximo | `calendario.py:297-302` |
 | Última data, sem `--proximo` | Janela aberta: as 6 colunas de notícias ficam vazias | `dataset.py:122`, `tom.py:135-151` |
 | Última data, ao vivo | Notícias cortadas em 08:00 de D; `proximo_ao_vivo = D` | `saida/insumos.py:57`, `saida/gerar.py:213` |
-| Balanço | `data_entrega` às 23:59:59 cai na noite daquela data; só marca `dia_resultado` | `experimento/resultados.py` |
+| Balanço | `data_entrega` às 23:59:59 cai na noite daquela data; só marca `dia_resultado`. Ao vivo, lido até D − 1 dia | `experimento/resultados.py`, `saida/insumos.py` |
 | Proventos | Não são lidos; só o efeito no preço ajustado | |
 | Rank | Só linhas do mesmo pregão | `preparacao.py:28-34` |
 
@@ -161,9 +160,10 @@ CDI, IPCA, IDIV, SMLL, IFIX e IVVB11 **não entram**. O IBOV entra só no `beta`
 | Rank antes de tirar linhas sem alvo | `test_exp_preparacao.py::test_preparar_faz_rank_antes_de_descartar_sem_alvo` |
 | Entrega de balanço | `test_exp_resultados.py` |
 | Embargo e separação treino/teste | `test_treino_validacao.py::test_caso2_nenhuma_data_de_teste_no_treino_e_embargo_respeitado` |
+| Dataset inteiro: 4 datas de t, mudança só em t+1, mudança depois de t+1, dados não lidos, cópias posteriores | `test_vazamento_experimento.py` |
 | Teste final e teste ao vivo | `test_treino_trava.py::test_veneno_do_teste_ao_vivo_nao_muda_nada`, `::test_segunda_chamada_do_teste_final_e_bloqueada` |
 
-**Vazamento do dataset inteiro:** `test_vazamento_experimento.py` compara as linhas de t entre o cenário cortado em t e o cenário com o futuro alterado (preços, volumes, notícias e balanço), antes e depois dos ranks. Lacunas na seção 11, D3.
+**Vazamento do dataset inteiro:** `test_vazamento_experimento.py` compara as linhas de t entre o cenário cortado em t e o cenário com o futuro alterado (preços, volumes, notícias e balanço), antes e depois dos ranks.
 
 **O que não é "conhecido na data", mesmo sem vazar preço:**
 
@@ -194,12 +194,12 @@ Artigos distintos por ano, antes dos filtros (2021–2022 e 2026 somam as três 
 - **N1-A:** só em `origens_so_data` (`google_news`). 00:00:00 em Los Angeles vira "só data". Na `wordpress`, 05:00:00 é hora real. `precisao_hora` fica `hora`, `meia_noite_pacifico` ou `sem_hora`.
 - **Filtro de papel:** `papel = errada` sai antes das repetidas, em todas as versões. Papel vazio fica (1.343 linhas, 0,33%). Corte desigual: `google_news` 10,7%, `wordpress` 1,5%, `cvm_ipe` 0%.
 - **Repetidas, passo 1:** mesma empresa e mesmo `id` contam uma vez.
-- **Repetidas, passo 2:** dentro da mesma origem, fora `cvm_ipe`, mesma empresa + `data_publicacao` + título normalizado contam uma vez. Fica a cópia com probabilidade; depois a mais cedo; depois o menor `id`.
+- **Repetidas, passo 2:** dentro da mesma origem, fora `cvm_ipe`, mesma empresa + `data_publicacao` + título normalizado contam uma vez. Fica a de momento mais cedo; no mesmo momento, a com probabilidade; depois o menor `id`.
 - **Repetidas, passo 3 (entre origens, fora `cvm_ipe`):** casa com uma cópia já mantida de outra origem, sem fechamento transitivo, por:
   - título (`normalizar_titulo`, sem o sufixo " - Veículo"), com ≥ 5 palavras e até 1 dia de distância; ou
   - URL (`resolved_url`, senão `link`; domínio + caminho), sem limite de data nem de palavras.
-- **Quem fica entre origens:** com probabilidade → hora real → mais cedo → menor `id`.
-- **Efeito medido (versão antes do filtro de papel):** 1.449 cópias removidas (1.340 título no mesmo dia, 76 título em ±1 dia, 33 URL), quase todas em 2021–2022 e 2026. Em 2023–2025 mudaram só 4 linhas.
+- **Quem fica entre origens:** momento mais cedo (a hora real, ou 23:59:59 da data sem hora) → com probabilidade → hora real → menor `id`. Assim, uma cópia posterior nunca muda o passado.
+- **Efeito medido (antes do filtro de papel e da regra do momento mais cedo; refazer ao regenerar):** 1.449 cópias removidas (1.340 título no mesmo dia, 76 título em ±1 dia, 33 URL), quase todas em 2021–2022 e 2026.
 
 ### Janelas
 
@@ -229,7 +229,9 @@ Notícia da empresa vale para todas as suas classes: PETR3 e PETR4 recebem os me
 | Situação | Resultado | Por quê |
 |---|---|---|
 | Antes de `cobertura_inicio` | As 6 colunas vazias, inclusive `qtd` | Não havia coleta |
-| Data coberta sem notícia | `qtd = 0`; tom, extremo e `mudanca_tom` vazios | É tratado como fato: "não houve notícia" (ver D1 no buraco de 2025) |
+| Pregão em `experimento.periodos_sem_coleta` (01/01 a 31/07/2025) | As 6 colunas vazias, inclusive `qtd`; `noticias_dia` `indisponivel` | Não houve coleta, logo não é "sem notícia" |
+| Base da `mudanca_tom` tocando o período | `mudanca_tom` vazia (até ~meados de set/2025) | A base exige a janela inteira coberta |
+| Data coberta sem notícia | `qtd = 0`; tom, extremo e `mudanca_tom` vazios | É tratado como fato: "não houve notícia" |
 | Notícia sem probabilidade | Conta em `qtd`; fora dos scores | Ausente, nunca neutra |
 | Histórico curto | Variável vazia | Mínimos da seção 4 |
 | Base as-of a mais de 5 pregões | `ret_*` e `ret_vs_setor` vazios | Base velha |
@@ -250,7 +252,7 @@ Notícia da empresa vale para todas as suas classes: PETR3 e PETR4 recebem os me
 | Linha sem `alvo` | Treino e avaliação (continua no CSV) |
 | Linha antes da cobertura; teste final e embargo | Na leitura do treino |
 
-**O XGBoost usa os vazios como estão.** Só a logística imputa: mediana + indicador de vazio, dentro de cada ajuste. Vazio nunca vira 0 nas variáveis; a única exceção é `qtd`.
+**O XGBoost usa os vazios como estão.** Só a logística imputa: mediana + indicador de vazio, dentro de cada ajuste. Vazio nunca vira 0 nas variáveis; `qtd = 0` só em data com coleta.
 
 ## 8. Validação e treino
 
@@ -263,14 +265,15 @@ Notícia da empresa vale para todas as suas classes: PETR3 e PETR4 recebem os me
 |---|---|---|
 | Modelo 1, XGBoost | 7 essenciais de preço + blocos aceitos | Quanto o preço explica |
 | Modelo 3, XGBoost | Modelo 1 + 4 de notícias (+ `noticias_contexto` se aceito) | **Hipótese do TCC** |
-| "3b" | **Sem treino próprio:** previsões do 3 e do 1 avaliadas nos dias de resultado | Efeito em dia de balanço |
+| "3b" | **Só avaliação:** previsões do 3 e do 1 nos dias de resultado | Efeito em dia de balanço |
 | Modelo 3 principais / hora real | Colunas do 3 com outro CSV | Testes extras |
 | Regressão logística | Colunas do 3 | Referência |
 | Regra da volatilidade | 1 − rank da volatilidade; vazio = 0,5 | Referência sem treino |
 | Acaso | 10 mil sorteios de k ações por dia; faixa p2,5–p97,5 | Referência |
 
 - **XGBoost:** `n_estimators=300, max_depth=3, learning_rate=0.03, subsample=0.8, colsample_bytree=0.8, min_child_weight=50, reg_lambda=5`; grade `max_depth {2,3} × min_child_weight {50,200}`; semente 20261023; `n_jobs=1`.
-- **Seleção:** `preco_contexto` e `macro` no modelo 1; `noticias_contexto` no modelo 3; depois a grade, no modelo 3.
+- **Seleção (só no desenvolvimento):** `preco_contexto` e `macro` no modelo 1; `noticias_contexto` no modelo 3; `noticias_dia_extremo` em rank no modelo 3 (mesma regra de ganho); depois a grade, no modelo 3.
+- **Versão:** dataset de outra `versao_preparacao` é recusado pelo treino. Modelo de outra versão deixa só o top 5 de fora, com aviso; os outros pacotes saem normalmente (rodada `ok` com o top não publicado, `parcial` com o top publicado).
 - **Métricas:** taxa de acerto do top 5 (e top 3) × faixa do acaso; excesso de retorno contra o IBOV; top × últimos k; AUC geral e por pregão; IC por bootstrap circular (blocos de 5, 2000 reamostragens); diferenças pareadas; robustez por ano; sensibilidade do último ano; `alvo_abertura` só nos dias válidos; calibração (ECE ≤ 0,02 com ≥ 5000 linhas).
 - **Critério:** o modelo 3 só "ganha" no top 5 se ficar acima do acaso **e** superar volatilidade e logística (`treino.py:561-579`).
 
@@ -289,6 +292,8 @@ Todos em `processamento/config/parametros.yaml`, salvo aviso.
 | `experimento.janela_dias_entre_origens` | 1 | Distância máxima por título |
 | `experimento.titulo_palavras_min_entre_origens` | 5 | Mínimo de palavras |
 | `experimento.principais.*` | `cvm_ipe`; `reportagem`; `protagonista`, `citada_com_fato` | Versão `principais` |
+| `experimento.periodos_sem_coleta` | 2025-01-01 a 2025-07-31 | Colunas de notícias vazias |
+| `experimento.noticias_mes_fracao_minima` | 0,25 | Só o aviso do diagnóstico |
 | `experimento.retornos` | 1, 5, 20 | `ret_*` |
 | `experimento.exposicao_pregoes` / `_minimo` | 120 / 60 | `exposicao_*` |
 | `experimento.extremos_pregoes` / `_minimo` | 252 / 120 | `dist_*` |
@@ -299,7 +304,7 @@ Todos em `processamento/config/parametros.yaml`, salvo aviso.
 | `fase1.base_defasagem_max_pregoes` | 5 | `ret_*`, `ret_vs_setor`, suspeitos |
 | `fase1.retorno_suspeito_min` / `_max` | −0,75 / +1,00 | Máscaras e alvo |
 
-**Sem efeito no dataset:** `fase1.setor_excluir` (D4), `fase1.setor_minimo` e `fase1.retorno_suspeito_pregoes_nivel`.
+**Sem efeito no dataset:** `fase1.setor_excluir` (a `ret_vs_setor` sempre exclui a empresa inteira), `fase1.setor_minimo` e `fase1.retorno_suspeito_pregoes_nivel`.
 
 **Afetam quais linhas o treino usa (não o CSV):** `treino.inicio_experimento`, `treino.treino_minimo_meses`, `treino.embargo_pregoes`, `treino.teste_final.*`.
 
@@ -309,7 +314,7 @@ Todos em `processamento/config/parametros.yaml`, salvo aviso.
 
 ### Notícias
 
-1. **Volume crescente e mudança de regime.** `noticias_dia_qtd` entra bruta, e o volume varia até 9 vezes entre períodos. Pares ação × notícia por mês, antes dos filtros:
+1. **Volume crescente e mudança de regime.** O volume varia até 9 vezes entre períodos. `noticias_dia_qtd` entra em rank para reduzir o efeito, mas o rank não elimina: com mais notícias, menos ações ficam em zero, e `noticias_dia_extremo` bruta também tende a crescer com o volume. Pares ação × notícia por mês, antes dos filtros:
 
    | Período | Pares/mês | Composição |
    |---|---|---|
@@ -321,14 +326,14 @@ Todos em `processamento/config/parametros.yaml`, salvo aviso.
    | 01–06/2026 | ~13.700 | Com `wordpress` em 03/2026 |
    | 07–10/2026 | ~21.500 | Com `wordpress` em 10/2026 |
 
-   **O teste final (desde 23/06/2026) tem bem mais notícias por mês do que o desenvolvimento**, então um corte aprendido em `qtd` pode não valer lá.
-2. **Buraco de jan–jul/2025.** Janeiro tem 38 artigos e fevereiro a julho têm zero, em todas as origens. Ver D1.
+   **O teste final (desde 23/06/2026) tem bem mais notícias por mês do que o desenvolvimento.**
+2. **Buraco de jan–jul/2025.** Janeiro tem 38 artigos e fevereiro a julho têm zero, em todas as origens. Tratado por `periodos_sem_coleta`; o diagnóstico avisa quando a coleta preencher.
 3. **`cvm_ipe` não existe em 2023** nem de 02 a 07/2025. A especificação não registra o de 2023.
 4. **`wordpress` marca mais ações por artigo:** ~2,3 pares por artigo em 2021, contra ~1,15 no `google_news`. Isso muda `qtd` e o tom por empresa nos anos com essa origem.
 5. **A amostra manual da `wordpress`** (`docs/validacao_wordpress.md`) não foi revisada; a origem entrou por decisão, com a coleta confirmando a fonte.
 6. **Juíza não avaliada.** O filtro `errada` depende dela, corta de forma desigual entre origens, e ao vivo uma notícia sem `papel` entra e pode sair depois de julgada.
 7. **Hora real rara.** ~90% do `google_news` não tem hora, então não dá para separar pregão de noite. `hora_real_noite` fica concentrada em 2021, 2022 e 2026. A reavaliação da N1-A depende do `corrigir_horas`, que estava pendente.
-8. **Histórico × ao vivo:** uma cópia "só data" ao vivo pode ser trocada no histórico pela cópia com hora real, mudando o pregão da notícia. Isso não vaza futuro. A regra por URL não tem limite de data: 22 pares têm mais de 30 dias de distância.
+8. **Histórico × ao vivo:** uma cópia ao vivo pode ser trocada no histórico por outra publicada antes e coletada depois, mudando o pregão da notícia. Isso não vaza futuro. A regra por URL não tem limite de data: 22 pares têm mais de 30 dias de distância. Cópia mais cedo sem probabilidade fica, e o painel do dia sai `indisponivel` nesse caso (raro: hoje todas têm probabilidade).
 
 ### Universo e preços
 
@@ -345,29 +350,26 @@ Todos em `processamento/config/parametros.yaml`, salvo aviso.
 
 17. `modelo_oficial: false`: nenhum resultado vale como conclusão até o usuário declarar o histórico completo.
 18. Os índices (IDIV, SMLL, IFIX) têm buraco em 2025, mas não afetam o dataset.
-19. Os três CSVs precisam ser regenerados para valer estas regras (P5). A avaliação de desenvolvimento precisa ser refeita depois disso.
+19. Os três CSVs precisam ser regenerados para valer estas regras. A avaliação de desenvolvimento precisa ser refeita depois disso, e até lá o top 5 fica de fora.
 
-## 11. Divergências entre código e especificação
+## 11. Divergências encontradas na revisão: todas tratadas
 
-| # | Assunto | Especificação | Código | Efeito |
-|---|---|---|---|---|
-| **D1** | Buraco de 2025 | Regra 7: "ausência é `null`, nunca 0". E4 só deixa vazio **antes** da cobertura | `tom.py:125,134`: a cobertura é só a **menor data**. Dentro do buraco, `qtd = 0` | ~9,5 mil linhas (estimativa: 124 pregões de fev–jul × 77 ações) dizem "sem notícia" quando na verdade **não houve coleta**, e entram no treino. **É o ponto mais importante.** Pede decisão |
-| **D2** | Início da cobertura | F4: "hoje 01/08/2025"; 3.4: "desde 01/01/2023"; seção 10: "desde 01/01/2024" | Calculado (`dataset.py:120-121`); o banco tem notícias desde 2021 | O treino passa a começar ~01/2021 (cerca de 5,5 anos, não 2,5). Confirmar no JSON ao regenerar |
-| **D3** | Teste de "sem vazamento" | Etapa 5 e pegadinha 8 pedem teste dedicado | **O teste existe** (`test_vazamento_experimento.py`), mas com um único t, sem proventos e sem cópia futura entre origens. Essa cópia muda t: `noticias.py:151` prefere a hora real, mesmo mais tarde (`test_entre_origens_url_resolvida_remove_sem_janela_de_data`: a de 17/10 sai por causa da de 27/10) | A notícia de t some do histórico por causa de uma cópia publicada depois do corte, o que não acontecia ao vivo |
-| **D4** | `setor_excluir` | Comentário em `parametros.yaml:172-173`: `setor_excluir` vem do bloco `fase1` | `variaveis.py:127` passa `"empresa"` fixo | Mudar o parâmetro altera o painel, não o modelo. Hoje os dois valem `empresa` |
-| **D5** | `dia_resultado` ao vivo | E11: entrega na noite de t, inclusive fim de semana | `saida/insumos.py:65` lê balanços só até t; no histórico sem `--ate`, lê todos | Entrega no sábado marca t no histórico, mas não ao vivo. Não afeta as previsões, só o recorte do 3b |
-| **D6** | Alvos guardados | 7.3 lista 4 colunas | São 5, com `alvo_abertura_valido` (F13) | Texto desatualizado |
-| **D7** | Definição de `tom_setor`, `tom_mercado` | 7.3: "das notícias", "de todas as notícias". E8 e E9 detalham | Segue E8 (1 voto por empresa) e E9 (só o universo) | A 7.3 está simplificada; a `mudanca_tom` também pesa por notícia, não por dia |
-| **D8** | Julgamento da juíza | Seção 10: "89% sem julgamento" e versões com 3–15% de linhas | P2 mede 0,33% sem julgamento | Trecho antigo; refazer a medição das versões ao regenerar |
-| **D9** | Hora real | Seção 1: ~89% só data; 7.2: ~91% | Por ano varia de 2,1% a 51,4% com hora real | Percentual global não vale mais com as origens unidas |
-| **D10** | Sensibilidade | 7.5: "se o universo for o atual" | `treino.py:330` sempre calcula | Só informação a mais no relatório |
-| **D11** | Modelo 3b | 7.4 parece um modelo próprio | F12 e `_modelo_3b`: só avaliação; `colunas_do_modelo("3b")` e o prefixo `xgb-m3b-` não são usados no treino | Texto; código sobrando |
-| **D12** | Textos com "~1 ano" | Histórico vai a 2019/2021 | `AVISO_PROVISORIO` (`treino.py:361`) e comentário em `parametros.yaml:193` | Aviso desatualizado no modelo provisório |
+| # | Assunto | O que foi feito |
+|---|---|---|
+| D1 | `qtd = 0` no buraco de 2025 | **Código:** `experimento.periodos_sem_coleta`; colunas vazias |
+| D2 | Três datas de início da cobertura | **Especificação e parâmetro:** início fixo em 2021-01-01 |
+| D3 | Teste de vazamento | **Testes e código:** teste ampliado; cópia posterior não muda mais o passado (o teste já existia) |
+| D4 | `setor_excluir` não afeta o modelo | **Comentário do yaml:** `"empresa"` fixo, como decide a E14 |
+| D5 | `dia_resultado` no fim de semana | **Código:** ao vivo, balanços até D − 1 dia só para o dataset |
+| D6 | Alvos guardados | **Especificação:** inclui `alvo_abertura_valido` |
+| D7 | `tom_setor`, `tom_mercado`, `mudanca_tom` | **Especificação:** 7.3 alinhada a E7, E8 e E9 |
+| D8 | "89% sem julgamento" | **Especificação:** medição marcada para refazer ao regenerar |
+| D9 | "~89%/~91% só data" | **Especificação:** percentuais por período |
+| D10 | Sensibilidade | **Especificação:** sempre calculada |
+| D11 | Modelo 3b | **Especificação e código:** só avaliação; `"3b"` e o prefixo `xgb-m3b-` removidos |
+| D12 | Textos com "~1 ano" | **Código e comentário:** atualizados |
 
-**O treino aceita dataset antigo sem avisar:** `_carregar_csv` só confere o sha256 e a coluna `alvo_abertura_valido`, e `localizar_datasets` pega o de maior data. Hoje, rodar o treino sem regenerar usaria o CSV de 23/10, com as regras antigas.
+### Pontos em aberto
 
-### Decisões pendentes
-
-1. **Buraco de 2025 (D1):** deixar as colunas de notícias vazias nesse trecho, em vez de `qtd = 0`. **Recomendação: sim**, porque é o que a regra 7 pede e as linhas continuam no treino pelo preço. Precisa de plano próprio e de um limite que defina "buraco".
-2. **Teste de vazamento (D3):** ampliar o teste existente com mais datas, proventos e cópias futuras entre origens, e corrigir a prioridade entre cópias. **Recomendação: sim, antes de regenerar.**
-3. **`noticias_dia_qtd` bruta:** o item 1 da seção 10 sugere testar uma versão relativa (por exemplo, contra a média da própria empresa). Como o volume muda bem no teste final, vale decidir **antes** de usá-lo, com base só no desenvolvimento.
+- **`noticias_dia_extremo` em rank:** a decisão sai da próxima avaliação de desenvolvimento (etapa `noticias_dia_extremo em rank` em `selecao.csv`).
+- **Efeito das regras novas nos dados reais:** só se mede ao regenerar: linhas afetadas pela regra do momento mais cedo, seção "Notícias por mês" do diagnóstico e cobertura das versões `principais` e `hora_real_noite`.

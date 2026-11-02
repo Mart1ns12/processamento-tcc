@@ -23,6 +23,7 @@ import pytest
 
 from fabrica_saida import AGORA
 from fabrica_treino import dataset_sintetico, params_teste
+from processamento.experimento.preparacao import VERSAO_PREPARACAO
 from processamento import fontes
 from processamento.experimento import modelos, preparacao
 from processamento.experimento import dataset as exp_dataset
@@ -65,7 +66,7 @@ def _salvar_modelos(pasta: Path, inverter: bool = False) -> None:
     for modelo_id, nome in (("3", "xgb-2025-10"), ("1", "xgb-m1-2025-10")):
         colunas = preparacao.colunas_do_modelo(modelo_id)
         modelo = modelos.treinar_xgb(treino[colunas], alvo, PARAMS.xgboost, PARAMS.semente)
-        meta = {chave: None for chave in CHAVES_METADADOS}
+        meta = {**{chave: None for chave in CHAVES_METADADOS}, "versao_preparacao": VERSAO_PREPARACAO}
         meta.update(modelo=modelo_id, colunas=colunas, provisorio=True, calibracao={"aprovada": False},
                     universo="composicao_atual")
         modelos.salvar_modelo(modelo, meta, pasta, nome)

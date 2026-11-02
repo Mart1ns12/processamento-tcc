@@ -82,7 +82,7 @@ def _inicio_experimento(valor: str, info: dict) -> date | None:
 def _carregar_csv(csv: Path) -> tuple[pd.DataFrame, dict]:
     """CSV inteiro (datas lidas) com o JSON ao lado. Confere o sha256 e a coluna `alvo_abertura_valido`.
 
-    Sem a coluna, o dataset é antigo: ErroDataset com o comando de regeração.
+    Sem a coluna, ou com outra `versao_preparacao`, o dataset é antigo: ErroDataset com o comando de regeração.
     """
     csv = Path(csv)
     caminho_json = csv.with_suffix(".json")
@@ -94,9 +94,14 @@ def _carregar_csv(csv: Path) -> tuple[pd.DataFrame, dict]:
 
     df = pd.read_csv(csv, dtype=_COLUNAS_TEXTO, encoding="utf-8")
     df["data"] = pd.to_datetime(df["data"], format="%Y-%m-%d")
+    versao = info.get("versao_noticias", "<v>")
     if "alvo_abertura_valido" not in df.columns:
-        versao = info.get("versao_noticias", "<v>")
         raise ErroDataset(f"o dataset {csv.name} não tem a coluna alvo_abertura_valido; {_regenere(versao)}")
+    if info.get("versao_preparacao") != preparacao.VERSAO_PREPARACAO:
+        raise ErroDataset(
+            f"o dataset {csv.name} é da versão de preparação {info.get('versao_preparacao')}, e a atual é "
+            f"{preparacao.VERSAO_PREPARACAO}; {_regenere(versao)}"
+        )
     return df, info
 
 
@@ -172,10 +177,11 @@ def _ganho_aceito(candidato: float | None, atual: float | None, minimo: float) -
 
 
 def selecionar_configuracao(prep, dobras, params: ParametrosTreino) -> tuple[dict, pd.DataFrame]:
-    """Blocos, bloco de notícias e hiperparâmetros, só com as dobras de desenvolvimento.
+    """Blocos, bloco de notícias, extremo em rank e hiperparâmetros, só com as dobras de desenvolvimento.
 
-    1) blocos de preço no modelo 1, em ordem; 2) "noticias_contexto" no modelo 3; 3) grade no modelo 3
-    final (o maior AUC médio; empate fica com o primeiro). Devolve (configuração, tabela de tentativas).
+    1) blocos de preço no modelo 1, em ordem; 2) "noticias_contexto" no modelo 3; 3) `noticias_dia_extremo` em rank
+    no modelo 3, pela mesma regra de ganho; 4) grade no modelo 3 final (o maior AUC médio; empate fica com o
+    primeiro). Devolve (configuração, tabela de tentativas).
     """
     tentativas: list[dict] = []
 
@@ -203,6 +209,17 @@ def selecionar_configuracao(prep, dobras, params: ParametrosTreino) -> tuple[dic
     colunas_1 = preparacao.colunas_do_modelo("1", tuple(blocos))
     colunas_3 = preparacao.colunas_do_modelo("3", blocos_3)
 
+    atual = candidato if noticias_contexto else atual
+    com_rank = [preparacao.EXTREMO_RANK if c == "noticias_dia_extremo" else c for c in colunas_3]
+    candidato = auc_de(com_rank)
+    extremo_em_rank = _ganho_aceito(candidato, atual, params.ganho_minimo_bloco)
+    tentativas.append({
+        "etapa": "modelo_3", "descricao": "noticias_dia_extremo em rank", "auc_medio": candidato,
+        "aceito": extremo_em_rank,
+    })
+    if extremo_em_rank:
+        colunas_3 = com_rank
+
     chaves = list(params.grade)
     melhor: tuple[float, dict, int] | None = None
     for valores in itertools.product(*(params.grade[c] for c in chaves)):
@@ -220,6 +237,7 @@ def selecionar_configuracao(prep, dobras, params: ParametrosTreino) -> tuple[dic
     configuracao = {
         "blocos_preco": list(blocos),
         "noticias_contexto": bool(noticias_contexto),
+        "extremo_em_rank": bool(extremo_em_rank),
         "hiperparametros": dict(melhor[1]),
         "colunas_1": colunas_1,
         "colunas_3": colunas_3,
@@ -358,7 +376,7 @@ REGISTRO_TESTE_FINAL = fontes.RAIZ / "docs" / "teste_final_usado.json"
 PASTA_DATASETS_PADRAO = fontes.RAIZ / "saida" / "experimento"
 PASTA_SAIDA_PADRAO = PASTA_DATASETS_PADRAO / "treino"
 PASTA_MODELOS_PADRAO = fontes.RAIZ / "modelos"
-AVISO_PROVISORIO = "modelo provisório: treinado com ~1 ano; só teste de funcionamento"
+AVISO_PROVISORIO = "modelo provisório (treino.modelo_oficial: false): só teste de funcionamento"
 MODELO_CALIBRADO = "modelo_3"
 _EXTRAS = (("modelo_3_principais", "principais"), ("modelo_3_hora_real_noite", "hora_real_noite"))
 _COLUNAS_TENTATIVA = ["etapa", "descricao", "auc_medio", "aceito"]
@@ -746,6 +764,7 @@ def _metadados(modelo: str, colunas: list[str], res: dict, info: dict, params: P
     cfg, prep = res["cfg"], res["prep"]
     return _para_json({
         "modelo": modelo,
+        "versao_preparacao": preparacao.VERSAO_PREPARACAO,
         "versao_noticias": info.get("versao_noticias", "todas"),
         "colunas": list(colunas),
         "blocos": {"blocos_preco": list(cfg["blocos_preco"]), "noticias_contexto": cfg["noticias_contexto"]},
@@ -808,6 +827,10 @@ def _configuracao_congelada(pasta_modelos: Path, params: ParametrosTreino) -> di
     mes = params.teste_final_inicio.strftime("%Y-%m")
     meta3 = _ler_meta(pasta_modelos, modelos.nome_modelo(mes, "3"))
     meta1 = _ler_meta(pasta_modelos, modelos.nome_modelo(mes, "1"))
+    if not (modelos.preparacao_compativel(meta3) and modelos.preparacao_compativel(meta1)):
+        raise ErroPreRequisito(
+            f"os modelos de {mes} são de outra versão de preparação: rode antes o treino de desenvolvimento"
+        )
     return {
         "blocos_preco": meta3["blocos"]["blocos_preco"],
         "noticias_contexto": meta3["blocos"]["noticias_contexto"],

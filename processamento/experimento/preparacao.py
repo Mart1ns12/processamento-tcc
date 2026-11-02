@@ -11,17 +11,25 @@ import pandas as pd
 IDENTIFICACAO = ["data", "ticker", "empresa", "setor", "universo", "dia_resultado"]
 ESSENCIAIS_PRECO = ["ret_1d", "ret_5d", "ret_20d", "volatilidade_20d", "beta", "volume_relativo", "salto_abertura"]
 COMPLEMENTARES_PRECO = ["dist_max_52s", "dist_min_52s", "amplitude", "ret_vs_setor", "exposicao_dolar", "exposicao_petroleo"]
-COLUNAS_RANK = ESSENCIAIS_PRECO + COMPLEMENTARES_PRECO
+COLUNAS_PRECO = ESSENCIAIS_PRECO + COMPLEMENTARES_PRECO
 NOTICIAS_DIA = ["noticias_dia_qtd", "noticias_dia_tom", "noticias_dia_extremo", "mudanca_tom"]
 COMPLEMENTARES_NOTICIAS = ["tom_setor", "tom_mercado"]
-COLUNAS_BRUTAS = NOTICIAS_DIA + COMPLEMENTARES_NOTICIAS
+# A quantidade de notícias muda de regime entre os anos: entra como rank do pregão, como as de preço (o CSV guarda o bruto).
+COLUNAS_RANK = COLUNAS_PRECO + ["noticias_dia_qtd"]
+COLUNAS_BRUTAS = [c for c in NOTICIAS_DIA + COMPLEMENTARES_NOTICIAS if c not in COLUNAS_RANK]
+# Variante testada só no desenvolvimento: `selecionar_configuracao` a troca pela bruta se o AUC subir o suficiente.
+EXTREMO_RANK = "noticias_dia_extremo_rank"
+COLUNA_BRUTA = {EXTREMO_RANK: "noticias_dia_extremo"}   # coluna preparada -> coluna do dataset (motivos do top)
+# Sobe quando mudam os ranks, as colunas ou as regras que afetam os valores do dataset: dataset e modelo de outra
+# versão não valem. 2 = regras de 01/11/2026 (cobertura, cópias pelo momento, noticias_dia_qtd em rank).
+VERSAO_PREPARACAO = 2
 COLUNAS_ALVO = ["alvo", "alvo_abertura", "alvo_abertura_valido", "ret_t1", "ret_ibov_t1"]
 BLOCOS_COMPLEMENTARES = {
     "preco_contexto": ["dist_max_52s", "dist_min_52s", "amplitude", "ret_vs_setor"],
     "macro": ["exposicao_dolar", "exposicao_petroleo"],
     "noticias_contexto": COMPLEMENTARES_NOTICIAS,
 }
-MODELOS = ("1", "3", "3b")
+MODELOS = ("1", "3")
 _COLUNAS_ENTRADA = IDENTIFICACAO + COLUNAS_RANK + COLUNAS_BRUTAS + COLUNAS_ALVO
 
 
@@ -45,11 +53,15 @@ def rank_no_pregao(df: pd.DataFrame, colunas: list[str]) -> pd.DataFrame:
 
 
 def preparar(dataset: pd.DataFrame) -> pd.DataFrame:
-    """Ranks das 13 variáveis de preço, volume e mercado; identificação, notícias e alvo não mudam."""
+    """Ranks das 13 variáveis de preço, volume e mercado e de `noticias_dia_qtd`; acrescenta `EXTREMO_RANK`.
+
+    Identificação, as outras colunas de notícias e o alvo não mudam.
+    """
     faltando = [c for c in _COLUNAS_ENTRADA if c not in dataset.columns]
     if faltando:
         raise ValueError(f"faltam colunas no dataset: {faltando}")
-    return rank_no_pregao(dataset, COLUNAS_RANK)
+    extremo = rank_no_pregao(dataset, ["noticias_dia_extremo"])["noticias_dia_extremo"]
+    return rank_no_pregao(dataset, COLUNAS_RANK).assign(**{EXTREMO_RANK: extremo})
 
 
 def linhas_de_treino(preparado: pd.DataFrame) -> pd.DataFrame:
@@ -58,7 +70,7 @@ def linhas_de_treino(preparado: pd.DataFrame) -> pd.DataFrame:
 
 
 def colunas_do_modelo(modelo: str, blocos: tuple[str, ...] = ()) -> list[str]:
-    """Colunas de entrada do modelo "1", "3" ou "3b", seguidas dos blocos complementares na ordem dada."""
+    """Colunas de entrada do modelo "1" ou "3", seguidas dos blocos complementares na ordem dada."""
     if modelo == "2":
         raise ValueError("modelo 2 removido: ver ESPECIFICACAO 7.4")
     if modelo not in MODELOS:
@@ -73,12 +85,12 @@ def colunas_do_modelo(modelo: str, blocos: tuple[str, ...] = ()) -> list[str]:
         if bloco in usados:
             raise ValueError(f"bloco repetido: {bloco!r}")
         if bloco == "noticias_contexto" and modelo == "1":
-            raise ValueError(f"o bloco noticias_contexto só vale nos modelos 3 e 3b (modelo {modelo!r})")
+            raise ValueError(f"o bloco noticias_contexto só vale no modelo 3 (modelo {modelo!r})")
         usados.add(bloco)
         colunas += BLOCOS_COMPLEMENTARES[bloco]
     return colunas
 
 
 def linhas_modelo_3b(preparado: pd.DataFrame) -> pd.DataFrame:
-    """Só os dias de resultado (dia_resultado == True), usados no modelo 3b."""
+    """Só os dias de resultado (dia_resultado == True), recorte da avaliação "3b" (não há modelo próprio, F12)."""
     return preparado[preparado["dia_resultado"].eq(True)].reset_index(drop=True)

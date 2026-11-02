@@ -37,6 +37,9 @@ ORDEM = ("acoes", "series_diarias", "mercado_dia", "resumo_acao", "fundamentos_t
 COMPACTOS = ("series_diarias", "proventos")                              # seção 2.3 (S20)
 COLETA_NAO_CONSULTADA = {"consultado": False, "nota": "gatilho da coleta não consultado (etapa 8)"}
 AVISO_SEM_MODELO = "sem arquivo de modelo em {pasta}: experimento_top não gerado"
+AVISO_MODELO_OUTRA_VERSAO = ("modelo {modelo} é de outra versão de preparação: top 5 não gerado até o próximo treino; "
+                             "os outros pacotes seguem normalmente")
+TOP_FORA_POR_VERSAO = object()   # o produtor do top devolve isto: pacote de fora, com aviso já dado
 AVISO_RETREINO = "Retreino de {mes} falhou ({tipo}): usando o modelo anterior."
 AVISO_SEM_PROBABILIDADE = ("{k} notícias sem probabilidade do FinBERT na janela do dataset: tratadas como ausentes "
                            "(não neutras).")
@@ -207,7 +210,8 @@ def gerar(d: date, *, ler=None, pasta_saida: Path | None = None, pasta_modelos: 
     @functools.cache
     def dataset():
         dados = DadosExperimento(
-            precos=ins.precos, cadastro=ins.cadastro, noticias=ins.noticias, balancos=ins.balancos,
+            precos=ins.precos, cadastro=ins.cadastro, noticias=ins.noticias,
+            balancos=ins.balancos if ins.balancos_resultado is None else ins.balancos_resultado,
             universo=universo(), mudancas=ins.mudancas,
         )
         df, info = montar_dataset(dados, ins.cal, versao_noticias="todas", proximo_ao_vivo=d,
@@ -287,6 +291,10 @@ def gerar(d: date, *, ler=None, pasta_saida: Path | None = None, pasta_modelos: 
             return None
         modelo, meta = modelos.carregar_modelo(caminho)
         modelo_m1, meta_m1 = modelos.carregar_modelo(caminho_m1) if caminho_m1 is not None else (None, None)
+        if not modelos.preparacao_compativel(meta) or (meta_m1 is not None and not modelos.preparacao_compativel(meta_m1)):
+            # as colunas teriam outro significado: só o top fica de fora; os outros pacotes seguem
+            avisos.append(AVISO_MODELO_OUTRA_VERSAO.format(modelo=caminho.stem))
+            return TOP_FORA_POR_VERSAO
         cnpj_de = mapas_cadastro(ins.cadastro)[1]
         pacote, interno = pacotes_experimento.gerar_top(
             dataset()[0], ins.t, d, modelo, meta, modelo_m1, meta_m1, janela(), cnpj_de, params_treino, params_saida,
@@ -310,6 +318,10 @@ def gerar(d: date, *, ler=None, pasta_saida: Path | None = None, pasta_modelos: 
     for nome in ORDEM:
         try:
             produzido = produtores[nome]()
+            if produzido is TOP_FORA_POR_VERSAO:
+                # top que não seria publicado não deixa a rodada parcial (seção 8.5); publicado, deixa
+                incompleta = incompleta or publicar_top
+                continue
             if produzido is None:
                 incompleta = True
                 continue

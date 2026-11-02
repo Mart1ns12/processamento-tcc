@@ -4,6 +4,7 @@
 leitor `ler` (conexão somente leitura, ou um leitor de teste). Cortes:
 - preços com `ate = D − 1 dia`; t = último pregão lido (`cal[-1]`);
 - balanços, proventos e índices até t (proventos sem unir as mudanças de ticker: `ligar_proventos` faz isso);
+- `balancos_resultado`: balanços até D − 1 dia, só para `dia_resultado` (entrega no fim de semana cai na noite de t);
 - notícias até `corte_manha(D)`; cadastro, ações emitidas e mudanças de ticker sem corte.
 """
 
@@ -42,6 +43,7 @@ class Insumos:
     composicao: pd.DataFrame | None
     exclusoes: Exclusoes
     noticias_ignoradas: dict[str, int] = field(default_factory=dict)   # origem -> notícias descartadas
+    balancos_resultado: pd.DataFrame | None = None   # até D − 1 dia, só para `dia_resultado`; None = usa `balancos`
 
 
 def ler_insumos(d: date, ler: Callable[..., pd.DataFrame], existe_composicao: bool | None = None) -> Insumos:
@@ -55,6 +57,8 @@ def ler_insumos(d: date, ler: Callable[..., pd.DataFrame], existe_composicao: bo
         raise ErroSaida(f"o último pregão lido ({t}) não é anterior a {d}")
     mudancas = fontes.ler_mudancas(ler)
     noticias = fontes.ler_noticias(ate=calendario.corte_manha(d), ler=ler, com_url_resolvida=True)
+    balancos_resultado = fontes.ler_tabela("balancos", ate=d - timedelta(days=1), ler=ler)
+    balancos = balancos_resultado[balancos_resultado["data_entrega"] <= pd.Timestamp(t)].reset_index(drop=True)
     return Insumos(
         d=d,
         t=t,
@@ -62,7 +66,8 @@ def ler_insumos(d: date, ler: Callable[..., pd.DataFrame], existe_composicao: bo
         precos=precos,
         cadastro=fontes.ler_tabela("cadastro", ler=ler),
         mudancas=mudancas,
-        balancos=fontes.ler_tabela("balancos", ate=t, ler=ler),
+        balancos=balancos,
+        balancos_resultado=balancos_resultado,
         acoes_emitidas=fontes.ler_tabela("acoes_emitidas", ler=ler),
         proventos=fontes.ler_tabela("proventos", ate=t, ler=ler, unir_mudancas=False),
         indices=fontes.ler_tabela("indices", ate=t, ler=ler),
