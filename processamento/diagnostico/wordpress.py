@@ -58,9 +58,9 @@ PERGUNTAS_COLETA = [
     "Qual é o status de 2021 (em processamento, descartado ou fora do escopo)?",
 ]
 PENDENCIA_ERRADA = (
-    "Papel 'errada': o código não filtra papel='errada' na versão 'todas' (padrão do dataset, "
-    "`fontes.ler_noticias` não filtra papel). Só a versão 'principais' filtra papéis "
-    "(experimento.principais.papeis). Só reportado: nada foi alterado."
+    "Papel 'errada': desde 01/11/2026 `fontes.ler_noticias` descarta papel='errada' em todas as versões "
+    "(`papeis_ignorados` no fontes.yaml; papel vazio fica). Esta medição lê com o filtro desligado "
+    "para mostrar o papel de cada origem."
 )
 
 
@@ -577,7 +577,7 @@ def secao_8(ctx: dict, ler) -> str:
         f"como no dataset; {len(linhas)} pares pregão × ação do universo; {len(cal)} pregões.")
 
     bruta = ctx["dados"].v1_bruta
-    nots_com = fontes.tratar_noticias_lidas(bruta, ler=ler, origens_ignoradas=[])
+    nots_com = fontes.tratar_noticias_lidas(bruta, ler=ler, origens_ignoradas=[], papeis_ignorados=[])
     nots_sem = _sem_ignoradas(nots_com)
 
     def _preparar(nots):

@@ -10,7 +10,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from processamento.fatos.precos import grade_de_precos
+from processamento.fatos.precos import ParametrosPrecos, carregar_parametros_precos, grade_de_precos, retornos_suspeitos
 
 IBOV = "IBOV"
 
@@ -39,8 +39,13 @@ def _comparar(ret: pd.DataFrame, ref: pd.DataFrame) -> pd.DataFrame:
     return (ret > ref).astype(float).where(ret.notna() & ref.notna())
 
 
-def alvos(precos: pd.DataFrame, cal: list, tickers: list[str]) -> dict[str, pd.DataFrame]:
+def alvos(
+    precos: pd.DataFrame, cal: list, tickers: list[str], params_precos: ParametrosPrecos | None = None
+) -> dict[str, pd.DataFrame]:
     """Alvo, alvo_abertura, ret_t1 e ret_ibov_t1 (pregão × ticker).
+
+    Retorno diário suspeito em t+1 (seção 6) deixa `ret_t1`, `alvo` e `alvo_abertura` de t em NaN.
+    `params_precos` None lê o bloco fase1.
 
     `alvo` compara o fechamento ajustado; `alvo_abertura`, a abertura ajustada (abertura · aj /
     fech, também para o IBOV) com a base do fechamento ajustado de t. No último pregão de `cal`,
@@ -57,11 +62,16 @@ def alvos(precos: pd.DataFrame, cal: list, tickers: list[str]) -> dict[str, pd.D
     ibov_ab = grade_de_precos(precos, cal, "abertura", [IBOV])[IBOV]
     ibov_fech = grade_de_precos(precos, cal, "fechamento", [IBOV])[IBOV]
 
-    ret_t1 = _retorno(aj, aj)
+    pp = carregar_parametros_precos() if params_precos is None else params_precos
+    suspeito_t1 = retornos_suspeitos(
+        aj, pp.retorno_suspeito_min, pp.retorno_suspeito_max, pp.base_defasagem_max_pregoes
+    ).shift(-1, fill_value=False).astype(bool)
+
+    ret_t1 = _retorno(aj, aj).mask(suspeito_t1)
     ret_ibov_t1 = _repetir_ibov(_retorno(ibov_aj, ibov_aj), aj)
     ab_aj = _abertura_ajustada(ab, aj, fech)
     ibov_ab_aj = _abertura_ajustada(ibov_ab, ibov_aj, ibov_fech)
-    ret_ab_t1 = _retorno(ab_aj, aj)
+    ret_ab_t1 = _retorno(ab_aj, aj).mask(suspeito_t1)
     ret_ibov_ab_t1 = _repetir_ibov(_retorno(ibov_ab_aj, ibov_aj), aj)
     ibov_ab_t1 = ibov_ab.shift(-1)
     igual = pd.Series(np.isclose(ibov_ab_t1, ibov_fech, rtol=0.0, atol=1e-9), index=ibov_fech.index)

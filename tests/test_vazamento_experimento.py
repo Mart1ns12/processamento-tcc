@@ -110,7 +110,8 @@ def test_noticias_de_t_existem_e_alvo_olha_o_futuro(cenario):
     assert _valor(cenario["df_alterado"], t, "AAAA3", "noticias_dia_qtd") > 0
     assert pd.isna(_valor(cenario["df_cortado"], t, "AAAA3", "alvo"))
     assert _valor(cenario["df_cheio"], t, "AAAA3", "alvo") in (0.0, 1.0)
-    assert _valor(cenario["df_alterado"], t, "AAAA3", "alvo") in (0.0, 1.0)
+    # o futuro alterado (preço ×3 em t1) é retorno suspeito: o alvo olha t+1 e fica vazio (seção 6)
+    assert pd.isna(_valor(cenario["df_alterado"], t, "AAAA3", "alvo"))
 
 
 def test_alteracao_mexeu_no_dia_seguinte(cenario):

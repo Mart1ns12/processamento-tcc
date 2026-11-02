@@ -97,7 +97,8 @@ def variaveis_de_preco(
     ibov = fatos_precos.grade_de_precos(precos, cal, "fechamento_ajustado", ["IBOV"])["IBOV"]
     usd = fatos_precos.grade_de_precos(precos, cal, "fechamento_ajustado", ["USDBRL"])["USDBRL"]
     brent = fatos_precos.grade_de_precos(precos, cal, "fechamento_ajustado", ["BRENT"])["BRENT"]
-    # retornos suspeitos da ação saem da volatilidade, do beta e das exposições (seção 6, "Retorno diário suspeito")
+    # retornos suspeitos da ação saem de todas as contas de preço do modelo (seção 6, "Retorno diário suspeito");
+    # a janela com o salto fica vazia e o preço não é corrigido
     suspeitos = fatos_precos.retornos_suspeitos(
         g_aj, params_precos.retorno_suspeito_min, params_precos.retorno_suspeito_max,
         params_precos.base_defasagem_max_pregoes,
@@ -105,9 +106,11 @@ def variaveis_de_preco(
 
     res: dict[str, pd.DataFrame] = {}
     for nome, n in params.retornos.items():
-        res[nome] = fatos_precos.variacao(g_aj, n, params_precos.base_defasagem_max_pregoes).valor
+        res[nome] = fatos_precos.variacao(g_aj, n, params_precos.base_defasagem_max_pregoes).valor.mask(
+            fatos_precos.suspeita_na_janela(suspeitos, n)
+        )
 
-    ret_dia = fatos_precos.variacao(g_aj, 1, params_precos.base_defasagem_max_pregoes).valor
+    ret_dia = fatos_precos.variacao(g_aj, 1, params_precos.base_defasagem_max_pregoes).valor.mask(suspeitos)
     res["volatilidade_20d"] = fatos_precos.volatilidade(
         g_aj, params_precos.volatilidade_retornos, excluir=suspeitos
     ).valor
@@ -115,8 +118,11 @@ def variaveis_de_preco(
         g_aj, ibov, params_precos.beta_pregoes, params_precos.beta_minimo, excluir=suspeitos
     ).valor
     res["volume_relativo"] = fatos_precos.volume_relativo(gv, params_precos.volume_pregoes)[1].valor
-    res["salto_abertura"] = salto_abertura(g_ab, g_aj, g_fech)
-    res["dist_max_52s"], res["dist_min_52s"] = extremos(g_aj, params.extremos_pregoes, params.extremos_minimo)
+    res["salto_abertura"] = salto_abertura(g_ab, g_aj, g_fech).mask(suspeitos)
+    # a janela de n preços contém o salto (s−1 e s) de s até s+n−2, ou seja, em n−1 pregões
+    no_extremo = fatos_precos.suspeita_na_janela(suspeitos, params.extremos_pregoes - 1)
+    dist_max, dist_min = extremos(g_aj, params.extremos_pregoes, params.extremos_minimo)
+    res["dist_max_52s"], res["dist_min_52s"] = dist_max.mask(no_extremo), dist_min.mask(no_extremo)
     res["amplitude"] = amplitude(g_max, g_min, g_fech)
     res["ret_vs_setor"] = ret_vs_setor(ret_dia, mascara, setor_de, cnpj_de, "empresa")
     res["exposicao_dolar"] = exposicao(g_aj, usd, params.exposicao_pregoes, params.exposicao_minimo,

@@ -56,8 +56,9 @@ def carregar_entradas(ler=None) -> dict:
     cal = calendario.pregoes(precos)
     cadastro = fontes.ler_tabela("cadastro", ler=ler)
     mudancas = fontes.ler_mudancas(ler)
-    novo = fontes.ler_noticias(ler=ler, com_url_resolvida=True)
-    antigo = fontes.ler_noticias(ler=ler, com_url_resolvida=True, origens_ignoradas=["wordpress"])
+    # medição da deduplicação: sem o filtro de papel, para continuar comparável à de 01/11/2026
+    novo = fontes.ler_noticias(ler=ler, com_url_resolvida=True, papeis_ignorados=[])
+    antigo = fontes.ler_noticias(ler=ler, com_url_resolvida=True, origens_ignoradas=["wordpress"], papeis_ignorados=[])
     setor_de, cnpj_de = mapas_cadastro(cadastro)
     tickers = sorted(set(novo["ticker"]))
     _, cnpj_de, _ = mapas_por_empresa(tickers, setor_de, cnpj_de, mudancas)
@@ -227,10 +228,10 @@ def medir_tempos(entradas: dict, params: ParametrosExperimento, ler=None) -> dic
     sem, com, urls = [], [], []
     for _ in range(REPETICOES):
         t0 = time.perf_counter()
-        fontes.ler_noticias(ler=ler)
+        fontes.ler_noticias(ler=ler, papeis_ignorados=[])
         sem.append(time.perf_counter() - t0)
         t0 = time.perf_counter()
-        fontes.ler_noticias(ler=ler, com_url_resolvida=True)
+        fontes.ler_noticias(ler=ler, com_url_resolvida=True, papeis_ignorados=[])
         com.append(time.perf_counter() - t0)
     linhas_urls = 0
     for _ in range(REPETICOES):

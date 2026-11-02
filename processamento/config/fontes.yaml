@@ -16,6 +16,9 @@ tabelas:
     origens_ignoradas: []
     # Origens em que 00:00:00 de Los Angeles significa "só data" (regra N1-A, fontes.aplicar_regra_so_data).
     origens_so_data: [google_news]
+    # Papéis da juíza descartados na leitura, antes das repetidas (dataset, rotina e noticias_dia; decisão de 01/11/2026).
+    # Notícia sem julgamento (papel vazio) fica. Contagem em df.attrs["papeis_ignorados"].
+    papeis_ignorados: [errada]
     valores_permitidos:
       origem: [google_news, cvm_ipe, wordpress]
       papel: [protagonista, citada_com_fato, mencao, errada, matriz_estrangeira]

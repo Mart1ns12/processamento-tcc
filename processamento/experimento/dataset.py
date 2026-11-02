@@ -111,7 +111,7 @@ def montar_dataset(
     grades = variaveis_de_preco(
         dados.precos, cal, tickers, mascara, setor_de, cnpj_de, params, params_precos
     )
-    grades.update(alvos(dados.precos, cal, tickers))
+    grades.update(alvos(dados.precos, cal, tickers, params_precos))
     df = _juntar(modelo, _grades_em_longo(grades))
 
     nots, info_nots = preparar_noticias(
@@ -132,6 +132,8 @@ def montar_dataset(
     info = {
         **info_nots,
         **info_res,
+        "papel_ignoradas": sum(dados.noticias.attrs.get("papeis_ignorados", {}).values()),
+        "papel_vazio": int(dados.noticias["papel"].isna().sum()),
         "linhas": len(df),
         "pregoes": len(cal),
         "versao_noticias": versao_noticias,

@@ -227,7 +227,7 @@ rotina:
   intervalo_minutos: 5            # entre consultas
   prazo: "09:45"                  # sem entrega até aqui: execucao "falhou", sem pacotes
   prazo_tardio: "12:00"           # continua consultando até aqui (rodada tardia); null = desliga
-  etapas_conferidas: ["precos", "noticias", "enriquecimento"]   # não concluídas: aviso
+  etapas_conferidas: ["precos", "noticias", "enriquecimento", "juiza"]   # não concluídas: aviso
   pasta_logs: "logs"
   trava: "saida/estado/rotina.trava"
   trava_validade_horas: 6

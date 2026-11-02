@@ -435,6 +435,7 @@ def ler_noticias(
     unir_mudancas: bool = True,
     origens_ignoradas: list[str] | None = None,
     com_url_resolvida: bool = False,
+    papeis_ignorados: list[str] | None = None,
 ) -> pd.DataFrame:
     """Lê `v1-noticias` na janela (seção 7.2) e devolve também `momento_ref` (horário de São Paulo).
 
@@ -444,6 +445,8 @@ def ler_noticias(
     As origens ignoradas saem no fim; a contagem por origem (dentro da janela) fica em
     `df.attrs["origens_ignoradas"]`. `origens_ignoradas` None usa as de `origens_ignoradas()`
     (mapa); uma lista dada (inclusive vazia) substitui essa lista.
+    Os papéis ignorados (`papeis_ignorados()` do mapa, mesma regra da lista) também saem no fim; papel vazio
+    fica; a contagem por papel fica em `df.attrs["papeis_ignorados"]`.
     O filtro grosso vai ao SQL pela data; o filtro fino é feito em `momento_ref`.
     `com_url_resolvida` junta a coluna `resolved_url` (de `raw_articles`, ver `ler_urls_resolvidas`);
     sem URL resolvida, fica nula. Não muda o número de linhas.
@@ -469,7 +472,8 @@ def ler_noticias(
     if com_url_resolvida:
         df = df.merge(ler_urls_resolvidas(ler), on="id", how="left")
     return tratar_noticias_lidas(
-        df, desde=desde, ate=ate_sp, ler=ler, unir_mudancas=unir_mudancas, origens_ignoradas=origens_ignoradas
+        df, desde=desde, ate=ate_sp, ler=ler, unir_mudancas=unir_mudancas, origens_ignoradas=origens_ignoradas,
+        papeis_ignorados=papeis_ignorados,
     )
 
 
@@ -481,6 +485,7 @@ def tratar_noticias_lidas(
     ler: Callable[..., pd.DataFrame] | None = None,
     unir_mudancas: bool = True,
     origens_ignoradas: list[str] | None = None,
+    papeis_ignorados: list[str] | None = None,
 ) -> pd.DataFrame:
     """O que `ler_noticias` faz depois do SELECT, sobre um DataFrame já lido (colunas lógicas do mapa).
 
@@ -503,8 +508,13 @@ def tratar_noticias_lidas(
     lista_ignorada = _origens_do_mapa() if origens_ignoradas is None else list(origens_ignoradas)
     ignorar = df["origem"].isin(lista_ignorada)
     contagem = {str(o): int(n) for o, n in df.loc[ignorar, "origem"].value_counts().sort_index().items()}
-    df = df[~ignorar].sort_values(["momento_ref", "id", "ticker"]).reset_index(drop=True)
+    df = df[~ignorar]
+    lista_papeis = _origens_do_mapa("papeis_ignorados") if papeis_ignorados is None else list(papeis_ignorados)
+    papel_fora = df["papel"].isin(lista_papeis)  # papel vazio nunca está na lista: fica
+    contagem_papeis = {str(p): int(n) for p, n in df.loc[papel_fora, "papel"].value_counts().sort_index().items()}
+    df = df[~papel_fora].sort_values(["momento_ref", "id", "ticker"]).reset_index(drop=True)
     df.attrs["origens_ignoradas"] = contagem
+    df.attrs["papeis_ignorados"] = contagem_papeis
     return df
 
 
@@ -516,6 +526,11 @@ def _origens_do_mapa(chave: str = "origens_ignoradas") -> list[str]:
 def origens_ignoradas() -> list[str]:
     """Origens de `v1-noticias` descartadas por `ler_noticias` (`origens_ignoradas` do mapa; vazia = nenhuma)."""
     return _origens_do_mapa()
+
+
+def papeis_ignorados() -> list[str]:
+    """Papéis de `v1-noticias` descartados por `ler_noticias` (`papeis_ignorados` do mapa; vazia = nenhum)."""
+    return _origens_do_mapa("papeis_ignorados")
 
 
 def origens_so_data() -> list[str]:

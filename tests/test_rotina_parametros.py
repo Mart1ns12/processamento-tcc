@@ -65,7 +65,7 @@ def test_rotina_real_carrega_os_valores_do_plano():
     assert params.prazo == time(9, 45)
     assert params.prazo_tardio == time(12, 0)
     assert params.intervalo_minutos == 5
-    assert params.etapas_conferidas == ("precos", "noticias", "enriquecimento")
+    assert params.etapas_conferidas == ("precos", "noticias", "enriquecimento", "juiza")
     assert params.trava == fontes.RAIZ / "saida/estado/rotina.trava"
     assert params.checagem.retorno_maximo_abs == 0.30
 
