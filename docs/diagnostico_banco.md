@@ -1,6 +1,6 @@
 # Diagnóstico do banco da coleta (só leitura)
 
-- Gerado em: 2026-11-01 17:20 (America/Sao_Paulo)
+- Gerado em: 2026-11-01 23:54 (America/Sao_Paulo)
 - Banco: tcc_scraper
 - MySQL: 8.0.46-0ubuntu0.24.04.4
 - Comando: `python -m processamento.diagnostico`
@@ -243,7 +243,7 @@ Nenhuma divergência encontrada.
 | 2023 | 24069 | 2239 | 9.3 | 7 | 0 | 21823 | 90.7 |
 | 2024 | 35361 | 3194 | 9 | 15 | 0 | 32152 | 90.9 |
 | 2025 | 32203 | 685 | 2.1 | 29932 | 92.9 | 1586 | 4.9 |
-| 2026 | 126246 | 21614 | 17.1 | 101698 | 80.6 | 2934 | 2.3 |
+| 2026 | 126246 | 21623 | 17.1 | 101689 | 80.5 | 2934 | 2.3 |
 
 ### Hora da publicação, por ano e origem (artigos distintos)
 
@@ -262,7 +262,7 @@ Nenhuma divergência encontrada.
 | 2025 | google_news | 30654 | 685 | 2.2 | 29932 | 97.6 | 37 | 0.1 |
 | 2026 | cvm_ipe | 2844 | 0 | 0 | 0 | 0 | 2844 | 100 |
 | 2026 | google_news | 121383 | 19604 | 16.2 | 101689 | 83.8 | 90 | 0.1 |
-| 2026 | wordpress | 2019 | 2010 | 99.6 | 9 | 0.4 | 0 | 0 |
+| 2026 | wordpress | 2019 | 2019 | 100 | 0 | 0 | 0 | 0 |
 
 ### Formatos de data/hora
 
@@ -314,8 +314,6 @@ Nenhuma divergência encontrada.
 | n | 7 | 401743 | n005084 | n486769 |
 
 ## 6. Valores distintos
-
-- v1-noticias.origem = wordpress: 83636 linhas ignoradas pela leitura (origens_ignoradas; fonte nova, aguardando definição)
 
 ### Valores por coluna
 
@@ -607,7 +605,23 @@ Nenhuma divergência encontrada.
 - nenhuma lacuna de mais de 5 pregões em v1-precos (fechamento_ajustado, só dentro do período com preço de cada ticker)
 - nenhuma lacuna em v1-indices (IDIV, SMLL e IFIX: mais de 5 pregões, inclusive no fim; CDI: qualquer pregão sem taxa no meio e mais de 5 no fim; IPCA: meses faltando e atraso de mais de 2 meses no fim)
 
-## 13. Vazios e zeros
+## 13. Notícias por mês
+
+- 64 meses avaliados (mês abaixo de 25% da mediana dos até 12 meses anteriores; o último mês da coleta fica de fora por estar incompleto)
+
+### Meses com poucas notícias
+
+| mes | artigos | mediana_referencia | situacao |
+|---|---|---|---|
+| 2025-01 | 28 | 2692 | cadastrado |
+| 2025-02 | 0 | 2692 | cadastrado |
+| 2025-03 | 0 | 2692 | cadastrado |
+| 2025-04 | 0 | 2692 | cadastrado |
+| 2025-05 | 0 | 2692 | cadastrado |
+| 2025-06 | 0 | 2692 | cadastrado |
+| 2025-07 | 0 | 2692 | cadastrado |
+
+## 14. Vazios e zeros
 
 - `v1-noticias.titulo`: 3 textos vazios ('') (a leitura trata como vazio); ids (até 10): n326413, n380792, n395868
 - `v1-mudancas_ticker.data_mudanca` preenchida em 10 de 10 linhas
@@ -644,7 +658,7 @@ Nenhuma divergência encontrada.
 | v1-acoes_emitidas | qtd_pn | 1850 | 0 | 0 | cheia | 0 | 1308 |
 | v1-proventos | data_pagamento | 8410 | 8026 | 95.4 | parcial | 0 | 0 |
 
-## 14. Painel de execuções (v1-painel_execucoes e v1-painel_etapas)
+## 15. Painel de execuções (v1-painel_execucoes e v1-painel_etapas)
 
 - daily cron fora da agenda (11h/21h UTC): 0h: 1, 3h: 1, 19h: 1 execuções
 - daily manual: 1 execuções (23h: 1)
@@ -700,7 +714,7 @@ Nenhuma divergência encontrada.
 | analise | 9 | falhou | 3 |
 | analise | 9 | pulada | 5 |
 
-## 15. Histórico novo: composição, corrigir_horas e cobertura do experimento
+## 16. Histórico novo: composição, corrigir_horas e cobertura do experimento
 
 - Composição do Ibovespa: 48 de 136 tickers sem nenhum preço em v1-precos (7 código antigo de empresa do cadastro, 41 fora do cadastro); 28 estiveram no índice em 2024 ou depois. O preço é procurado com a união das mudanças de ticker (o código antigo vale pelo atual).
 - corrigir_horas: execução mais recente 2026-10-29-coletar-175705 (status concluida), etapa concluida; iniciada em 2026-10-29 17:57, finalizada em 2026-10-29 18:01 (horário de São Paulo)
