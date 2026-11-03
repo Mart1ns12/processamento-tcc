@@ -1,0 +1,1229 @@
+{
+  "configuracao": {
+    "blocos_preco": [],
+    "colunas_1": [
+      "ret_1d",
+      "ret_5d",
+      "ret_20d",
+      "volatilidade_20d",
+      "beta",
+      "volume_relativo",
+      "salto_abertura",
+      "posicao_fechamento",
+      "mom_12_1",
+      "liquidez_20d",
+      "ret_idio_5d"
+    ],
+    "colunas_3": [
+      "ret_1d",
+      "ret_5d",
+      "ret_20d",
+      "volatilidade_20d",
+      "beta",
+      "volume_relativo",
+      "salto_abertura",
+      "noticias_dia_qtd",
+      "noticias_dia_tom",
+      "noticias_dia_extremo",
+      "mudanca_tom",
+      "posicao_fechamento",
+      "mom_12_1",
+      "liquidez_20d",
+      "ret_idio_5d"
+    ],
+    "colunas_3e": null,
+    "extremo_em_rank": false,
+    "familia": "logistica",
+    "hiperparametros": null,
+    "noticias_contexto": false,
+    "rodadas_de_origem": {
+      "busca": 1,
+      "protocolo": 1
+    },
+    "sha256_dataset": "741e781122d073e0f8fdab363998e34e39fa4f811d19c00a04412dedf548c980",
+    "vencedor": "logistica"
+  },
+  "criterios": {
+    "combinacao": {
+      "aprovado": false,
+      "c1": false,
+      "c2": true,
+      "c3": true,
+      "c4": true,
+      "c5": null
+    },
+    "lgbm_2_200": {
+      "aprovado": false,
+      "c1": false,
+      "c2": true,
+      "c3": true,
+      "c4": true,
+      "c5": null
+    },
+    "lgbm_2_50": {
+      "aprovado": false,
+      "c1": false,
+      "c2": true,
+      "c3": true,
+      "c4": true,
+      "c5": null
+    },
+    "lgbm_3_200": {
+      "aprovado": false,
+      "c1": false,
+      "c2": false,
+      "c3": false,
+      "c4": true,
+      "c5": null
+    },
+    "lgbm_3_50": {
+      "aprovado": false,
+      "c1": false,
+      "c2": false,
+      "c3": true,
+      "c4": true,
+      "c5": null
+    },
+    "logistica": {
+      "aprovado": true,
+      "c1": true,
+      "c2": true,
+      "c3": true,
+      "c4": true,
+      "c5": null
+    },
+    "xgb_2_200": {
+      "aprovado": false,
+      "c1": false,
+      "c2": false,
+      "c3": true,
+      "c4": true,
+      "c5": null
+    },
+    "xgb_2_50": {
+      "aprovado": false,
+      "c1": false,
+      "c2": false,
+      "c3": true,
+      "c4": true,
+      "c5": null
+    },
+    "xgb_3_200": {
+      "aprovado": false,
+      "c1": false,
+      "c2": false,
+      "c3": true,
+      "c4": true,
+      "c5": null
+    }
+  },
+  "data_rodada": "2026-10-30",
+  "escolha": {
+    "aprovados": [
+      "logistica"
+    ],
+    "combinacao_aprovada": false,
+    "melhor": "logistica",
+    "motivo": "logistica tem o maior ganho e nenhum mais simples fica sem diferença clara",
+    "vencedor": "logistica"
+  },
+  "final": {
+    "calibracao": {
+      "aprovada": true,
+      "brier": 0.24972927002691406,
+      "chance_exibida": false,
+      "ece": 0.00661117262191201,
+      "n": 88841,
+      "tabela": [
+        {
+          "bin": 0,
+          "media_prevista": 0.0009591209041144366,
+          "media_real": 0.3333333333333333,
+          "n": 3
+        },
+        {
+          "bin": 2,
+          "media_prevista": 0.2543143312016231,
+          "media_real": 0.5714285714285714,
+          "n": 21
+        },
+        {
+          "bin": 3,
+          "media_prevista": 0.379966190016142,
+          "media_real": 0.4484076433121019,
+          "n": 785
+        },
+        {
+          "bin": 4,
+          "media_prevista": 0.4725810430187106,
+          "media_real": 0.4737762556245787,
+          "n": 54893
+        },
+        {
+          "bin": 5,
+          "media_prevista": 0.52020389349945,
+          "media_real": 0.5067041980689488,
+          "n": 33039
+        },
+        {
+          "bin": 6,
+          "media_prevista": 0.6219268616041274,
+          "media_real": 0.48484848484848486,
+          "n": 99
+        },
+        {
+          "bin": 7,
+          "media_prevista": 0.7641221828513876,
+          "media_real": 0.0,
+          "n": 1
+        }
+      ]
+    },
+    "comparacoes": [
+      {
+        "a": "modelo_3",
+        "b": "modelo_1",
+        "ic": [
+          -0.01183704842428901,
+          0.005226748654880862
+        ],
+        "media_dif": -0.0033820138355111456,
+        "metrica": "acerto_top5_dia",
+        "n_dias": 1301
+      },
+      {
+        "a": "modelo_3",
+        "b": "modelo_1",
+        "ic": [
+          -0.002012043040048815,
+          0.0011790901325801752
+        ],
+        "media_dif": -0.0003980924707703393,
+        "metrica": "auc_dia",
+        "n_dias": 1301
+      },
+      {
+        "a": "modelo_3",
+        "b": "logistica",
+        "ic": [
+          -0.014296694850115295,
+          0.013382013835511106
+        ],
+        "media_dif": -0.0007686395080707134,
+        "metrica": "acerto_top5_dia",
+        "n_dias": 1301
+      },
+      {
+        "a": "modelo_3",
+        "b": "logistica",
+        "ic": [
+          0.0020515500255904365,
+          0.009429549438755803
+        ],
+        "media_dif": 0.005754194688827485,
+        "metrica": "auc_dia",
+        "n_dias": 1301
+      },
+      {
+        "a": "modelo_3",
+        "b": "volatilidade",
+        "ic": [
+          -0.006921598770176786,
+          0.029673328209069923
+        ],
+        "media_dif": 0.010760953112990008,
+        "metrica": "acerto_top5_dia",
+        "n_dias": 1301
+      },
+      {
+        "a": "modelo_3",
+        "b": "volatilidade",
+        "ic": [
+          0.0020740347856289484,
+          0.0153088343756815
+        ],
+        "media_dif": 0.008636786120466667,
+        "metrica": "auc_dia",
+        "n_dias": 1301
+      }
+    ],
+    "familia": "logistica",
+    "hiperparametros": null,
+    "logistica_e_referencia": true,
+    "modelos": {
+      "logistica": {
+        "abertura": {
+          "auc_geral": 0.5113318973181582,
+          "n_dias_total": 1301,
+          "n_dias_validos": 893,
+          "topk": {
+            "3": {
+              "n_dias": 893,
+              "taxa_acerto": 0.6020903322135125,
+              "vs_acaso": "acima"
+            },
+            "5": {
+              "n_dias": 893,
+              "taxa_acerto": 0.5879059350503919,
+              "vs_acaso": "acima"
+            }
+          }
+        },
+        "auc_geral": 0.5170020660130881,
+        "auc_medio_pregao": 0.5153585073182619,
+        "colunas": [
+          "ret_1d",
+          "ret_5d",
+          "ret_20d",
+          "volatilidade_20d",
+          "beta",
+          "volume_relativo",
+          "salto_abertura",
+          "noticias_dia_qtd",
+          "noticias_dia_tom",
+          "noticias_dia_extremo",
+          "mudanca_tom",
+          "posicao_fechamento",
+          "mom_12_1",
+          "liquidez_20d",
+          "ret_idio_5d"
+        ],
+        "n_dias_auc": 1301,
+        "por_ano": [
+          {
+            "ano": 2021,
+            "excesso_5": 0.0012539525861916606,
+            "n_dias": 187,
+            "taxa_acerto_3": 0.5062388591800356,
+            "taxa_acerto_5": 0.5251336898395721
+          },
+          {
+            "ano": 2022,
+            "excesso_5": 8.413702809297075e-05,
+            "n_dias": 250,
+            "taxa_acerto_3": 0.5186666666666666,
+            "taxa_acerto_5": 0.49279999999999996
+          },
+          {
+            "ano": 2023,
+            "excesso_5": 0.0010578662323101956,
+            "n_dias": 248,
+            "taxa_acerto_3": 0.49865591397849457,
+            "taxa_acerto_5": 0.5185483870967742
+          },
+          {
+            "ano": 2024,
+            "excesso_5": 0.0015300838182169736,
+            "n_dias": 251,
+            "taxa_acerto_3": 0.5405046480743692,
+            "taxa_acerto_5": 0.5338645418326693
+          },
+          {
+            "ano": 2025,
+            "excesso_5": 0.0001312050957029638,
+            "n_dias": 250,
+            "taxa_acerto_3": 0.524,
+            "taxa_acerto_5": 0.49839999999999995
+          },
+          {
+            "ano": 2026,
+            "excesso_5": -0.0003833376778747009,
+            "n_dias": 115,
+            "taxa_acerto_3": 0.5043478260869565,
+            "taxa_acerto_5": 0.48
+          }
+        ],
+        "sensibilidade": {
+          "anteriores": {
+            "dif_excesso": 0.001400160447538892,
+            "dif_top_ultimos": 0.050808753568030385,
+            "excesso_medio": 0.0010099746968000398,
+            "excesso_ultimos": -0.00039018575073885214,
+            "n_dias": 1051,
+            "taxa_acerto": 0.5189343482397716,
+            "taxa_ultimos": 0.4681255946717412
+          },
+          "corte": "2025-06-19",
+          "ultimo_ano": {
+            "dif_excesso": 0.0018123701501075288,
+            "dif_top_ultimos": 0.028000000000000025,
+            "excesso_medio": -0.0006833628429608778,
+            "excesso_ultimos": -0.0024957329930684067,
+            "n_dias": 250,
+            "taxa_acerto": 0.4736,
+            "taxa_ultimos": 0.4456
+          }
+        },
+        "topk": {
+          "3": {
+            "dif_top_ultimos": 0.0445810914681013,
+            "excesso_medio": 0.0010317790861887489,
+            "excesso_ultimos": -7.423997324025301e-05,
+            "fracao_acaso_maior_ou_igual": 0.0,
+            "ic_excesso": [
+              0.00045428234336388856,
+              0.0016066529462346684
+            ],
+            "ic_taxa": [
+              0.4998654880860876,
+              0.5339482449397899
+            ],
+            "n_dias": 1301,
+            "taxa_acerto": 0.5170381757622341,
+            "taxa_ultimos": 0.4724570842941328,
+            "vs_acaso": "acima"
+          },
+          "5": {
+            "dif_top_ultimos": 0.046425826287471106,
+            "excesso_medio": 0.0006845831634101633,
+            "excesso_ultimos": -0.0007947874498798117,
+            "fracao_acaso_maior_ou_igual": 0.0,
+            "ic_excesso": [
+              0.0002107977077672429,
+              0.0011789049115980737
+            ],
+            "ic_taxa": [
+              0.4968485780169101,
+              0.5242121445042275
+            ],
+            "n_dias": 1301,
+            "taxa_acerto": 0.5102229054573405,
+            "taxa_ultimos": 0.4637970791698694,
+            "vs_acaso": "acima"
+          }
+        }
+      },
+      "modelo_1": {
+        "abertura": {
+          "auc_geral": 0.5204765139347088,
+          "n_dias_total": 1301,
+          "n_dias_validos": 893,
+          "topk": {
+            "3": {
+              "n_dias": 893,
+              "taxa_acerto": 0.5942515864128406,
+              "vs_acaso": "acima"
+            },
+            "5": {
+              "n_dias": 893,
+              "taxa_acerto": 0.5896976483762598,
+              "vs_acaso": "acima"
+            }
+          }
+        },
+        "auc_geral": 0.5199711124165858,
+        "auc_medio_pregao": 0.5215107944778598,
+        "colunas": [
+          "ret_1d",
+          "ret_5d",
+          "ret_20d",
+          "volatilidade_20d",
+          "beta",
+          "volume_relativo",
+          "salto_abertura",
+          "posicao_fechamento",
+          "mom_12_1",
+          "liquidez_20d",
+          "ret_idio_5d"
+        ],
+        "n_dias_auc": 1301,
+        "por_ano": [
+          {
+            "ano": 2021,
+            "excesso_5": 0.0018045318861205182,
+            "n_dias": 187,
+            "taxa_acerto_3": 0.5508021390374331,
+            "taxa_acerto_5": 0.5336898395721926
+          },
+          {
+            "ano": 2022,
+            "excesso_5": -0.0006663037505353925,
+            "n_dias": 250,
+            "taxa_acerto_3": 0.476,
+            "taxa_acerto_5": 0.4936
+          },
+          {
+            "ano": 2023,
+            "excesso_5": -0.0008451329108182991,
+            "n_dias": 248,
+            "taxa_acerto_3": 0.4771505376344086,
+            "taxa_acerto_5": 0.5000000000000001
+          },
+          {
+            "ano": 2024,
+            "excesso_5": 0.0019192976636528468,
+            "n_dias": 251,
+            "taxa_acerto_3": 0.547144754316069,
+            "taxa_acerto_5": 0.5426294820717131
+          },
+          {
+            "ano": 2025,
+            "excesso_5": 0.00034216212921400367,
+            "n_dias": 250,
+            "taxa_acerto_3": 0.5079999999999999,
+            "taxa_acerto_5": 0.5207999999999999
+          },
+          {
+            "ano": 2026,
+            "excesso_5": -0.0006190617825867579,
+            "n_dias": 115,
+            "taxa_acerto_3": 0.45217391304347826,
+            "taxa_acerto_5": 0.46608695652173915
+          }
+        ],
+        "sensibilidade": {
+          "anteriores": {
+            "dif_excesso": 0.0013716834693392659,
+            "dif_top_ultimos": 0.06127497621313038,
+            "excesso_medio": 0.00043535981998530726,
+            "excesso_ultimos": -0.0009363236493539586,
+            "n_dias": 1051,
+            "taxa_acerto": 0.5166508087535681,
+            "taxa_ultimos": 0.4553758325404377
+          },
+          "corte": "2025-06-19",
+          "ultimo_ano": {
+            "dif_excesso": 0.0020842515741517093,
+            "dif_top_ultimos": 0.060799999999999965,
+            "excesso_medio": -7.698669356761556e-07,
+            "excesso_ultimos": -0.0020850214410873856,
+            "n_dias": 250,
+            "taxa_acerto": 0.49679999999999996,
+            "taxa_ultimos": 0.436
+          }
+        },
+        "topk": {
+          "3": {
+            "dif_top_ultimos": 0.05995388162951576,
+            "excesso_medio": 3.1252847211777693e-05,
+            "excesso_ultimos": -0.001506195525080455,
+            "fracao_acaso_maior_ou_igual": 0.0074,
+            "ic_excesso": [
+              -0.0006209877010083137,
+              0.0006344022998434049
+            ],
+            "ic_taxa": [
+              0.48757366128619006,
+              0.5216500128106585
+            ],
+            "n_dias": 1301,
+            "taxa_acerto": 0.5047399436331027,
+            "taxa_ultimos": 0.44478606200358695,
+            "vs_acaso": "acima"
+          },
+          "5": {
+            "dif_top_ultimos": 0.06118370484242902,
+            "excesso_medio": 0.0003515531929828124,
+            "excesso_ultimos": -0.001157057275743933,
+            "fracao_acaso_maior_ou_igual": 0.0,
+            "ic_excesso": [
+              -0.00018951270750244202,
+              0.0008796106235962511
+            ],
+            "ic_taxa": [
+              0.49930822444273637,
+              0.5266756341275941
+            ],
+            "n_dias": 1301,
+            "taxa_acerto": 0.512836279784781,
+            "taxa_ultimos": 0.45165257494235195,
+            "vs_acaso": "acima"
+          }
+        }
+      },
+      "modelo_3": {
+        "abertura": {
+          "auc_geral": 0.5186311731212567,
+          "n_dias_total": 1301,
+          "n_dias_validos": 893,
+          "topk": {
+            "3": {
+              "n_dias": 893,
+              "taxa_acerto": 0.5905188503172826,
+              "vs_acaso": "acima"
+            },
+            "5": {
+              "n_dias": 893,
+              "taxa_acerto": 0.5888017917133258,
+              "vs_acaso": "acima"
+            }
+          }
+        },
+        "auc_geral": 0.5216374814561258,
+        "auc_medio_pregao": 0.5211127020070895,
+        "colunas": [
+          "ret_1d",
+          "ret_5d",
+          "ret_20d",
+          "volatilidade_20d",
+          "beta",
+          "volume_relativo",
+          "salto_abertura",
+          "noticias_dia_qtd",
+          "noticias_dia_tom",
+          "noticias_dia_extremo",
+          "mudanca_tom",
+          "posicao_fechamento",
+          "mom_12_1",
+          "liquidez_20d",
+          "ret_idio_5d"
+        ],
+        "n_dias_auc": 1301,
+        "por_ano": [
+          {
+            "ano": 2021,
+            "excesso_5": 0.0015838112698194303,
+            "n_dias": 187,
+            "taxa_acerto_3": 0.5418894830659536,
+            "taxa_acerto_5": 0.5283422459893049
+          },
+          {
+            "ano": 2022,
+            "excesso_5": -0.0004258633865004594,
+            "n_dias": 250,
+            "taxa_acerto_3": 0.48933333333333323,
+            "taxa_acerto_5": 0.4968
+          },
+          {
+            "ano": 2023,
+            "excesso_5": -0.0006307368146112526,
+            "n_dias": 248,
+            "taxa_acerto_3": 0.5013440860215054,
+            "taxa_acerto_5": 0.5040322580645161
+          },
+          {
+            "ano": 2024,
+            "excesso_5": 0.0017069761251834942,
+            "n_dias": 251,
+            "taxa_acerto_3": 0.5272244355909694,
+            "taxa_acerto_5": 0.5227091633466135
+          },
+          {
+            "ano": 2025,
+            "excesso_5": 0.0004032851038227797,
+            "n_dias": 250,
+            "taxa_acerto_3": 0.4973333333333333,
+            "taxa_acerto_5": 0.5136
+          },
+          {
+            "ano": 2026,
+            "excesso_5": -0.0003473247739883095,
+            "n_dias": 115,
+            "taxa_acerto_3": 0.4608695652173913,
+            "taxa_acerto_5": 0.48
+          }
+        ],
+        "sensibilidade": {
+          "anteriores": {
+            "dif_excesso": 0.0011042365711131095,
+            "dif_top_ultimos": 0.04814462416745957,
+            "excesso_medio": 0.0004564879749828918,
+            "excesso_ultimos": -0.0006477485961302177,
+            "n_dias": 1051,
+            "taxa_acerto": 0.5124643196955281,
+            "taxa_ultimos": 0.4643196955280685
+          },
+          "corte": "2025-06-19",
+          "ultimo_ano": {
+            "dif_excesso": 0.0015557828232829196,
+            "dif_top_ultimos": 0.0520000000000001,
+            "excesso_medio": 0.00017138081387442023,
+            "excesso_ultimos": -0.0013844020094084994,
+            "n_dias": 250,
+            "taxa_acerto": 0.4968000000000001,
+            "taxa_ultimos": 0.4448
+          }
+        },
+        "topk": {
+          "3": {
+            "dif_top_ultimos": 0.05021778119395348,
+            "excesso_medio": 0.0002821325094142834,
+            "excesso_ultimos": -0.0010022925239862018,
+            "fracao_acaso_maior_ou_igual": 0.0056,
+            "ic_excesso": [
+              -0.00036578197190280045,
+              0.0008789304212116867
+            ],
+            "ic_taxa": [
+              0.4885985139636177,
+              0.5221624391493722
+            ],
+            "n_dias": 1301,
+            "taxa_acerto": 0.5055085831411735,
+            "taxa_ultimos": 0.45529080194722005,
+            "vs_acaso": "acima"
+          },
+          "5": {
+            "dif_top_ultimos": 0.04888547271329752,
+            "excesso_medio": 0.0004017018179674284,
+            "excesso_ultimos": -0.0007893038254304255,
+            "fracao_acaso_maior_ou_igual": 0.0,
+            "ic_excesso": [
+              -0.00013679396008306783,
+              0.0008998663013527762
+            ],
+            "ic_taxa": [
+              0.4962336664104535,
+              0.5223674096848578
+            ],
+            "n_dias": 1301,
+            "taxa_acerto": 0.5094542659492698,
+            "taxa_ultimos": 0.4605687932359723,
+            "vs_acaso": "acima"
+          }
+        }
+      },
+      "volatilidade": {
+        "abertura": {
+          "auc_geral": 0.49855694666786526,
+          "n_dias_total": 1301,
+          "n_dias_validos": 893,
+          "topk": {
+            "3": {
+              "n_dias": 893,
+              "taxa_acerto": 0.5662560656961553,
+              "vs_acaso": "dentro"
+            },
+            "5": {
+              "n_dias": 893,
+              "taxa_acerto": 0.5675251959686449,
+              "vs_acaso": "acima"
+            }
+          }
+        },
+        "auc_geral": 0.5124825747635487,
+        "auc_medio_pregao": 0.5124759158866227,
+        "colunas": [
+          "volatilidade_20d"
+        ],
+        "n_dias_auc": 1301,
+        "por_ano": [
+          {
+            "ano": 2021,
+            "excesso_5": 0.0006079224232224759,
+            "n_dias": 187,
+            "taxa_acerto_3": 0.4848484848484848,
+            "taxa_acerto_5": 0.47379679144385023
+          },
+          {
+            "ano": 2022,
+            "excesso_5": 0.0003021840609512786,
+            "n_dias": 250,
+            "taxa_acerto_3": 0.49333333333333335,
+            "taxa_acerto_5": 0.504
+          },
+          {
+            "ano": 2023,
+            "excesso_5": -0.0005833888501262451,
+            "n_dias": 248,
+            "taxa_acerto_3": 0.4905913978494623,
+            "taxa_acerto_5": 0.4879032258064516
+          },
+          {
+            "ano": 2024,
+            "excesso_5": -6.137218668437634e-05,
+            "n_dias": 251,
+            "taxa_acerto_3": 0.49535192563081015,
+            "taxa_acerto_5": 0.5011952191235061
+          },
+          {
+            "ano": 2025,
+            "excesso_5": 8.414909605231012e-05,
+            "n_dias": 250,
+            "taxa_acerto_3": 0.5066666666666667,
+            "taxa_acerto_5": 0.5096
+          },
+          {
+            "ano": 2026,
+            "excesso_5": 0.00023093249521067958,
+            "n_dias": 115,
+            "taxa_acerto_3": 0.5188405797101449,
+            "taxa_acerto_5": 0.5217391304347826
+          }
+        ],
+        "sensibilidade": {
+          "anteriores": {
+            "dif_excesso": 0.0013404318156241765,
+            "dif_top_ultimos": 0.036726926736441456,
+            "excesso_medio": 1.6754340251799297e-06,
+            "excesso_ultimos": -0.0013387563815989965,
+            "n_dias": 1051,
+            "taxa_acerto": 0.49400570884871553,
+            "taxa_ultimos": 0.4572787821122741
+          },
+          "corte": "2025-06-19",
+          "ultimo_ano": {
+            "dif_excesso": 0.0029532682184171435,
+            "dif_top_ultimos": 0.057599999999999985,
+            "excesso_medio": 0.00029990513797270796,
+            "excesso_ultimos": -0.0026533630804444356,
+            "n_dias": 250,
+            "taxa_acerto": 0.5184,
+            "taxa_ultimos": 0.4608
+          }
+        },
+        "topk": {
+          "3": {
+            "dif_top_ultimos": 0.03561363054060973,
+            "excesso_medio": -4.979721349156507e-05,
+            "excesso_ultimos": -0.001379562523730888,
+            "fracao_acaso_maior_ou_igual": 0.0817,
+            "ic_excesso": [
+              -0.000543190320545324,
+              0.0004580062490407351
+            ],
+            "ic_taxa": [
+              0.47808736869075075,
+              0.5142198308993082
+            ],
+            "n_dias": 1301,
+            "taxa_acerto": 0.4967973353830386,
+            "taxa_ultimos": 0.4611837048424289,
+            "vs_acaso": "dentro"
+          },
+          "5": {
+            "dif_top_ultimos": 0.040737893927747904,
+            "excesso_medio": 5.898321725875554e-05,
+            "excesso_ultimos": -0.0015913710431757527,
+            "fracao_acaso_maior_ou_igual": 0.0154,
+            "ic_excesso": [
+              -0.00039155214549027785,
+              0.00048518654761463617
+            ],
+            "ic_taxa": [
+              0.48332052267486547,
+              0.5137624903920062
+            ],
+            "n_dias": 1301,
+            "taxa_acerto": 0.49869331283627977,
+            "taxa_ultimos": 0.45795541890853186,
+            "vs_acaso": "acima"
+          }
+        }
+      }
+    },
+    "veredito": {
+      "acaso": "acima",
+      "supera_logistica": false,
+      "supera_volatilidade": true,
+      "texto": "No top 5, o modelo 3 ficou acima do acaso, mas não superou a logística."
+    }
+  },
+  "identificacao": {
+    "arquivo_dataset": "dataset-todas-2026-10-30.csv",
+    "hiperparametros": {
+      "colsample_bytree": 0.8,
+      "learning_rate": 0.03,
+      "max_depth": 3,
+      "min_child_weight": 50,
+      "n_estimators": 300,
+      "reg_lambda": 5,
+      "subsample": 0.8
+    },
+    "n_dobras": 63,
+    "n_linhas": 92267,
+    "n_pregoes": 1361,
+    "periodo_fim": "2026-06-19",
+    "periodo_ini": "2021-01-04",
+    "rodada_protocolo": 1,
+    "semente": 20261023,
+    "sha256_dataset": "741e781122d073e0f8fdab363998e34e39fa4f811d19c00a04412dedf548c980",
+    "sha_codigo": "cf0956f9c62f0aa2d90b5b4ba5a88ee9d4b7959ff432e128756781b65c6b3216",
+    "sha_parametros": "d3cee30e3cb8b1b5595be7d0d4f7901f9a4188eab304867d6747b0a6a0360e35",
+    "sha_regras": "dd967e28c1eb71f5d8d2751264b850b68ed25d51695c697f5fcb7fdafdde7156",
+    "versao_preparacao": 6,
+    "versoes": {
+      "numpy": "2.5.4",
+      "pandas": "3.1.0",
+      "sklearn": "1.9.1",
+      "xgboost": "3.4.1"
+    }
+  },
+  "medidas": {
+    "combinacao": {
+      "auc_base": 0.5153585073182619,
+      "auc_candidato": 0.5190545531301515,
+      "ganho": 0.003696045811889567,
+      "ganho_por_ano": {
+        "2021": 0.0036776968758165042,
+        "2022": 0.0036048944436774984,
+        "2023": 0.0025887808362814796,
+        "2024": 0.0050720336885193475,
+        "2025": 0.00416123332933587,
+        "2026": 0.0022973586001837796
+      },
+      "ic": [
+        0.0014989483580477344,
+        0.0058960286839453415
+      ],
+      "n_dias_auc": 1301,
+      "n_dias_por_ano": {
+        "2021": 187,
+        "2022": 250,
+        "2023": 248,
+        "2024": 251,
+        "2025": 250,
+        "2026": 115
+      },
+      "regime": {
+        "ganho": 0.0050720336885193475,
+        "por_ano": {
+          "2023": 0.0025887808362814796,
+          "2024": 0.0050720336885193475
+        }
+      },
+      "top": {
+        "acertos_base": 3319,
+        "acertos_candidato": 3384,
+        "k": 5,
+        "n_dias": 1301,
+        "queda_pontos": -0.9992313604919256,
+        "taxa_base": 0.5102229054573405,
+        "taxa_candidato": 0.5202152190622598
+      }
+    },
+    "lgbm_2_200": {
+      "auc_base": 0.5153585073182619,
+      "auc_candidato": 0.5184485558393032,
+      "ganho": 0.0030900485210412294,
+      "ganho_por_ano": {
+        "2021": -0.001579447179075201,
+        "2022": 0.004193591637160403,
+        "2023": 0.0026183569629920364,
+        "2024": 0.0014292756398120866,
+        "2025": 0.0066416228508251254,
+        "2026": 0.005205264469134444
+      },
+      "ic": [
+        0.00021726480413612685,
+        0.0059989721316539985
+      ],
+      "n_dias_auc": 1301,
+      "n_dias_por_ano": {
+        "2021": 187,
+        "2022": 250,
+        "2023": 248,
+        "2024": 251,
+        "2025": 250,
+        "2026": 115
+      },
+      "regime": {
+        "ganho": 0.0014292756398120864,
+        "por_ano": {
+          "2023": 0.0026183569629920364,
+          "2024": 0.0014292756398120866
+        }
+      },
+      "top": {
+        "acertos_base": 3319,
+        "acertos_candidato": 3367,
+        "k": 5,
+        "n_dias": 1301,
+        "queda_pontos": -0.7378939277478902,
+        "taxa_base": 0.5102229054573405,
+        "taxa_candidato": 0.5176018447348194
+      }
+    },
+    "lgbm_2_50": {
+      "auc_base": 0.5153585073182619,
+      "auc_candidato": 0.5179997942969067,
+      "ganho": 0.002641286978644799,
+      "ganho_por_ano": {
+        "2021": -0.0007453732604891616,
+        "2022": 0.0021500447609978947,
+        "2023": 0.0021466983918023695,
+        "2024": 0.0018726328762359251,
+        "2025": 0.006398038280753106,
+        "2026": 0.0037936203946817523
+      },
+      "ic": [
+        0.00015813889363626717,
+        0.005186880802457137
+      ],
+      "n_dias_auc": 1301,
+      "n_dias_por_ano": {
+        "2021": 187,
+        "2022": 250,
+        "2023": 248,
+        "2024": 251,
+        "2025": 250,
+        "2026": 115
+      },
+      "regime": {
+        "ganho": 0.0018726328762359251,
+        "por_ano": {
+          "2023": 0.0021466983918023695,
+          "2024": 0.0018726328762359251
+        }
+      },
+      "top": {
+        "acertos_base": 3319,
+        "acertos_candidato": 3362,
+        "k": 5,
+        "n_dias": 1301,
+        "queda_pontos": -0.661029976940819,
+        "taxa_base": 0.5102229054573405,
+        "taxa_candidato": 0.5168332052267487
+      }
+    },
+    "lgbm_3_200": {
+      "auc_base": 0.5153585073182619,
+      "auc_candidato": 0.5161843416999055,
+      "ganho": 0.0008258343816434186,
+      "ganho_por_ano": {
+        "2021": -0.0002827272347902988,
+        "2022": 0.0027049552635081335,
+        "2023": -0.0007280261901020975,
+        "2024": -0.0026152735265418865,
+        "2025": 0.0036844777863239303,
+        "2026": 0.003190490532810358
+      },
+      "ic": [
+        -0.0019105097473959816,
+        0.003528368796991397
+      ],
+      "n_dias_auc": 1301,
+      "n_dias_por_ano": {
+        "2021": 187,
+        "2022": 250,
+        "2023": 248,
+        "2024": 251,
+        "2025": 250,
+        "2026": 115
+      },
+      "regime": {
+        "ganho": -0.0026152735265418865,
+        "por_ano": {
+          "2023": -0.0007280261901020975,
+          "2024": -0.0026152735265418865
+        }
+      },
+      "top": {
+        "acertos_base": 3319,
+        "acertos_candidato": 3353,
+        "k": 5,
+        "n_dias": 1301,
+        "queda_pontos": -0.522674865488082,
+        "taxa_base": 0.5102229054573405,
+        "taxa_candidato": 0.5154496541122213
+      }
+    },
+    "lgbm_3_50": {
+      "auc_base": 0.5153585073182619,
+      "auc_candidato": 0.5164247786026862,
+      "ganho": 0.001066271284424337,
+      "ganho_por_ano": {
+        "2021": 0.0017339513227182443,
+        "2022": -3.5264117953956566e-05,
+        "2023": 0.002027792804930314,
+        "2024": -0.0008276457719388165,
+        "2025": 0.0020220953423044715,
+        "2026": 0.0023574670498612803
+      },
+      "ic": [
+        -0.00101851817417984,
+        0.0031964622530832156
+      ],
+      "n_dias_auc": 1301,
+      "n_dias_por_ano": {
+        "2021": 187,
+        "2022": 250,
+        "2023": 248,
+        "2024": 251,
+        "2025": 250,
+        "2026": 115
+      },
+      "regime": {
+        "ganho": -0.0008276457719388163,
+        "por_ano": {
+          "2023": 0.002027792804930314,
+          "2024": -0.0008276457719388165
+        }
+      },
+      "top": {
+        "acertos_base": 3319,
+        "acertos_candidato": 3373,
+        "k": 5,
+        "n_dias": 1301,
+        "queda_pontos": -0.8301306687163779,
+        "taxa_base": 0.5102229054573405,
+        "taxa_candidato": 0.5185242121445043
+      }
+    },
+    "logistica": {
+      "auc_base": 0.5153585073182619,
+      "auc_candidato": 0.5211127020070895,
+      "ganho": 0.005754194688827485,
+      "ganho_por_ano": {
+        "2021": 0.0035376941347221875,
+        "2022": 0.008806019825103241,
+        "2023": 0.0053137507840680534,
+        "2024": 0.008356212449808083,
+        "2025": 0.00530656306857401,
+        "2026": -0.0010322326591174743
+      },
+      "ic": [
+        0.0005451165299868095,
+        0.010918463256444388
+      ],
+      "n_dias_auc": 1301,
+      "n_dias_por_ano": {
+        "2021": 187,
+        "2022": 250,
+        "2023": 248,
+        "2024": 251,
+        "2025": 250,
+        "2026": 115
+      },
+      "regime": {
+        "ganho": 0.008356212449808083,
+        "por_ano": {
+          "2023": 0.0053137507840680534,
+          "2024": 0.008356212449808083
+        }
+      },
+      "top": {
+        "acertos_base": 3319,
+        "acertos_candidato": 3314,
+        "k": 5,
+        "n_dias": 1301,
+        "queda_pontos": 0.0768639508070712,
+        "taxa_base": 0.5102229054573405,
+        "taxa_candidato": 0.5094542659492698
+      }
+    },
+    "xgb_2_200": {
+      "auc_base": 0.5153585073182619,
+      "auc_candidato": 0.518085826691,
+      "ganho": 0.0027273193727380225,
+      "ganho_por_ano": {
+        "2021": -0.0008758404415607936,
+        "2022": 0.004497993559847223,
+        "2023": 0.002094869272619741,
+        "2024": 0.0009682781961405307,
+        "2025": 0.005675302402474173,
+        "2026": 0.003531611035501895
+      },
+      "ic": [
+        -7.325240672226854e-05,
+        0.005584202711226725
+      ],
+      "n_dias_auc": 1301,
+      "n_dias_por_ano": {
+        "2021": 187,
+        "2022": 250,
+        "2023": 248,
+        "2024": 251,
+        "2025": 250,
+        "2026": 115
+      },
+      "regime": {
+        "ganho": 0.0009682781961405307,
+        "por_ano": {
+          "2023": 0.002094869272619741,
+          "2024": 0.0009682781961405307
+        }
+      },
+      "top": {
+        "acertos_base": 3319,
+        "acertos_candidato": 3319,
+        "k": 5,
+        "n_dias": 1301,
+        "queda_pontos": 0.0,
+        "taxa_base": 0.5102229054573405,
+        "taxa_candidato": 0.5102229054573405
+      }
+    },
+    "xgb_2_50": {
+      "auc_base": 0.5153585073182619,
+      "auc_candidato": 0.5174879591674995,
+      "ganho": 0.0021294518492375723,
+      "ganho_por_ano": {
+        "2021": -0.0012892221372504396,
+        "2022": 0.0029658073664721196,
+        "2023": 0.0012966833875240555,
+        "2024": 0.0021171825979959123,
+        "2025": 0.004552709109384109,
+        "2026": 0.0024250605596253636
+      },
+      "ic": [
+        -0.000206233264200916,
+        0.004501664607834425
+      ],
+      "n_dias_auc": 1301,
+      "n_dias_por_ano": {
+        "2021": 187,
+        "2022": 250,
+        "2023": 248,
+        "2024": 251,
+        "2025": 250,
+        "2026": 115
+      },
+      "regime": {
+        "ganho": 0.0021171825979959123,
+        "por_ano": {
+          "2023": 0.0012966833875240555,
+          "2024": 0.0021171825979959123
+        }
+      },
+      "top": {
+        "acertos_base": 3319,
+        "acertos_candidato": 3340,
+        "k": 5,
+        "n_dias": 1301,
+        "queda_pontos": -0.32282859338970127,
+        "taxa_base": 0.5102229054573405,
+        "taxa_candidato": 0.5134511913912375
+      }
+    },
+    "xgb_3_200": {
+      "auc_base": 0.5153585073182619,
+      "auc_candidato": 0.5164262019645769,
+      "ganho": 0.0010676946463149444,
+      "ganho_por_ano": {
+        "2021": 0.0001483859531433763,
+        "2022": 0.003326633543032097,
+        "2023": 0.0016205161082173147,
+        "2024": -0.0024354056498433947,
+        "2025": 0.0032540343377771273,
+        "2026": -0.0006473529157528451
+      },
+      "ic": [
+        -0.0013039002685816725,
+        0.0033152757415397783
+      ],
+      "n_dias_auc": 1301,
+      "n_dias_por_ano": {
+        "2021": 187,
+        "2022": 250,
+        "2023": 248,
+        "2024": 251,
+        "2025": 250,
+        "2026": 115
+      },
+      "regime": {
+        "ganho": -0.0024354056498433947,
+        "por_ano": {
+          "2023": 0.0016205161082173147,
+          "2024": -0.0024354056498433947
+        }
+      },
+      "top": {
+        "acertos_base": 3319,
+        "acertos_candidato": 3318,
+        "k": 5,
+        "n_dias": 1301,
+        "queda_pontos": 0.01537279016141646,
+        "taxa_base": 0.5102229054573405,
+        "taxa_candidato": 0.5100691775557263
+      }
+    }
+  },
+  "motivo": "1ª busca",
+  "repete_rodada": null,
+  "reproduziu": null,
+  "rodada": 1,
+  "sha_resultado": "777c527b54d99263de9512e41a567fbbdc5acb78f215f6193cc86dddd0d4d61f",
+  "status": "concluida",
+  "vencedor": "logistica"
+}
