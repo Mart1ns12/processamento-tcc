@@ -154,3 +154,35 @@ Ele só lê o período de desenvolvimento, não abre o teste final e não grava 
 | Ticker do universo sem nenhum provento | 0 casos em 98.934 linhas |
 | Reapresentações de Fato Relevante | 197 de 3.487; 60 sem original (mesma referência ou até 10 dias antes). **Corrigido:** contam como evento na própria `data_entrega`, se entregues até 10 dias depois da referência (58 das 60) |
 | JBS | `v1-precos` tem JBSS3 de 30/12/2019 a 06/06/2025 e JBSS32 de 09/06/2025 em diante; nenhum provento dos dois códigos; documentos da CVM só desde 2025. **Decidido (02/11/2026): a JBS fica fora do universo por exclusão explícita em `exclusoes.yaml`**; dy_12m e fato_relevante_cvm seriam zeros falsos. Volta quando a coleta trouxer proventos, balanços e documentos da CVM do período. Limitação do TCC (seção 3.4 da especificação) |
+
+## 8. Situação após a rodada 1 e análises exploratórias
+
+Registrado em 02/11/2026, **antes de rodar a sensibilidade**. Esta seção é registro: não muda as seções 1 a 7, os critérios, os limites nem a configuração congelada.
+
+**Situação.** O protocolo e a busca foram rodados (as seções 6 e 7 foram escritas antes disso). Protocolo: bloco A adotado; B, C, D, E e o controle reprovados. Busca: venceu a regressão logística. Cada um foi repetido com as mesmas entradas e reproduziu o `sha_resultado` (protocolo `07544273dffe`, busca `777c527b54d9`). Pela seção 6, nada entra em produção antes de ajustar o código e a especificação para a logística: isso está pendente.
+
+**Análises de sensibilidade de modelo 3 × modelo 1.** São exploratórias, relatadas à parte em `docs/busca_rodada_001_sensibilidade.md`, sem mudar a hipótese, a configuração congelada, a escolha do modelo nem o teste final. Ficam fora de `docs/protocolo_tentativas.jsonl` e da contagem de testes do protocolo, e os IC não têm ajuste por comparações múltiplas. Família logística, colunas de `docs/protocolo_congelado_rodada_001.json`, mesmas dobras e semente, só no desenvolvimento:
+
+| Caso | Treino | Avaliação |
+|---|---|---|
+| a) Linhas com notícia | Todas as linhas de `todas` | Só linhas com `noticias_dia_qtd` bruto ≥ 1; NaN sai, não vira zero |
+| b) `principais` | Modelo 3 nessa versão × modelo 1 de `todas` | Todas as linhas e o recorte com notícia da própria versão |
+| c) `hora_real_noite` | Modelo 3 nessa versão × modelo 1 de `todas` | Todas as linhas e o recorte com notícia da própria versão |
+| d) Só notícias | Logística só com as colunas de notícias de `todas` | Frente ao acaso; o resultado principal é o recorte com notícia |
+
+No recorte, o dia só entra com pelo menos 5 linhas com alvo e as duas classes; o acaso é recalculado nele, e os dias perdidos são relatados por ano.
+
+**Decisões do usuário para o teste final (02/11/2026):**
+
+| Tema | Decisão |
+|---|---|
+| Histórico | 2021 em diante, com a lacuna de jan–jul/2025 como limitação, conta como histórico completo. `modelo_oficial` muda antes do treino final, não agora |
+| Medida primária | Ganho de AUC por pregão, modelo 3 − modelo 1, com IC 95% acima de 0. Secundária: top 5 frente ao acaso |
+| Congelado | Logística, configuração final da rodada 001; referências: acaso, volatilidade e XGBoost do ponto de partida |
+| Jan–jul/2025 preenchido depois | Fica vazio no resultado principal; depois do teste, só como sensibilidade |
+| Dataset | Treino no sha `741e781122d0…`, com cópia guardada; o sha do dataset do teste é registrado antes de rodar |
+| Preços reescritos | Comparar a parte de desenvolvimento, nova × congelada, sem abrir o teste, com tolerância 1e-6; acima disso, parar e perguntar |
+| Custos | Bruto como primário; líquido com um custo único definido antes do teste |
+| Eventos depois de 23/06/2026 | Auditar só retornos, antes do treino final. Evento novo gera nova versão e refaz protocolo e busca. Depois de congelar, nada muda: exclusão só como sensibilidade |
+| `liberar_chance` | Continua `false` até o teste ao vivo |
+| Fim do teste final | **Ainda não definido** |

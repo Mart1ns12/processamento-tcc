@@ -1,0 +1,44 @@
+{
+  "blocos_preco": [],
+  "colunas_1": [
+    "ret_1d",
+    "ret_5d",
+    "ret_20d",
+    "volatilidade_20d",
+    "beta",
+    "volume_relativo",
+    "salto_abertura",
+    "posicao_fechamento",
+    "mom_12_1",
+    "liquidez_20d",
+    "ret_idio_5d"
+  ],
+  "colunas_3": [
+    "ret_1d",
+    "ret_5d",
+    "ret_20d",
+    "volatilidade_20d",
+    "beta",
+    "volume_relativo",
+    "salto_abertura",
+    "noticias_dia_qtd",
+    "noticias_dia_tom",
+    "noticias_dia_extremo",
+    "mudanca_tom",
+    "posicao_fechamento",
+    "mom_12_1",
+    "liquidez_20d",
+    "ret_idio_5d"
+  ],
+  "colunas_3e": null,
+  "extremo_em_rank": false,
+  "familia": "logistica",
+  "hiperparametros": null,
+  "noticias_contexto": false,
+  "rodadas_de_origem": {
+    "busca": 2,
+    "protocolo": 1
+  },
+  "sha256_dataset": "741e781122d073e0f8fdab363998e34e39fa4f811d19c00a04412dedf548c980",
+  "vencedor": "logistica"
+}

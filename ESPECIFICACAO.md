@@ -673,6 +673,14 @@ Com ~1 ano de histórico, a etapa 6 é **só teste de funcionamento** (3.4): o r
 
 ---
 
+**Acréscimo de 02/11/2026 (resultado da rodada 1; `docs/protocolo_variaveis.md`, seção 8)**
+
+- **Protocolo:** bloco A (`posicao_fechamento`, `mom_12_1`, `liquidez_20d`, `ret_idio_5d`) adotado; B, C, D, E e o controle reprovados; `preco_contexto`, `macro` e `noticias_contexto` fora da base. Colunas em `docs/protocolo_congelado_rodada_001.json`. Relatório: `docs/protocolo_rodada_001.md`.
+- **Busca:** a regressão logística (C = 1) venceu: ganho de AUC +0,00575 contra o XGBoost do ponto de partida, que passa a ser a terceira referência. Configuração: `docs/configuracao_final_rodada_001.json`. Relatório: `docs/busca_rodada_001.md`.
+- **Reprodução:** protocolo e busca repetidos com as mesmas entradas deram o mesmo `sha_resultado`.
+- **Comparação do TCC no desenvolvimento (exploratória, `modelo_oficial` false):** modelo 3 × modelo 1 com a logística, ganho de AUC −0,00040 (IC 95% de −0,00201 a 0,00118). Anexo: `docs/busca_rodada_001_comparacao_tcc.md`. Sensibilidade: `docs/busca_rodada_001_sensibilidade.md`.
+- **Produção ainda é XGBoost:** treino, top 5, motivos e retreino não aceitam a logística, e os motivos ainda não têm texto para as 4 colunas do bloco A. As seções 7.3, 7.4, 7.6 e 7.7 descrevem o estado atual e mudam com esse ajuste.
+
 ## 10. Pendências externas (não bloqueiam a implementação)
 
 | Pendência | De quem |

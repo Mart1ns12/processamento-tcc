@@ -1,0 +1,549 @@
+{
+  "adotados": [
+    "bloco_a"
+  ],
+  "aprovados": [
+    "bloco_a"
+  ],
+  "bloco_e_aprovado": false,
+  "cobertura": {
+    "2021": {
+      "controle_sorteado": 1.0,
+      "dias_desde_resultado": 0.5891809839232733,
+      "dy_12m": 0.9972400469192024,
+      "exposicao_small": 0.998827019940661,
+      "fato_relevante_cvm": 1.0,
+      "liquidez_20d": 0.9972400469192024,
+      "mom_12_1": 0.9509418339888221,
+      "momento_setor_5d": 0.9944800938384047,
+      "posicao_fechamento": 1.0,
+      "ret_idio_5d": 0.9939971020492652,
+      "var_lucro_aa": 0.0
+    },
+    "2022": {
+      "controle_sorteado": 1.0,
+      "dias_desde_resultado": 0.9409510647653747,
+      "dy_12m": 1.0,
+      "exposicao_small": 0.9979898234813744,
+      "fato_relevante_cvm": 1.0,
+      "liquidez_20d": 0.9802123248947798,
+      "mom_12_1": 0.9705383503988944,
+      "momento_setor_5d": 1.0,
+      "posicao_fechamento": 0.9989949117406872,
+      "ret_idio_5d": 0.9942207425089515,
+      "var_lucro_aa": 0.5611533387775614
+    },
+    "2023": {
+      "controle_sorteado": 1.0,
+      "dias_desde_resultado": 0.9490999756750182,
+      "dy_12m": 0.9987837509121869,
+      "exposicao_small": 1.0,
+      "fato_relevante_cvm": 0.0,
+      "liquidez_20d": 0.9927633179275116,
+      "mom_12_1": 0.9959863780102165,
+      "momento_setor_5d": 1.0,
+      "posicao_fechamento": 0.9996959377280467,
+      "ret_idio_5d": 0.9996959377280467,
+      "var_lucro_aa": 0.8616516662612503
+    },
+    "2024": {
+      "controle_sorteado": 1.0,
+      "dias_desde_resultado": 0.9717246817618564,
+      "dy_12m": 1.0,
+      "exposicao_small": 1.0,
+      "fato_relevante_cvm": 1.0,
+      "liquidez_20d": 0.9897487890052946,
+      "mom_12_1": 0.9907063197026023,
+      "momento_setor_5d": 1.0,
+      "posicao_fechamento": 0.9994367466486426,
+      "ret_idio_5d": 1.0,
+      "var_lucro_aa": 0.862453531598513
+    },
+    "2025": {
+      "controle_sorteado": 1.0,
+      "dias_desde_resultado": 0.9769892022224552,
+      "dy_12m": 0.9989516720830276,
+      "exposicao_small": 0.9968550162490827,
+      "fato_relevante_cvm": 0.42142782262291645,
+      "liquidez_20d": 0.9979033441660552,
+      "mom_12_1": 0.9933431177272251,
+      "momento_setor_5d": 0.9911940454974316,
+      "posicao_fechamento": 0.9999475836041514,
+      "ret_idio_5d": 0.9937100324981655,
+      "var_lucro_aa": 0.8794422895481707
+    },
+    "2026": {
+      "controle_sorteado": 1.0,
+      "dias_desde_resultado": 0.9731684554363043,
+      "dy_12m": 1.0,
+      "exposicao_small": 1.0,
+      "fato_relevante_cvm": 1.0,
+      "liquidez_20d": 1.0,
+      "mom_12_1": 0.9865842277181521,
+      "momento_setor_5d": 0.9865842277181521,
+      "posicao_fechamento": 1.0,
+      "ret_idio_5d": 1.0,
+      "var_lucro_aa": 0.8762249183387775
+    }
+  },
+  "colunas_congeladas": {
+    "blocos_preco": [],
+    "colunas_1": [
+      "ret_1d",
+      "ret_5d",
+      "ret_20d",
+      "volatilidade_20d",
+      "beta",
+      "volume_relativo",
+      "salto_abertura",
+      "posicao_fechamento",
+      "mom_12_1",
+      "liquidez_20d",
+      "ret_idio_5d"
+    ],
+    "colunas_3": [
+      "ret_1d",
+      "ret_5d",
+      "ret_20d",
+      "volatilidade_20d",
+      "beta",
+      "volume_relativo",
+      "salto_abertura",
+      "noticias_dia_qtd",
+      "noticias_dia_tom",
+      "noticias_dia_extremo",
+      "mudanca_tom",
+      "posicao_fechamento",
+      "mom_12_1",
+      "liquidez_20d",
+      "ret_idio_5d"
+    ],
+    "colunas_3e": null,
+    "extremo_em_rank": false,
+    "hiperparametros": {
+      "colsample_bytree": 0.8,
+      "learning_rate": 0.03,
+      "max_depth": 3,
+      "min_child_weight": 50,
+      "n_estimators": 300,
+      "reg_lambda": 5,
+      "subsample": 0.8
+    },
+    "noticias_contexto": false,
+    "rodada": 2,
+    "sha256_dataset": "741e781122d073e0f8fdab363998e34e39fa4f811d19c00a04412dedf548c980"
+  },
+  "conjunto": {
+    "avaliacao": null,
+    "blocos": [],
+    "colunas": null,
+    "medidas": null,
+    "motivo": "1 bloco(s) aprovado(s); o conjunto só roda com 2 ou mais",
+    "situacao": "nao_se_aplica"
+  },
+  "data_rodada": "2026-10-30",
+  "identificacao": {
+    "arquivo_dataset": "dataset-todas-2026-10-30.csv",
+    "hiperparametros": {
+      "colsample_bytree": 0.8,
+      "learning_rate": 0.03,
+      "max_depth": 3,
+      "min_child_weight": 50,
+      "n_estimators": 300,
+      "reg_lambda": 5,
+      "subsample": 0.8
+    },
+    "n_dobras": 63,
+    "n_linhas": 92267,
+    "n_pregoes": 1361,
+    "periodo_fim": "2026-06-19",
+    "periodo_ini": "2021-01-04",
+    "semente": 20261023,
+    "sha256_dataset": "741e781122d073e0f8fdab363998e34e39fa4f811d19c00a04412dedf548c980",
+    "sha_codigo": "4c612df58dcb318dc5ba44fc22c51c369947d45a2d371949aefa17096295e7e1",
+    "sha_parametros": "d3cee30e3cb8b1b5595be7d0d4f7901f9a4188eab304867d6747b0a6a0360e35",
+    "sha_regras": "e275d3d6e8f1b65e4c781871062991d3e2503f3eaa0bb8836b864302390556b0",
+    "versao_preparacao": 6,
+    "versoes": {
+      "numpy": "2.5.4",
+      "pandas": "3.1.0",
+      "sklearn": "1.9.1",
+      "xgboost": "3.4.1"
+    }
+  },
+  "modelo_oficial": false,
+  "motivo": "Repeticao_para_conferir_determinismo",
+  "motivos": [],
+  "n_testes": 6,
+  "passo_0": {
+    "blocos": [],
+    "colunas_modelo_1": [
+      "ret_1d",
+      "ret_5d",
+      "ret_20d",
+      "volatilidade_20d",
+      "beta",
+      "volume_relativo",
+      "salto_abertura"
+    ],
+    "colunas_modelo_3": [
+      "ret_1d",
+      "ret_5d",
+      "ret_20d",
+      "volatilidade_20d",
+      "beta",
+      "volume_relativo",
+      "salto_abertura",
+      "noticias_dia_qtd",
+      "noticias_dia_tom",
+      "noticias_dia_extremo",
+      "mudanca_tom"
+    ],
+    "noticias_contexto": false,
+    "tentativas": [
+      {
+        "aceito": false,
+        "auc_medio": 0.5095499811477522,
+        "descricao": "bloco preco_contexto",
+        "etapa": "modelo_1"
+      },
+      {
+        "aceito": false,
+        "auc_medio": 0.5085628378593015,
+        "descricao": "bloco macro",
+        "etapa": "modelo_1"
+      },
+      {
+        "aceito": false,
+        "auc_medio": 0.5104066879971775,
+        "descricao": "bloco noticias_contexto",
+        "etapa": "modelo_3"
+      }
+    ]
+  },
+  "repete_rodada": 1,
+  "reproduziu": true,
+  "rodada": 2,
+  "sha_resultado": "07544273dffe7257b9187d4f217015323650fbc65a02b1b264b431fee5e21e7b",
+  "status": "valida",
+  "testes": {
+    "bloco_a": {
+      "avaliacao": {
+        "aprovado": true,
+        "c1": true,
+        "c2": true,
+        "c3": true,
+        "c4": true,
+        "c5": null
+      },
+      "base": "modelo 1",
+      "medidas": {
+        "auc_base": 0.5089304183321948,
+        "auc_candidato": 0.516614841523248,
+        "ganho": 0.0076844231910532445,
+        "ganho_por_ano": {
+          "2021": 0.013495672339464995,
+          "2022": 0.010561539403416864,
+          "2023": 0.004485984236037212,
+          "2024": 0.004502286154020043,
+          "2025": 0.012335977802758793,
+          "2026": -0.004288985849216136
+        },
+        "ic": [
+          0.002618015970252033,
+          0.01345902723780285
+        ],
+        "n_dias_auc": 1301,
+        "n_dias_por_ano": {
+          "2021": 187,
+          "2022": 250,
+          "2023": 248,
+          "2024": 251,
+          "2025": 250,
+          "2026": 115
+        },
+        "regime": {
+          "ganho": 0.004502286154020042,
+          "por_ano": {
+            "2023": 0.004485984236037212,
+            "2024": 0.004502286154020043
+          }
+        },
+        "top": {
+          "acertos_base": 3240,
+          "acertos_candidato": 3326,
+          "k": 5,
+          "n_dias": 1301,
+          "queda_pontos": -1.3220599538816324,
+          "taxa_base": 0.4980784012298232,
+          "taxa_candidato": 0.5112990007686395
+        }
+      }
+    },
+    "bloco_b": {
+      "avaliacao": {
+        "aprovado": false,
+        "c1": false,
+        "c2": false,
+        "c3": false,
+        "c4": false,
+        "c5": null
+      },
+      "base": "modelo 1",
+      "medidas": {
+        "auc_base": 0.5089304183321948,
+        "auc_candidato": 0.5065374936693046,
+        "ganho": -0.0023929246628901445,
+        "ganho_por_ano": {
+          "2021": -0.003976527735083194,
+          "2022": -0.0009867136174338703,
+          "2023": -0.0038160259311083755,
+          "2024": -0.004196404625134319,
+          "2025": -0.0006843455878746001,
+          "2026": 0.0004161086364451184
+        },
+        "ic": [
+          -0.0065802065435914495,
+          0.0016548318287639753
+        ],
+        "n_dias_auc": 1301,
+        "n_dias_por_ano": {
+          "2021": 187,
+          "2022": 250,
+          "2023": 248,
+          "2024": 251,
+          "2025": 250,
+          "2026": 115
+        },
+        "regime": {
+          "ganho": -0.004196404625134318,
+          "por_ano": {
+            "2023": -0.0038160259311083755,
+            "2024": -0.004196404625134319
+          }
+        },
+        "top": {
+          "acertos_base": 3240,
+          "acertos_candidato": 3203,
+          "k": 5,
+          "n_dias": 1301,
+          "queda_pontos": 0.5687932359723313,
+          "taxa_base": 0.4980784012298232,
+          "taxa_candidato": 0.4923904688700999
+        }
+      }
+    },
+    "bloco_c": {
+      "avaliacao": {
+        "aprovado": false,
+        "c1": false,
+        "c2": false,
+        "c3": false,
+        "c4": true,
+        "c5": null
+      },
+      "base": "modelo 1",
+      "medidas": {
+        "auc_base": 0.5089304183321948,
+        "auc_candidato": 0.509791464610049,
+        "ganho": 0.0008610462778542146,
+        "ganho_por_ano": {
+          "2021": -0.0023650506318620445,
+          "2022": 0.008136136970203866,
+          "2023": -0.002208996990776964,
+          "2024": 0.00025310360023947896,
+          "2025": 0.0006945528188488935,
+          "2026": -0.0013989958396876242
+        },
+        "ic": [
+          -0.0030378910479808854,
+          0.005008645801424345
+        ],
+        "n_dias_auc": 1301,
+        "n_dias_por_ano": {
+          "2021": 187,
+          "2022": 250,
+          "2023": 248,
+          "2024": 251,
+          "2025": 250,
+          "2026": 115
+        },
+        "regime": {
+          "ganho": 0.0002531036002394792,
+          "por_ano": {
+            "2023": -0.002208996990776964,
+            "2024": 0.00025310360023947896
+          }
+        },
+        "top": {
+          "acertos_base": 3240,
+          "acertos_candidato": 3277,
+          "k": 5,
+          "n_dias": 1301,
+          "queda_pontos": -0.5687932359723258,
+          "taxa_base": 0.4980784012298232,
+          "taxa_candidato": 0.5037663335895465
+        }
+      }
+    },
+    "bloco_d": {
+      "avaliacao": {
+        "aprovado": false,
+        "c1": false,
+        "c2": false,
+        "c3": false,
+        "c4": true,
+        "c5": null
+      },
+      "base": "modelo 1",
+      "medidas": {
+        "auc_base": 0.5089304183321948,
+        "auc_candidato": 0.5083608516134756,
+        "ganho": -0.0005695667187192665,
+        "ganho_por_ano": {
+          "2021": -0.00371825965784503,
+          "2022": -0.0008361884952758562,
+          "2023": 0.0008490808041275158,
+          "2024": -2.0040879685991654e-05,
+          "2025": 0.0006452456014387775,
+          "2026": -0.0017695460886949176
+        },
+        "ic": [
+          -0.0031375519666055553,
+          0.0020049733075020526
+        ],
+        "n_dias_auc": 1301,
+        "n_dias_por_ano": {
+          "2021": 187,
+          "2022": 250,
+          "2023": 248,
+          "2024": 251,
+          "2025": 250,
+          "2026": 115
+        },
+        "regime": {
+          "ganho": -2.0040879685991654e-05,
+          "por_ano": {
+            "2023": 0.0008490808041275158,
+            "2024": -2.0040879685991654e-05
+          }
+        },
+        "top": {
+          "acertos_base": 3240,
+          "acertos_candidato": 3216,
+          "k": 5,
+          "n_dias": 1301,
+          "queda_pontos": 0.3689469638739451,
+          "taxa_base": 0.4980784012298232,
+          "taxa_candidato": 0.49438893159108377
+        }
+      }
+    },
+    "bloco_e": {
+      "avaliacao": {
+        "aprovado": false,
+        "c1": false,
+        "c2": false,
+        "c3": true,
+        "c4": true,
+        "c5": false
+      },
+      "base": "modelo 3",
+      "medidas": {
+        "auc_base": 0.5101454518486606,
+        "auc_candidato": 0.5105649511576271,
+        "ganho": 0.00041949930896654136,
+        "ganho_por_ano": {
+          "2021": 0.0011743973126756729,
+          "2022": 0.0034772828888716702,
+          "2023": -0.0019071695715250122,
+          "2024": -0.0005204721991936003,
+          "2025": 0.0001766473160806068,
+          "2026": 0.00014165502602475283
+        },
+        "ic": [
+          -0.0020916501378455323,
+          0.0030896384518603543
+        ],
+        "n_dias_auc": 1301,
+        "n_dias_por_ano": {
+          "2021": 187,
+          "2022": 250,
+          "2023": 248,
+          "2024": 251,
+          "2025": 250,
+          "2026": 115
+        },
+        "regime": {
+          "ganho": -0.0005204721991936003,
+          "por_ano": {
+            "2023": -0.0019071695715250122,
+            "2024": -0.0005204721991936003
+          }
+        },
+        "top": {
+          "acertos_base": 3264,
+          "acertos_candidato": 3279,
+          "k": 5,
+          "n_dias": 1301,
+          "queda_pontos": -0.2305918524212136,
+          "taxa_base": 0.5017678708685627,
+          "taxa_candidato": 0.5040737893927748
+        }
+      }
+    },
+    "controle": {
+      "avaliacao": {
+        "aprovado": false,
+        "c1": false,
+        "c2": false,
+        "c3": false,
+        "c4": true,
+        "c5": null
+      },
+      "base": "modelo 1",
+      "medidas": {
+        "auc_base": 0.5089304183321948,
+        "auc_candidato": 0.5081454348607848,
+        "ganho": -0.0007849834714099688,
+        "ganho_por_ano": {
+          "2021": -0.0022484484857871064,
+          "2022": -0.0033404721652508184,
+          "2023": -0.001881415576478071,
+          "2024": 0.0007674439796878998,
+          "2025": 0.0026761577043053516,
+          "2026": -0.0013979338274862153
+        },
+        "ic": [
+          -0.0031051705961196267,
+          0.00153366665424657
+        ],
+        "n_dias_auc": 1301,
+        "n_dias_por_ano": {
+          "2021": 187,
+          "2022": 250,
+          "2023": 248,
+          "2024": 251,
+          "2025": 250,
+          "2026": 115
+        },
+        "regime": {
+          "ganho": 0.0007674439796878998,
+          "por_ano": {
+            "2023": -0.001881415576478071,
+            "2024": 0.0007674439796878998
+          }
+        },
+        "top": {
+          "acertos_base": 3240,
+          "acertos_candidato": 3236,
+          "k": 5,
+          "n_dias": 1301,
+          "queda_pontos": 0.06149116064566029,
+          "taxa_base": 0.4980784012298232,
+          "taxa_candidato": 0.4974634896233666
+        }
+      }
+    }
+  }
+}
