@@ -409,3 +409,14 @@ def test_duracao_ultima_acao_e_duracoes_painel(tmp_path):
     assert relatorios.duracoes_painel(pasta, ["rotina", "carga", "diagnostico", "testes"]) == {
         "rotina": None, "carga": None, "diagnostico": 125, "testes": 96,
     }
+
+
+def test_experimento_com_familia_logistica_le_as_metas_da_logistica(tmp_path):
+    raiz = montar_raiz(tmp_path)
+    shutil.copy(raiz / "modelos" / "xgb-2026-06.meta.json", raiz / "modelos" / "logistica-2026-06.meta.json")
+    shutil.copy(raiz / "modelos" / "xgb-m1-2026-06.meta.json", raiz / "modelos" / "logistica-m1-2026-06.meta.json")
+
+    com_logistica = ler_experimento(raiz, _com(familia_producao="logistica"))
+    assert com_logistica["modelo_em_uso"]["arquivo"] == "logistica-2026-06.meta.json"
+    assert com_logistica["modelo_sombra"]["arquivo"] == "logistica-m1-2026-06.meta.json"
+    assert ler_experimento(raiz, PARAMS)["modelo_em_uso"]["arquivo"] == "xgb-2026-06.meta.json"

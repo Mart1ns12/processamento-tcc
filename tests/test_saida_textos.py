@@ -4,6 +4,8 @@ Os valores esperados são os do plano (seção 12, Fase 5). Sem rede e sem banco
 """
 
 import itertools
+import json
+from pathlib import Path
 
 import pytest
 
@@ -90,6 +92,22 @@ CASOS_MOTIVO = [
     (("mudanca_tom", 0.3, None, 4, 0.05), "Tom das notícias melhor que o habitual da empresa"),
     (("noticias_dia_qtd", 0.0, None, 0.0, 0.05), "Nenhuma notícia no último pregão e na noite"),
     (("beta", None, None, None, 0.05), "Beta: sem dado"),
+    (("posicao_fechamento", 0.75, None, None, 0.05),
+     "Fechou em 75% da faixa entre a mínima e a máxima do último pregão"),
+    (("posicao_fechamento", None, None, None, 0.05), "Posição do fechamento no dia: sem dado"),
+    (("mom_12_1", 0.123, 0.8, None, 0.05),
+     "Subiu 12,3% em 12 meses, sem contar o último mês (acima da média das ações)"),
+    (("mom_12_1", -0.05, 0.2, None, 0.05),
+     "Caiu 5,0% em 12 meses, sem contar o último mês (abaixo da média das ações)"),
+    (("mom_12_1", None, None, None, 0.05), "Retorno de 12 meses, sem o último mês: sem dado"),
+    (("liquidez_20d", 12345678, None, None, 0.05), "Giro típico de R$ 12,3 mi por pregão"),
+    (("liquidez_20d", None, None, None, 0.05), "Giro típico por pregão: sem dado"),
+    (("ret_idio_5d", -0.02, 0.3, None, 0.05),
+     "2,0% abaixo do esperado pelo Ibovespa nos últimos 5 pregões"),
+    (("ret_idio_5d", 0.01, 0.7, None, 0.05),
+     "1,0% acima do esperado pelo Ibovespa nos últimos 5 pregões"),
+    (("ret_idio_5d", None, None, None, 0.05),
+     "Retorno em relação ao Ibovespa (5 pregões): sem dado"),
 ]
 
 
@@ -101,6 +119,18 @@ def test_texto_motivo_casos_do_plano(argumentos, esperado):
 def test_texto_motivo_fator_desconhecido_levanta_erro():
     with pytest.raises(ValueError):
         texto_motivo("xpto", 1.0, 0.5, None, 0.05)
+
+
+def test_texto_motivo_nao_levanta_para_colunas_congeladas():
+    # Toda coluna da configuração congelada da rodada 1 precisa ter frase (valor, vazio e rank).
+    caminho = Path(__file__).resolve().parents[1] / "docs" / "configuracao_final_rodada_001.json"
+    congelada = json.loads(caminho.read_text(encoding="utf-8"))
+    colunas = sorted(set(congelada["colunas_1"]) | set(congelada["colunas_3"]))
+    assert "posicao_fechamento" in colunas and "ret_idio_5d" in colunas
+    for coluna in colunas:
+        for valor in (None, 0.0, 0.0123, -0.02, 3.0, 12345678.0):
+            for rank in (None, 0.2, 0.8):
+                assert texto_motivo(coluna, valor, rank, 2.0, 0.05)
 
 
 def test_linguagem_sem_termos_proibidos():

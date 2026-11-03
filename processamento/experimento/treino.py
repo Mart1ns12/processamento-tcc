@@ -26,7 +26,7 @@ import xgboost as xgb
 
 from processamento import fontes
 from processamento.experimento import avaliacao, modelos, preparacao, previsao, relatorio, validacao
-from processamento.experimento.parametros import ParametrosTreino, carregar_parametros_treino
+from processamento.experimento.parametros import FAMILIAS_PRODUCAO, ParametrosTreino, carregar_parametros_treino
 
 MODELOS_AVALIADOS = ("modelo_1", "modelo_3", "logistica", "volatilidade", "modelo_3_principais", "modelo_3_hora_real_noite")
 TIPOS_DATASET = ("todas", "principais", "hora_real_noite")
@@ -602,17 +602,21 @@ def _supera(taxa: float | None, outra: float | None) -> bool:
     return taxa is not None and outra is not None and taxa > outra
 
 
-def _veredito(modelos_bloco: dict) -> dict:
-    """"Acima do acaso" só conta se o modelo 3 também superar a volatilidade e a logística no top 5."""
+def _veredito(modelos_bloco: dict, nome_terceira: str = "a logística") -> dict:
+    """"Acima do acaso" só conta se o modelo 3 também superar a volatilidade e a referência logística no top 5.
+
+    `nome_terceira` é o nome dessa referência no texto: "a logística", ou "o XGBoost" quando a família em
+    produção é a logística (o slot "logistica" passa a ser o XGBoost de referência). A chave continua `supera_logistica`.
+    """
     top5 = modelos_bloco[MODELO_CALIBRADO]["topk"]["5"]
     situacao = top5["vs_acaso"]
     taxa = top5["taxa_acerto"]
     sup_vol = _supera(taxa, modelos_bloco["volatilidade"]["topk"]["5"]["taxa_acerto"])
     sup_log = _supera(taxa, modelos_bloco["logistica"]["topk"]["5"]["taxa_acerto"])
     if situacao == "acima" and sup_vol and sup_log:
-        texto = "No top 5, o modelo 3 ficou acima do acaso e superou a regra da volatilidade e a logística neste período."
+        texto = f"No top 5, o modelo 3 ficou acima do acaso e superou a regra da volatilidade e {nome_terceira} neste período."
     elif situacao == "acima":
-        faltam = [nome for nome, ok in (("a regra da volatilidade", sup_vol), ("a logística", sup_log)) if not ok]
+        faltam = [nome for nome, ok in (("a regra da volatilidade", sup_vol), (nome_terceira, sup_log)) if not ok]
         texto = "No top 5, o modelo 3 ficou acima do acaso, mas não superou " + " nem ".join(faltam) + "."
     elif situacao == "dentro":
         texto = "No top 5, o modelo 3 ainda não mostrou vantagem sobre o acaso."
@@ -620,7 +624,20 @@ def _veredito(modelos_bloco: dict) -> dict:
         texto = "No top 5, o modelo 3 ficou abaixo do acaso."
     else:
         texto = "Sem dados suficientes para comparar o modelo 3 com o acaso."
-    return {"acaso": situacao, "supera_volatilidade": sup_vol, "supera_logistica": sup_log, "texto": texto}
+    return {"acaso": situacao, "supera_volatilidade": sup_vol, "supera_logistica": sup_log,
+            "referencia_terceira": nome_terceira, "texto": texto}
+
+
+def _nome_terceira(familia: str) -> str:
+    """Nome da referência do slot "logistica" no veredito: o XGBoost de referência quando a família é a logística."""
+    return "o XGBoost" if familia == "logistica" else "a logística"
+
+
+def _ajustar(X: pd.DataFrame, y: pd.Series, hiper: dict, params: ParametrosTreino, familia: str):
+    """Modelo da família: XGBoost com `hiper`, ou logística (`ModeloLogistico`, gravada em JSON)."""
+    if familia == "logistica":
+        return modelos.ModeloLogistico.de_pipeline(modelos.treinar_logistica(X, y, params.logistica_c, params.semente))
+    return modelos.treinar_xgb(X, y, hiper, params.semente)
 
 
 def _calibracao(p3: pd.DataFrame, params: ParametrosTreino) -> dict:
@@ -646,8 +663,9 @@ def _exemplo_top(prep, df, dobras, cfg: dict, params: ParametrosTreino, aprovada
         return None
     dia = teste["data"].max()
     c1, c3, hiper = cfg["colunas_1"], cfg["colunas_3"], cfg["hiperparametros"]
-    ajuste3 = modelos.treinar_xgb(treino[c3], treino["alvo"], hiper, params.semente)
-    ajuste1 = modelos.treinar_xgb(treino[c1], treino["alvo"], hiper, params.semente)
+    familia = cfg.get("familia", "xgb")
+    ajuste3 = _ajustar(treino[c3], treino["alvo"], hiper, params, familia)
+    ajuste1 = _ajustar(treino[c1], treino["alvo"], hiper, params, familia)
     completo = preparacao.preparar(df)
     mascara = (df["data"] == dia).to_numpy()
     preparado_dia = completo.loc[mascara]
@@ -677,10 +695,16 @@ def _avaliar(lidos: dict, params: ParametrosTreino, modo: str, fim: date | None,
         raise ErroPreRequisito("teste final sem configuração congelada")
     hiper = cfg["hiperparametros"]
     c1, c3 = cfg["colunas_1"], cfg["colunas_3"]
+    familia = cfg.get("familia", "xgb")   # a família do modelo 1, do modelo 3 e das extras
+    # com a logística em produção, o slot "logistica" é o XGBoost de referência (params.xgboost), como na busca
+    referencia = (
+        prever_walk_forward(prep, dobras, c3, "xgb", params, dict(params.xgboost)) if familia == "logistica"
+        else prever_walk_forward(prep, dobras, c3, "logistica", params)
+    )
     pred: dict[str, pd.DataFrame | None] = {
-        "modelo_1": prever_walk_forward(prep, dobras, c1, "xgb", params, hiper),
-        "modelo_3": prever_walk_forward(prep, dobras, c3, "xgb", params, hiper),
-        "logistica": prever_walk_forward(prep, dobras, c3, "logistica", params),
+        "modelo_1": prever_walk_forward(prep, dobras, c1, familia, params, hiper),
+        "modelo_3": prever_walk_forward(prep, dobras, c3, familia, params, hiper),
+        "logistica": referencia,
         "volatilidade": prever_walk_forward(prep, dobras, c3, "volatilidade", params),
     }
     for nome, tipo in _EXTRAS:
@@ -689,7 +713,7 @@ def _avaliar(lidos: dict, params: ParametrosTreino, modo: str, fim: date | None,
             pred[nome] = None
             continue
         prep_x, cal_x = preparar_dev(par[0])
-        pred[nome] = prever_walk_forward(prep_x, _dobras(cal_x, params, modo, fim), c3, "xgb", params, hiper)
+        pred[nome] = prever_walk_forward(prep_x, _dobras(cal_x, params, modo, fim), c3, familia, params, hiper)
         _conferir_mesmas_linhas(pred["modelo_3"], pred[nome], nome, tipo)
 
     acaso = calcular_acaso(pred["modelo_3"], params)
@@ -709,7 +733,7 @@ def _avaliar(lidos: dict, params: ParametrosTreino, modo: str, fim: date | None,
         "comparacoes": _comparacoes(pred, params),
         "modelo_3b": _modelo_3b(pred, prep),
         "calibracao": calib,
-        "veredito": _veredito(bloco),
+        "veredito": _veredito(bloco, _nome_terceira(familia)),
         "exemplo": _exemplo_top(prep, df, dobras, cfg, params, calib["aprovada"]),
     }
 
@@ -787,11 +811,16 @@ def _montar_metricas(res: dict, lidos: dict, params: ParametrosTreino, modo: str
 
 
 def _metadados(modelo: str, colunas: list[str], res: dict, info: dict, params: ParametrosTreino,
-               universo: list[str], gerado_em: str, bloco: dict, calibracao: dict | None) -> dict:
-    """`.meta.json` de um modelo provisório, já em tipos JSON (traz todas as chaves de `CHAVES_METADADOS`)."""
+               universo: list[str], gerado_em: str, bloco: dict, calibracao: dict | None,
+               familia: str = "xgb") -> dict:
+    """`.meta.json` de um modelo provisório, já em tipos JSON (traz todas as chaves de `CHAVES_METADADOS`).
+
+    `familia` ("xgb" ou "logistica") vai junto; fora de `CHAVES_METADADOS`, então é opcional para quem lê.
+    """
     cfg, prep = res["cfg"], res["prep"]
     return _para_json({
         "modelo": modelo,
+        "familia": familia,
         "versao_preparacao": preparacao.VERSAO_PREPARACAO,
         "versao_noticias": info.get("versao_noticias", "todas"),
         "colunas": list(colunas),
@@ -824,15 +853,16 @@ def _treinar_e_salvar(res: dict, params: ParametrosTreino, pasta_modelos: Path, 
     """Modelo 3 e modelo 1 treinados em todas as linhas de desenvolvimento, marcados como provisórios."""
     prep, cfg = res["prep"], res["cfg"]
     hiper = cfg["hiperparametros"]
+    familia = cfg.get("familia", "xgb")
     mes = params.teste_final_inicio.strftime("%Y-%m")
-    ajuste3 = modelos.treinar_xgb(prep[cfg["colunas_3"]], prep["alvo"], hiper, params.semente)
-    ajuste1 = modelos.treinar_xgb(prep[cfg["colunas_1"]], prep["alvo"], hiper, params.semente)
+    ajuste3 = _ajustar(prep[cfg["colunas_3"]], prep["alvo"], hiper, params, familia)
+    ajuste1 = _ajustar(prep[cfg["colunas_1"]], prep["alvo"], hiper, params, familia)
     gerado = _agora()
     meta3 = _metadados("3", cfg["colunas_3"], res, info, params, universo, gerado,
-                       res["modelos"][MODELO_CALIBRADO], res["calibracao"])
+                       res["modelos"][MODELO_CALIBRADO], res["calibracao"], familia)
     meta1 = _metadados("1", cfg["colunas_1"], res, info, params, universo, gerado,
-                       res["modelos"]["modelo_1"], None)
-    nome3, nome1 = modelos.nome_modelo(mes, "3"), modelos.nome_modelo(mes, "1")
+                       res["modelos"]["modelo_1"], None, familia)
+    nome3, nome1 = modelos.nome_modelo(mes, "3", familia), modelos.nome_modelo(mes, "1", familia)
     modelos.salvar_modelo(ajuste3, meta3, pasta_modelos, nome3)
     modelos.salvar_modelo(ajuste1, meta1, pasta_modelos, nome1)
     return {
@@ -853,27 +883,34 @@ def _ler_meta(pasta: Path, nome: str) -> dict:
 def _configuracao_congelada(pasta_modelos: Path, params: ParametrosTreino) -> dict:
     """Colunas e hiperparâmetros dos `.meta.json` do desenvolvimento (o teste final não re-seleciona nada)."""
     mes = params.teste_final_inicio.strftime("%Y-%m")
-    meta3 = _ler_meta(pasta_modelos, modelos.nome_modelo(mes, "3"))
-    meta1 = _ler_meta(pasta_modelos, modelos.nome_modelo(mes, "1"))
+    # o teste final usa os modelos da família em produção (os nomes de arquivo saem de treino.familia_producao)
+    familia_producao = params.familia_producao
+    meta3 = _ler_meta(pasta_modelos, modelos.nome_modelo(mes, "3", familia_producao))
+    meta1 = _ler_meta(pasta_modelos, modelos.nome_modelo(mes, "1", familia_producao))
     if not (modelos.preparacao_compativel(meta3) and modelos.preparacao_compativel(meta1)):
         raise ErroPreRequisito(
             f"os modelos de {mes} são de outra versão de preparação: rode antes o treino de desenvolvimento"
         )
+    familia = meta3.get("familia", "xgb")   # arquivo sem `familia` é XGBoost (modelos antes da logística)
+    if familia != familia_producao or meta1.get("familia", "xgb") != familia:
+        raise ErroPreRequisito(f"os modelos de {mes} não são da família {familia_producao!r} (treino.familia_producao)")
     return {
         "blocos_preco": meta3["blocos"]["blocos_preco"],
         "noticias_contexto": meta3["blocos"]["noticias_contexto"],
         "hiperparametros": meta3["hiperparametros"],
         "colunas_1": meta1["colunas"],
         "colunas_3": meta3["colunas"],
+        "familia": familia,
     }
 
 
-def _ler_configuracao(caminho: Path, sha256: str | None) -> dict:
+def _ler_configuracao(caminho: Path, sha256: str | None, params: ParametrosTreino) -> dict:
     """Configuração congelada pelo protocolo ou pela busca (`docs/protocolo_congelado_rodada_NNN.json`),
     para o treino de desenvolvimento (`--configuracao`).
 
-    Recusa outro dataset (sha256 diferente) e outra família que não XGBoost. Arquivo sem `familia` é do
-    protocolo, que só congela XGBoost. Devolve as mesmas chaves de `_configuracao_congelada`.
+    Recusa outro dataset (sha256 diferente) e família diferente de `treino.familia_producao`. Arquivo sem
+    `familia` é XGBoost (protocolo). Na logística, `hiperparametros` é `{"C": params.logistica_c}` (o arquivo
+    pode trazer null). Devolve as mesmas chaves de `_configuracao_congelada`, com `familia`.
     """
     caminho = Path(caminho)
     if not caminho.is_file():
@@ -882,13 +919,27 @@ def _ler_configuracao(caminho: Path, sha256: str | None) -> dict:
     if congelado.get("sha256_dataset") != sha256:
         raise ErroPreRequisito(f"a configuração {caminho.name} é de outro dataset (sha256 diferente)")
     familia = congelado.get("familia", "xgb")
-    if familia != "xgb":
-        raise ErroPreRequisito(f"família {familia!r} ainda não tem treino de desenvolvimento (só xgb)")
-    chaves = ("blocos_preco", "noticias_contexto", "hiperparametros", "colunas_1", "colunas_3")
+    if familia not in FAMILIAS_PRODUCAO:
+        raise ErroPreRequisito(f"família {familia!r} sem treino de desenvolvimento (use {', '.join(FAMILIAS_PRODUCAO)})")
+    if familia != params.familia_producao:
+        raise ErroPreRequisito(
+            f"{caminho.name} é da família {familia!r}, e treino.familia_producao é {params.familia_producao!r}"
+        )
+    chaves = ("blocos_preco", "noticias_contexto", "colunas_1", "colunas_3")
+    if familia == "xgb":
+        chaves += ("hiperparametros",)
     faltam = [c for c in chaves if c not in congelado]
     if faltam:
         raise ErroPreRequisito(f"{caminho.name} não tem {', '.join(faltam)}")
-    return {c: congelado[c] for c in chaves}
+    hiperparametros = {"C": params.logistica_c} if familia == "logistica" else congelado["hiperparametros"]
+    return {
+        "blocos_preco": congelado["blocos_preco"],
+        "noticias_contexto": congelado["noticias_contexto"],
+        "hiperparametros": hiperparametros,
+        "colunas_1": congelado["colunas_1"],
+        "colunas_3": congelado["colunas_3"],
+        "familia": familia,
+    }
 
 
 def _previsoes(pred: dict) -> pd.DataFrame:
@@ -982,7 +1033,7 @@ def executar(
 
     lidos = {nome: None if arquivos[nome] is None else leitor(arquivos[nome]) for nome in TIPOS_DATASET}
     if modo == "desenvolvimento" and configuracao is not None:
-        congelada = _ler_configuracao(configuracao, lidos["todas"][1].get("sha256"))
+        congelada = _ler_configuracao(configuracao, lidos["todas"][1].get("sha256"), params)
     res = _avaliar(lidos, params, modo, fim, congelada)
     df_todas, info_todas = lidos["todas"]
     universo = sorted({str(u) for u in _dev(df_todas, params)["universo"].dropna()})

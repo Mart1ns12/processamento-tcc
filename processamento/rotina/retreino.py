@@ -1,6 +1,7 @@
 """Retreino mensal da rotina diária (seção 7 do plano da etapa 8; fase 6).
 
-Em produção (`treino.teste_final.fim` preenchido) e enquanto não existir `xgb-AAAA-MM.json` do mês de D,
+Em produção (`treino.teste_final.fim` preenchido) e enquanto não existir `<familia>-AAAA-MM.json` do mês de D
+(a família é `treino.familia_producao`: "logistica" ou "xgb"),
 treina o modelo 3 e o modelo 1 só com os pregões antes do dia 1 do mês, menos o de embargo. Colunas, blocos
 e hiperparâmetros vêm do desenvolvimento congelado (`treino._configuracao_congelada`), nunca re-escolhidos.
 
@@ -32,11 +33,12 @@ def datas_de_treino(cal: list, mes: str, embargo: int) -> list[date]:
     return antes[: max(len(antes) - embargo, 0)]
 
 
-def precisa_retreinar(pasta_modelos: Path, d: date, fim: date | None) -> bool:
+def precisa_retreinar(pasta_modelos: Path, d: date, fim: date | None,
+                      familia: str = modelos.FAMILIA_PADRAO) -> bool:
     """Só com `fim` preenchido (produção). Retreina enquanto falta algum dos quatro arquivos do mês de D.
 
-    Os quatro são o `xgb-AAAA-MM.json` (sinal de "pronto") com o `.meta.json`, e o `xgb-m1-AAAA-MM.json` com o
-    `.meta.json`. Se a gravação caiu no meio, um deles falta e o retreino refaz o par inteiro.
+    Os quatro são o `<familia>-AAAA-MM.json` (sinal de "pronto") com o `.meta.json`, e o `<familia>-m1-AAAA-MM.json`
+    com o `.meta.json`. Se a gravação caiu no meio, um deles falta e o retreino refaz o par inteiro.
     """
     if fim is None:
         return False
@@ -44,7 +46,7 @@ def precisa_retreinar(pasta_modelos: Path, d: date, fim: date | None) -> bool:
     mes = f"{d.year:04d}-{d.month:02d}"
     faltam = []
     for modelo in ("3", "1"):
-        nome = modelos.nome_modelo(mes, modelo)
+        nome = modelos.nome_modelo(mes, modelo, familia)
         faltam.extend([pasta / f"{nome}.json", pasta / f"{nome}.meta.json"])
     return not all(arquivo.is_file() for arquivo in faltam)
 
@@ -62,8 +64,10 @@ def _metadados_retreino(modelo: str, colunas: list[str], dev: dict, calibracao: 
                         params: ParametrosTreino, gerado_em: str) -> dict:
     """`.meta.json` do retreino: todas as `CHAVES_METADADOS` mais `retreino`. Métricas são as do desenvolvimento."""
     provisorio = not params.modelo_oficial
+    familia = congelada.get("familia", modelos.FAMILIA_PADRAO)
     return treino._para_json({
         "modelo": modelo,
+        "familia": familia,
         "versao_preparacao": preparacao.VERSAO_PREPARACAO,
         "versao_noticias": "todas",
         "colunas": list(colunas),
@@ -87,7 +91,7 @@ def _metadados_retreino(modelo: str, colunas: list[str], dev: dict, calibracao: 
         },
         "retreino": {
             "mes": mes,
-            "configuracao_de": modelos.nome_modelo(params.teste_final_inicio.strftime("%Y-%m"), "3"),
+            "configuracao_de": modelos.nome_modelo(params.teste_final_inicio.strftime("%Y-%m"), "3", familia),
             "corte_antes_de": _primeiro_dia(mes).isoformat(),
         },
     })
@@ -101,13 +105,14 @@ def retreinar_mes(df: pd.DataFrame, info: dict, cal: list, d: date, *, pasta_mod
     exceção sobe para o chamador, que a transforma em aviso. `cal` são as datas de pregão disponíveis.
     """
     pasta = Path(pasta_modelos)
-    if not precisa_retreinar(pasta, d, params.teste_final_fim):
+    familia = params.familia_producao   # o retreino é da família em produção (treino.familia_producao)
+    if not precisa_retreinar(pasta, d, params.teste_final_fim, familia):
         return []
     mes = f"{d.year:04d}-{d.month:02d}"
     mes_dev = params.teste_final_inicio.strftime("%Y-%m")
     congelada = treino._configuracao_congelada(pasta, params)
-    dev3 = treino._ler_meta(pasta, modelos.nome_modelo(mes_dev, "3"))
-    dev1 = treino._ler_meta(pasta, modelos.nome_modelo(mes_dev, "1"))
+    dev3 = treino._ler_meta(pasta, modelos.nome_modelo(mes_dev, "3", familia))
+    dev1 = treino._ler_meta(pasta, modelos.nome_modelo(mes_dev, "1", familia))
 
     inicio = treino._inicio_experimento(params.inicio_experimento, info)
     datas = [x for x in datas_de_treino(cal, mes, params.embargo_pregoes) if inicio is None or x >= inicio]
@@ -118,9 +123,9 @@ def retreinar_mes(df: pd.DataFrame, info: dict, cal: list, d: date, *, pasta_mod
     if prep.empty:
         raise treino.ErroPreRequisito(f"retreino de {mes}: nenhuma linha de treino antes de {mes}-01")
 
-    hiper, semente = congelada["hiperparametros"], params.semente
-    ajuste1 = modelos.treinar_xgb(prep[congelada["colunas_1"]], prep["alvo"], hiper, semente)
-    ajuste3 = modelos.treinar_xgb(prep[congelada["colunas_3"]], prep["alvo"], hiper, semente)
+    hiper = congelada["hiperparametros"]
+    ajuste1 = treino._ajustar(prep[congelada["colunas_1"]], prep["alvo"], hiper, params, familia)
+    ajuste3 = treino._ajustar(prep[congelada["colunas_3"]], prep["alvo"], hiper, params, familia)
 
     comum = {
         "congelada": congelada,
@@ -133,6 +138,6 @@ def retreinar_mes(df: pd.DataFrame, info: dict, cal: list, d: date, *, pasta_mod
     }
     meta1 = _metadados_retreino("1", congelada["colunas_1"], dev1, None, **comum)
     meta3 = _metadados_retreino("3", congelada["colunas_3"], dev3, dev3["calibracao"], **comum)
-    modelos.salvar_modelo(ajuste1, meta1, pasta, modelos.nome_modelo(mes, "1"))
-    modelos.salvar_modelo(ajuste3, meta3, pasta, modelos.nome_modelo(mes, "3"))
+    modelos.salvar_modelo(ajuste1, meta1, pasta, modelos.nome_modelo(mes, "1", familia))
+    modelos.salvar_modelo(ajuste3, meta3, pasta, modelos.nome_modelo(mes, "3", familia))
     return []

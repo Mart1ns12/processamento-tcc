@@ -327,7 +327,7 @@ def _secao_veredito(metricas: dict) -> list[str]:
     return linhas + [
         f"- Acaso: {ROTULO_ACASO.get(v.get('acaso'), NAO_INFORMADO)}.",
         f"- Supera a volatilidade: {_sim_nao(v.get('supera_volatilidade'))}.",
-        f"- Supera a logística: {_sim_nao(v.get('supera_logistica'))}.",
+        f"- Supera {v.get('referencia_terceira', 'a logística')}: {_sim_nao(v.get('supera_logistica'))}.",
         "",
         _texto(v.get("texto")),
     ]

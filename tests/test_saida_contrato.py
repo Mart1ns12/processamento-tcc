@@ -365,3 +365,15 @@ def test_gravar_lote_compacto_sem_espacos(tmp_path):
     texto = arquivo.read_text(encoding="utf-8")
     assert "\n" not in texto and ": " not in texto
     assert json.loads(texto) == lote_serie
+
+
+def test_modelo_aceita_logistica_e_recusa_outros_nomes():
+    for nome in ("xgb-2026-11", "logistica-2026-11"):
+        r = exemplo("experimento_top")
+        r["modelo_versao"] = nome
+        c.validar("experimento_top", r)
+    for nome in ("logistica-2026-11-01", "lgbm-2026-11", "logistica-m1-2026-11"):
+        r = exemplo("experimento_top")
+        r["modelo_versao"] = nome
+        with pytest.raises(ErroContrato, match="ou logistica-AAAA-MM"):
+            c.validar("experimento_top", r)

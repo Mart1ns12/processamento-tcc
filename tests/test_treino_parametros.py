@@ -122,3 +122,24 @@ def test_chave_a_mais_da_erro(tmp_path):
     caminho = _escrever(tmp_path, _BLOCO_VALIDO.replace("  motivos_qtd: 3\n", "  motivos_qtd: 3\n  extra: 1\n"))
     with pytest.raises(ErroParametrosExperimento, match="chave desconhecida"):
         carregar_parametros_treino(caminho)
+
+
+# --- família em produção (treino.familia_producao) ------------------------------------------
+
+def test_arquivo_real_produz_a_logistica():
+    assert carregar_parametros_treino().familia_producao == "logistica"
+
+
+def test_familia_producao_ausente_e_xgb(tmp_path):
+    assert carregar_parametros_treino(_escrever(tmp_path, _BLOCO_VALIDO)).familia_producao == "xgb"
+
+
+def test_familia_producao_logistica_entre_aspas(tmp_path):
+    bloco = _BLOCO_VALIDO + '  familia_producao: "logistica"\n'
+    assert carregar_parametros_treino(_escrever(tmp_path, bloco)).familia_producao == "logistica"
+
+
+def test_familia_producao_desconhecida_da_erro(tmp_path):
+    bloco = _BLOCO_VALIDO + '  familia_producao: "lgbm"\n'
+    with pytest.raises(ErroParametrosExperimento, match="familia_producao"):
+        carregar_parametros_treino(_escrever(tmp_path, bloco))

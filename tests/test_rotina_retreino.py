@@ -260,3 +260,48 @@ def test_queda_na_gravacao_pede_retreino_do_par_inteiro(tmp_path):
     (pasta / "xgb-2026-11.meta.json").write_text("{}", encoding="utf-8")
     (pasta / "xgb-m1-2026-11.meta.json").unlink()
     assert retreino.precisa_retreinar(pasta, D1, fim) is True
+
+
+# --- retreino da logística (família em produção) ---------------------------------------------
+
+def _pasta_dev_logistica(tmp_path, params):
+    """Desenvolvimento da logística (modelos 3 e 1 em JSON), como o treino de dev grava com a família logística."""
+    pasta = tmp_path / "modelos_logistica"
+    rng = np.random.default_rng(0)
+    mes = params.teste_final_inicio.strftime("%Y-%m")
+    for modelo_id, cols, calib in (("3", preparacao.colunas_do_modelo("3"), {"aprovada": False}),
+                                   ("1", preparacao.colunas_do_modelo("1"), None)):
+        X = pd.DataFrame(rng.normal(size=(60, len(cols))), columns=cols)
+        y = pd.Series(rng.integers(0, 2, 60))
+        pipe = modelos.treinar_logistica(X, y, params.logistica_c, params.semente)
+        meta = _meta_dev(modelo_id, cols, params, calib)
+        meta.update(familia="logistica", hiperparametros={"C": params.logistica_c})
+        modelos.salvar_modelo(modelos.ModeloLogistico.de_pipeline(pipe), meta, pasta,
+                              modelos.nome_modelo(mes, modelo_id, "logistica"))
+    return pasta
+
+
+def test_retreino_da_logistica_grava_os_quatro_arquivos_com_a_familia(tmp_path, completo):
+    params = params_teste(teste_final_fim=date(2026, 10, 30), familia_producao="logistica")
+    pasta = _pasta_dev_logistica(tmp_path, params)
+    df = _apagar_alvo(_ate(completo, "2026-10-30"), "2026-10-30")
+
+    avisos = retreino.retreinar_mes(df, INFO, _cal(df), D1, pasta_modelos=pasta, params=params, agora=AGORA)
+    assert avisos == []
+    for nome in ("logistica-m1-2026-11.json", "logistica-m1-2026-11.meta.json",
+                 "logistica-2026-11.json", "logistica-2026-11.meta.json"):
+        assert (pasta / nome).is_file(), nome
+    assert not (pasta / "xgb-2026-11.json").exists()
+    meta = _ler(pasta, "logistica-2026-11.meta.json")
+    assert meta["familia"] == "logistica"
+    assert meta["hiperparametros"] == {"C": 1.0}
+    assert meta["retreino"]["configuracao_de"] == "logistica-2026-01"
+    modelo, _ = modelos.carregar_modelo(pasta / "logistica-2026-11.json")
+    assert isinstance(modelo, modelos.ModeloLogistico)
+
+
+def test_precisa_retreinar_olha_os_arquivos_da_familia(tmp_path):
+    pasta = tmp_path / "vazia"
+    pasta.mkdir()
+    assert retreino.precisa_retreinar(pasta, D1, date(2026, 10, 30), "logistica") is True
+    assert retreino.precisa_retreinar(pasta, D1, date(2026, 10, 30)) is True  # xgb, padrão: também faltam

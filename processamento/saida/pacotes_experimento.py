@@ -46,7 +46,6 @@ NOTA_SEM_DIAS = (
     "O histórico começa na entrada em produção (teste ao vivo). "
     "Antes disso, os top 5 são testes de funcionamento e não entram aqui."
 )
-_RE_MODELO_ARQUIVO = re.compile(r"^xgb-(\d{4}-\d{2})\.json$")
 _RE_TOP_ARQUIVO = re.compile(r"^(\d{4}-\d{2}-\d{2})\.top\.json$")
 AVISO_NAO_HOUVE = "pregão previsto {dia} não houve; dia descartado"  # usado por fechar_pendentes
 AVISO_BASE_DIFERENTE = (
@@ -91,30 +90,33 @@ def _chance_saida(chance: dict) -> dict:
 
 # ---------------------------------------------------------------- modelo e validade
 
-def escolher_modelo(pasta_modelos: Path, d: date) -> tuple[Path | None, Path | None, list[str]]:
-    """Modelo 3 e modelo 1 do dia D.
+def escolher_modelo(
+    pasta_modelos: Path, d: date, familia: str = modelos.FAMILIA_PADRAO
+) -> tuple[Path | None, Path | None, list[str]]:
+    """Modelo 3 e modelo 1 do dia D, da família dada ("xgb" ou "logistica").
 
-    Usa `xgb-AAAA-MM` do mês de D; se não existir, o mais recente anterior a esse mês (com aviso).
-    O modelo 1 é `xgb-m1-<mês do modelo 3>` se existir. Sem modelo nenhum: (None, None, []).
+    Usa `<familia>-AAAA-MM` do mês de D; se não existir, o mais recente anterior a esse mês (com aviso).
+    O modelo 1 é `<familia>-m1-<mês do modelo 3>` se existir. Sem modelo nenhum: (None, None, []).
     """
     pasta = Path(pasta_modelos)
     mes_d = _mes(d)
     avisos: list[str] = []
-    if (pasta / f"{modelos.nome_modelo(mes_d)}.json").is_file():
+    if (pasta / f"{modelos.nome_modelo(mes_d, '3', familia)}.json").is_file():
         escolhido = mes_d
     else:
         anteriores = []
+        padrao = re.compile(rf"^{re.escape(familia)}-(\d{{4}}-\d{{2}})\.json$")
         if pasta.is_dir():
             for arquivo in pasta.iterdir():
-                casou = _RE_MODELO_ARQUIVO.match(arquivo.name)
+                casou = padrao.match(arquivo.name)
                 if casou and casou.group(1) < mes_d:
                     anteriores.append(casou.group(1))
         if not anteriores:
             return None, None, []
         escolhido = max(anteriores)
         avisos.append(AVISOS["modelo_mes"].format(mes=escolhido))
-    modelo_3 = pasta / f"{modelos.nome_modelo(escolhido)}.json"
-    modelo_1 = pasta / f"{modelos.nome_modelo(escolhido, '1')}.json"
+    modelo_3 = pasta / f"{modelos.nome_modelo(escolhido, '3', familia)}.json"
+    modelo_1 = pasta / f"{modelos.nome_modelo(escolhido, '1', familia)}.json"
     return modelo_3, (modelo_1 if modelo_1.is_file() else None), avisos
 
 
@@ -236,12 +238,13 @@ def gerar_top(
         "ranking": ranking,
     }
 
-    mes_modelo = nome_modelo.removeprefix("xgb-")
-    probabilidades = modelos.prob_xgb(modelo, preparado_dia[meta["colunas"]])
+    mes_modelo = nome_modelo[-7:]  # AAAA-MM no fim do nome (xgb-AAAA-MM ou logistica-AAAA-MM)
+    familia = meta.get("familia", modelos.FAMILIA_PADRAO)
+    probabilidades = modelos.prob(modelo, preparado_dia[meta["colunas"]])
     tem_m1 = modelo_m1 is not None
     interno = {
         "modelo_arquivo": f"{nome_modelo}.json",
-        "modelo_m1_arquivo": f"{modelos.nome_modelo(mes_modelo, '1')}.json" if tem_m1 else None,
+        "modelo_m1_arquivo": f"{modelos.nome_modelo(mes_modelo, '1', familia)}.json" if tem_m1 else None,
         "sombra_modelo_1": (
             previsao.top_sombra_modelo(preparado_dia, modelo_m1, meta_m1["colunas"], k) if tem_m1 else None
         ),

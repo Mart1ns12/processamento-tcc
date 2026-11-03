@@ -288,3 +288,61 @@ def test_motivos_com_extremo_em_rank_falam_da_coluna_do_dataset():
     itens = previsao.top_do_dia(prep[mascara], bruto[mascara], modelo, {"colunas": colunas, "calibracao": {"aprovada": False}}, params)
     fatores = {m["fator"] for m in itens[0]["motivos"]}
     assert "noticias_dia_extremo" in fatores and preparacao.EXTREMO_RANK not in fatores
+
+
+# --- Logística: motivos e notícias sem tom --------------------------------------------------------
+
+def _logistica_caso():
+    """Mesmo caso do plano de `test_treino_modelos.py` (fase 2), com a linha 2 sem o b."""
+    modelo = modelos.ModeloLogistico(
+        colunas=["a", "b"], medianas=[0.5, 0.2], indicadoras=[1], media=[0.5, 0.2, 0.25],
+        escala=[0.25, 0.1, 0.5], coef=[0.4, -0.2, 0.6], intercepto=-0.1,
+    )
+    linhas = pd.DataFrame({"a": [0.75, 0.25, NAN], "b": [0.4, NAN, 0.2]})
+    return modelo, linhas
+
+
+def test_logistica_motivos_linha_com_ausencia():
+    modelo, linhas = _logistica_caso()
+    contrib = modelos.contribuicoes(modelo, linhas).iloc[1]
+    motivos = previsao.motivos(contrib, linhas.iloc[1], qtd=2, limiar=0.01)
+    assert [(m["fator"], m["efeito"], m["valor"]) for m in motivos] == [("b", "ajudou", None), ("a", "atrapalhou", 0.25)]
+
+
+def test_juntar_noticias_sem_tom_soma_qtd_e_extremo_no_tom():
+    contrib = pd.Series({"noticias_dia_qtd": -0.05, "noticias_dia_tom": 0.2, "noticias_dia_extremo": 0.1, "vies": -0.1})
+    bruto = pd.Series({"noticias_dia_qtd": 0.0, "noticias_dia_tom": NAN, "noticias_dia_extremo": NAN})
+    motivos = previsao.motivos(previsao.juntar_noticias_sem_tom(contrib, bruto), bruto, qtd=5, limiar=0.01)
+    assert [(m["fator"], m["valor"], round(m["contribuicao"], 12)) for m in motivos] == [("noticias_dia_tom", None, 0.25)]
+    assert motivos[0]["efeito"] == "ajudou"
+
+
+def test_juntar_noticias_sem_tom_com_tom_preenchido_nao_mexe():
+    contrib = pd.Series({"noticias_dia_qtd": -0.05, "noticias_dia_tom": 0.2, "noticias_dia_extremo": 0.1, "vies": -0.1})
+    bruto = pd.Series({"noticias_dia_qtd": 2.0, "noticias_dia_tom": 0.3, "noticias_dia_extremo": 0.4})
+    juntada = previsao.juntar_noticias_sem_tom(contrib, bruto)
+    assert juntada.equals(contrib)
+
+
+def test_top_do_dia_com_modelo_logistico_fluxo_completo():
+    import dataclasses
+
+    from fabrica_treino import dataset_sintetico, params_teste
+    from processamento.experimento import preparacao
+
+    bruto = dataset_sintetico(n_pregoes=130, n_tickers=12)
+    prep = preparacao.preparar(bruto)
+    treino = preparacao.linhas_de_treino(prep)
+    colunas = list(preparacao.colunas_do_modelo("3"))
+    params = dataclasses.replace(params_teste(), motivos_qtd=len(colunas))
+    pipe = modelos.treinar_logistica(treino[colunas], treino["alvo"], params.logistica_c, params.semente)
+    modelo = modelos.ModeloLogistico.de_pipeline(pipe)
+    dia = prep["data"].max()
+    mascara = prep["data"] == dia
+    itens = previsao.top_do_dia(prep[mascara], bruto[mascara], modelo, {"colunas": colunas, "calibracao": {"aprovada": False}}, params)
+    assert len(itens) == params.topk[0]
+    assert all(not item["chance"]["exibir"] for item in itens)  # chance continua oculta
+    for item in itens:
+        fatores = [m["fator"] for m in item["motivos"]]
+        assert len(fatores) == len(set(fatores))
+        assert all(np.isfinite(m["contribuicao"]) for m in item["motivos"])

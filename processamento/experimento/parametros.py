@@ -54,6 +54,7 @@ _CHAVES_TREINO = {
     "motivos_limiar",
     "calibracao",
 }
+FAMILIAS_PRODUCAO = ("xgb", "logistica")
 _CHAVES_TESTE_FINAL = {"inicio", "fim", "liberado"}
 _CHAVES_XGBOOST = {
     "n_estimators",
@@ -118,6 +119,13 @@ def _booleano(valor: object, onde: str) -> bool:
     """Confere true/false do YAML (sem aspas); levanta `ErroParametrosExperimento` se não bater."""
     if not isinstance(valor, bool):
         raise ErroParametrosExperimento(f"{onde} deve ser true ou false (recebeu {valor!r})")
+    return valor
+
+
+def _familia_producao(valor: object, onde: str) -> str:
+    """"xgb" ou "logistica" (entre aspas no YAML); levanta `ErroParametrosExperimento` se não bater."""
+    if valor not in FAMILIAS_PRODUCAO:
+        raise ErroParametrosExperimento(f"{onde} deve ser um de {FAMILIAS_PRODUCAO} (recebeu {valor!r})")
     return valor
 
 
@@ -243,6 +251,7 @@ class ParametrosTreino:
     calibracao_linhas_minimas: int
     liberar_chance: bool
     modelo_oficial: bool = False
+    familia_producao: str = "xgb"   # família do modelo que a rotina publica ("xgb" ou "logistica")
 
 
 def _inteiro_nao_negativo(valor: object, onde: str) -> int:
@@ -376,8 +385,8 @@ def carregar_parametros_treino(caminho: str | None = None) -> ParametrosTreino:
     bloco = calendario.carregar_parametros(caminho).get("treino")
     if bloco is None:
         raise ErroParametrosExperimento("falta o bloco treino no arquivo de parâmetros")
-    # `modelo_oficial` é opcional (ausente = false), para não quebrar yamls de teste montados à mão.
-    opcionais = {"modelo_oficial"} if isinstance(bloco, dict) and "modelo_oficial" in bloco else set()
+    # `modelo_oficial` e `familia_producao` são opcionais (ausente = false / xgb), para não quebrar yamls de teste.
+    opcionais = {"modelo_oficial", "familia_producao"} & set(bloco) if isinstance(bloco, dict) else set()
     _chaves_exatas(bloco, _CHAVES_TREINO | opcionais, "treino")
     inicio, fim, liberado = _teste_final(bloco["teste_final"])
     calibracao = bloco["calibracao"]
@@ -407,4 +416,5 @@ def carregar_parametros_treino(caminho: str | None = None) -> ParametrosTreino:
         calibracao_linhas_minimas=_inteiro_positivo(calibracao["linhas_minimas"], "treino.calibracao.linhas_minimas"),
         liberar_chance=_booleano(calibracao["liberar_chance"], "treino.calibracao.liberar_chance"),
         modelo_oficial=_booleano(bloco.get("modelo_oficial", False), "treino.modelo_oficial"),
+        familia_producao=_familia_producao(bloco.get("familia_producao", "xgb"), "treino.familia_producao"),
     )

@@ -81,7 +81,7 @@ def formatar_duracao(segundos: int | None) -> str:
 
 def ler_parametros(raiz: Path) -> dict:
     """Parâmetros que o painel usa, lidos direto do yaml (sem os carregadores validados); padrões se faltar."""
-    params = {"modelo_oficial": False, "teste_final": {"inicio": None, "fim": None, "liberado": False},
+    params = {"modelo_oficial": False, "familia_producao": "xgb", "teste_final": {"inicio": None, "fim": None, "liberado": False},
               "publicar_top_provisorio": False, "pasta_saida": "saida", "pasta_logs": "logs",
               "trava": "saida/estado/rotina.trava", "trava_validade_horas": 6.0, "erro": None}
     caminho = Path(raiz) / "processamento" / "config" / "parametros.yaml"
@@ -107,6 +107,7 @@ def ler_parametros(raiz: Path) -> dict:
     rotina = _secao(dados, "rotina")
 
     params["modelo_oficial"] = _valor(treino, "modelo_oficial", False)
+    params["familia_producao"] = _texto(_valor(treino, "familia_producao", "xgb"))
     params["teste_final"] = {"inicio": _texto(_valor(teste, "inicio", None)),
                              "fim": _texto(_valor(teste, "fim", None)),
                              "liberado": _valor(teste, "liberado", False)}

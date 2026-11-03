@@ -6,7 +6,7 @@ forma atômica. Nenhuma função daqui acessa banco ou rede.
 
 Mini-linguagem dos esquemas (`ESQUEMAS`):
 - texto: "texto", "texto?" (aceita null), "data", "data?", "data_hora", "data_hora?", "inteiro",
-  "numero", "numero?", "bool", "bool?", "objeto", "versao" (== "1.0"), "modelo" (xgb-AAAA-MM);
+  "numero", "numero?", "bool", "bool?", "objeto", "versao" (== "1.0"), "modelo" (xgb-AAAA-MM ou logistica-AAAA-MM);
 - folhas: "folha" (número), "folha_bool", "folha_texto", "folha_data", "chance";
 - compostos: ("enum", opções), ("lista", tipo), ("folha+", {campos extras}) (folha com campos
   extras), ("ou_nulo", tipo), ("opcional", tipo) (pode faltar);
@@ -51,7 +51,7 @@ _CAMPOS_TRIMESTRAIS = ("receita_trimestre", "receita_12m", "lucro_liquido_trimes
                        "divida_liquida", "dl_pl", "dl_ebitda", "payout_12m")
 _RE_DATA = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _RE_DATA_HORA = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$")
-_RE_MODELO = re.compile(r"^xgb-\d{4}-\d{2}$")
+_RE_MODELO = re.compile(r"^(xgb|logistica)-\d{4}-\d{2}$")
 
 
 class ErroContrato(ValueError):
@@ -215,7 +215,7 @@ def _checar_tipo(tipo: str, valor: object, caminho: str) -> None:
             raise _erro(caminho, f"versao_contrato deveria ser {VERSAO_CONTRATO!r} (recebeu {valor!r})")
     elif base == "modelo":
         if not isinstance(valor, str) or not _RE_MODELO.match(valor):
-            raise _erro(caminho, f"modelo deveria ser xgb-AAAA-MM (recebeu {valor!r})")
+            raise _erro(caminho, f"modelo deveria ser xgb-AAAA-MM ou logistica-AAAA-MM (recebeu {valor!r})")
     elif base == "chance":
         _checar_chance(valor, caminho)
     elif base in ("folha", "folha_bool", "folha_texto", "folha_data"):

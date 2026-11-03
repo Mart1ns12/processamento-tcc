@@ -39,7 +39,7 @@ O processamento tem duas frentes:
 | Fase | O que faz |
 |---|---|
 | **Fase 1: painel de fatos** | Calcula indicadores 100% confirmados (cotação, rentabilidade, comparações, risco, valuation, dividendos). **Nenhuma previsão** |
-| **Fase 2: experimento** | XGBoost + sentimento do FinBERT estimam quais ações têm maior chance de **superar o Ibovespa no próximo pregão**. Mostrado como **"5 ações com maior chance de superar o Ibovespa (experimento)"**, com selo "em avaliação" e histórico de acertos contra o acaso |
+| **Fase 2: experimento** | Regressão logística + sentimento do FinBERT estimam quais ações têm maior chance de **superar o Ibovespa no próximo pregão**. Mostrado como **"5 ações com maior chance de superar o Ibovespa (experimento)"**, com selo "em avaliação" e histórico de acertos contra o acaso |
 
 **Pergunta do TCC:** o sentimento das notícias, lido pelo FinBERT, ajuda a prever o desempenho das ações? Foco nas **notícias do dia t e da noite, até as 8h de t+1** (antes da abertura do pregão previsto). Como a maioria das notícias do Google News só tem a data (cerca de 90% por ano; só a `wordpress` tem hora em tudo, seção 7.2), não dá para isolar as publicadas depois do fechamento; esse efeito é medido num teste extra só com as notícias de hora real (seção 7.5).
 
@@ -261,7 +261,7 @@ Fonte dos dados: tabelas da seção 3. `fech` = `fechamento`; `aj` = `fechamento
 | `exposicao_dolar` | Beta contra o USDBRL (120 pregões) × variação do dólar no dia | Complementar |
 | `exposicao_petroleo` | Idem com o BRENT | Complementar |
 
-**Colunas do protocolo** (`docs/protocolo_variaveis.md`; decidido em 02/11/2026). Ficam no dataset, em rank na preparação, mas **não entram nos modelos atuais**, na logística nem no ao vivo: só nos testes de bloco (`preparacao.BLOCOS_PROTOCOLO`).
+**Colunas do protocolo** (`docs/protocolo_variaveis.md`; decidido em 02/11/2026). Ficam no dataset, em rank na preparação. O **bloco A** (`posicao_fechamento`, `mom_12_1`, `liquidez_20d`, `ret_idio_5d`) foi adotado na rodada 1 e **entra na logística em produção** (ao vivo, com a configuração congelada). Os blocos B, C, D, E e o controle ficam **fora dos modelos**: só nos testes de bloco (`preparacao.BLOCOS_PROTOCOLO`).
 
 | Variável | Cálculo | Bloco |
 |---|---|---|
@@ -301,7 +301,7 @@ O **modelo 2** (+ notícias do pregão) **saiu** em 23/10/2026 (N2-A): com ~89% 
 - O filtro é feito **no processamento**; a coleta mantém o filtro dela desligado (`ENTREGA_FILTRO_JUIZA=false`).
 
 Ordem: primeiro só as **essenciais**; depois os **complementares**, um bloco por vez, mantendo só o que melhora na validação.
-XGBoost, ponto de partida: `n_estimators=300, max_depth=3, learning_rate=0.03, subsample=0.8, colsample_bytree=0.8, min_child_weight=50, reg_lambda=5`. Grade pequena escolhida pela validação.
+XGBoost, ponto de partida (referência de comparação, também com a logística em produção): `n_estimators=300, max_depth=3, learning_rate=0.03, subsample=0.8, colsample_bytree=0.8, min_child_weight=50, reg_lambda=5`. Grade pequena escolhida pela validação.
 
 ### 7.5 Avaliação
 - **Walk-forward mensal** (treina no passado, testa no mês seguinte, avança), com **embargo de 1 pregão**.
@@ -311,12 +311,12 @@ XGBoost, ponto de partida: `n_estimators=300, max_depth=3, learning_rate=0.03, s
 - **Corte principal: top 5** (o que vai para a tela). Avaliar também o **top 3** com as mesmas métricas, para mostrar que o resultado não depende do corte.
 - Métricas: acerto do top 5 × **faixa do acaso** (10 mil sorteios aleatórios de 5 ações por dia, faixa de 95%); retorno médio do top 5 − IBOV; **top 5 × últimos 5**; AUC geral e AUC médio por pregão; IC por bootstrap em blocos de pregão; **robustez por ano**; **análise de sensibilidade** (último ano × anteriores), sempre calculada.
 - **Teste extra "notícia depois do fechamento" (pedido em 23/10/2026; implementar na etapa 6):** recalcular as variáveis de notícias usando **só as notícias com hora real** (`precisao_hora = 'hora'`) e **só a noite** (do fechamento de t até 08:00 de t+1; `inicio_janela = "fechamento"`), e comparar com o modelo 3 na mesma validação. Mede o efeito das notícias publicadas depois do fechamento. No Google News a amostra é pequena (~9% com hora real, ~47% delas na noite). A `wordpress` tem hora real em tudo (seção 3.1), então a amostra fica concentrada em 2021, 2022 e nos meses de 2026 com essa origem: informar as contagens por ano e por origem e tratar como exploratório.
-- **Referências de comparação** (rodadas com a mesma validação): escolha ao acaso (faixa acima), regra simples só com a volatilidade (ações mais calmas primeiro) e **regressão logística** com as mesmas variáveis. O XGBoost só "ganha" se superar as três.
+- **Referências de comparação** (rodadas com a mesma validação): escolha ao acaso (faixa acima), regra simples só com a volatilidade (ações mais calmas primeiro) e **regressão logística** com as mesmas variáveis (com ela em produção, a terceira referência passa a ser o XGBoost de ponto de partida). O modelo em produção só "ganha" se superar as três.
 - Diferença dentro da faixa do acaso = "ainda não mostrou vantagem sobre o acaso".
 
 ### 7.6 Previsão diária (top 5)
 - Ordenar as ações do dia pela probabilidade do modelo e pegar as 5 primeiras. Na tela: **"5 ações com maior chance de superar o Ibovespa (experimento)"**.
-- **Motivos:** contribuições do XGBoost (`pred_contribs`), traduzidas em frases ("Notícias da noite com tom positivo (3 notícias)"), com efeito `ajudou`/`atrapalhou`/`neutro`.
+- **Motivos:** contribuições do modelo em produção (logística: a parte de cada variável no logit, com o viés; XGBoost: `pred_contribs`), traduzidas em frases ("Notícias da noite com tom positivo (3 notícias)"), com efeito `ajudou`/`atrapalhou`/`neutro`.
 - **Chance:** calculada, mas `exibir = false` até a calibração ser conferida (se o modelo diz 60%, ~60% acontecem). Quando exibida, vem ao lado da referência do acaso, 50% (`chance.referencia_acaso`); com a chance escondida, a referência também vai `null`, para a interface não mostrar "50%" por engano.
 - Gravar o top 5 do dia no momento da geração (histórico nunca recalculado depois).
 - No dia seguinte, fechar o resultado: `superou` = retorno da ação > retorno do IBOV no pregão previsto. Retorno suspeito nesse pregão (seção 6): retorno `null`, `superou` vazio, não conta como acerto, e `resultado_incompleto = true`.
@@ -325,7 +325,7 @@ XGBoost, ponto de partida: `n_estimators=300, max_depth=3, learning_rate=0.03, s
 - **Qual modelo gera o top 5:** o **modelo 3** (com as notícias do dia e da noite, até 08:00 de t+1), porque é ele que testa a hipótese do TCC. Ele é mostrado mesmo que não supere o acaso: o selo "em avaliação" e o histórico existem para isso.
 - **Comparação ao vivo:** todo dia, gravar também (sem mostrar na tela) o top 5 do **modelo 1** (sem notícias) e o da **regra da volatilidade**. Assim, o histórico mostra, com dados de verdade e daqui para frente, se as notícias fazem diferença.
 - **Retreino mensal:** no primeiro pregão de cada mês, na própria rotina, depois da entrega e antes do top, sempre que o modelo do mês não existir e a rotina estiver em produção (`treino.teste_final.fim` preenchido). Corte = pregões antes do dia 1 do mês, menos o de embargo (o mesmo esquema do walk-forward). Metadados com `retreino` e as métricas do desenvolvimento (a validação não é refeita). Se faltar no mês, repete nos pregões seguintes (mesmo corte, mesmo modelo). A chave `treino.modelo_oficial` (R7) diz se o modelo é oficial. Os hiperparâmetros só mudam numa nova avaliação completa, nunca no retreino automático. Modelo de desenvolvimento de outra `versao_preparacao` impede o retreino (vira aviso; a rodada segue).
-- **Arquivo do modelo:** salvar em `modelos/xgb-AAAA-MM.json`, com um arquivo de metadados ao lado: `versao_preparacao`, variáveis usadas, período de treino, hiperparâmetros, métricas da validação, universo (`composicao_atual` ou histórica) e um hash do dataset. O `modelo_versao` do pacote `experimento_top` aponta para esse arquivo (nome sem o dia, como no exemplo da 8.3). O modelo 1, usado no top 5 sombra, vai em `modelos/xgb-m1-AAAA-MM.json` (F17).
+- **Arquivo do modelo:** salvar em `modelos/<família>-AAAA-MM.json` (`logistica-AAAA-MM.json` com a logística em produção; JSON explícito, sem pickle), com um arquivo de metadados ao lado: `versao_preparacao`, variáveis usadas, período de treino, hiperparâmetros, métricas da validação, universo (`composicao_atual` ou histórica) e um hash do dataset. O `modelo_versao` do pacote `experimento_top` aponta para esse arquivo (nome sem o dia, como no exemplo da 8.3). O modelo 1, usado no top 5 sombra, vai em `modelos/<família>-m1-AAAA-MM.json` (F17).
 - **Antes do histórico completo:** o modelo pode ser treinado com o 1 ano atual **só para testar a rotina** (top 5 marcado com aviso "modelo provisório"; `valido_para_historico = false`). O modelo "oficial" e o histórico que vale para o TCC começam quando o histórico completo chegar.
 
 ---
@@ -550,7 +550,7 @@ Com ~1 ano de histórico, a etapa 6 é **só teste de funcionamento** (3.4): o r
 - **F14 Teste "hora real na noite" (7.5):** versão de dataset `hora_real_noite` (`precisao_hora = 'hora'` e `inicio_janela = "fechamento"`). Exploratório: a `mudanca_tom` fica quase toda vazia.
 - **F15 Bootstrap:** circular, em blocos de 5 pregões, 2000 reamostragens.
 - **F16 Calibração e chance:** ECE com 10 faixas; aprovada se ECE ≤ 0,02 com pelo menos 5000 linhas. A chance só é exibida com calibração aprovada **e** `liberar_chance: true` (decisão manual); até lá sai `valor: null`, `exibir: false`, `status: calibracao_nao_conferida` (como no exemplo da 8.3).
-- **F17 Modelos salvos:** `modelos/xgb-AAAA-MM.json` (modelo 3) e `modelos/xgb-m1-AAAA-MM.json` (modelo 1, top 5 sombra), cada um com `.meta.json` (colunas, período de treino, hiperparâmetros, semente, métricas, universo, sha256 do dataset, versões das bibliotecas). Antes do histórico completo: `provisorio: true`, treinados só com o desenvolvimento.
+- **F17 Modelos salvos:** `modelos/<família>-AAAA-MM.json` (modelo 3) e `modelos/<família>-m1-AAAA-MM.json` (modelo 1, top 5 sombra); a família é a de `treino.familia_producao` (logística em produção), cada um com `.meta.json` (colunas, período de treino, hiperparâmetros, semente, métricas, universo, sha256 do dataset, versões das bibliotecas). Antes do histórico completo: `provisorio: true`, treinados só com o desenvolvimento.
 - **F18 Semente:** uma só, `20261023`, em tudo (XGBoost com `n_jobs=1`, sorteios, bootstrap, logística).
 - **F19 Saídas:** `saida/experimento/treino/dev-<data do dataset>/` (fora do git): `relatorio.md`, `metricas.json`, previsões e resumos diários. O treino lê só os CSV do dataset (nunca o banco).
 
@@ -668,7 +668,7 @@ Com ~1 ano de histórico, a etapa 6 é **só teste de funcionamento** (3.4): o r
 
 **Acréscimo de 02/11/2026 (executor do protocolo; `docs/protocolo_variaveis.md`, seção 7)**
 - **Q7 Executor:** `python -m processamento.experimento.protocolo_execucao`, em `experimento/protocolo.py` (regras), `protocolo_registro.py`, `protocolo_relatorio.py` e `protocolo_execucao.py`. Só lê o CSV de desenvolvimento; não abre o teste final, não grava em `modelos/` e não lê o banco. `avaliacao.ic_bootstrap_blocos` ganhou `percentis` (padrão igual) e `treino.selecionar_blocos` foi extraída de `selecionar_configuracao`, sem mudar resultados.
-- **Q9 Busca:** `python -m processamento.experimento.busca_execucao`, em `experimento/busca.py` (regra) e `busca_execucao.py`, com as regras de `docs/protocolo_variaveis.md`, seção 6. Exige a configuração congelada de uma rodada válida; só lê o CSV de desenvolvimento e não grava em `modelos/`. `modelos.py` e `prever_walk_forward` ganharam o LightGBM (`lightgbm==4.7.0`; só a busca importa). `treino --configuracao` usa a configuração final no desenvolvimento em vez de `selecionar_configuracao` (só família XGBoost por enquanto; recusado no teste final). Sem a opção, nada muda.
+- **Q9 Busca:** `python -m processamento.experimento.busca_execucao`, em `experimento/busca.py` (regra) e `busca_execucao.py`, com as regras de `docs/protocolo_variaveis.md`, seção 6. Exige a configuração congelada de uma rodada válida; só lê o CSV de desenvolvimento e não grava em `modelos/`. `modelos.py` e `prever_walk_forward` ganharam o LightGBM (`lightgbm==4.7.0`; só a busca importa). `treino --configuracao` usa a configuração final no desenvolvimento em vez de `selecionar_configuracao` (família XGBoost ou logística, a de `treino.familia_producao`; recusado no teste final). Sem a opção, nada muda.
 - **Q8 `var_lucro_aa`:** conta própria de lucro e PL por empresa em `experimento/resultados.py`, ~50 vezes mais rápida, com a mesma regra de `fatos/trimestres.py`. `tests/test_exp_var_lucro_equivalencia.py` compara as duas: mudança na regra de trimestres precisa valer nas duas.
 
 ---

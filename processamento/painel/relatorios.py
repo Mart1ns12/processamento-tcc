@@ -20,8 +20,6 @@ RE_LOG_ROTINA = re.compile(r"^rotina-(\d{4}-\d{2}-\d{2})\.log$")
 RE_SECAO = re.compile(r"^## (\d+)\. (.+)$")
 RE_SEPARADOR = re.compile(r"^\|[\s:|-]*-[\s:|-]*$")
 RE_DEV = re.compile(r"^dev-(\d{4}-\d{2}-\d{2})$")
-RE_META = re.compile(r"^xgb-(\d{4}-\d{2})\.meta\.json$")
-RE_META_SOMBRA = re.compile(r"^xgb-m1-(\d{4}-\d{2})\.meta\.json$")
 RE_TOP = re.compile(r"^(\d{4}-\d{2}-\d{2})\.top\.json$")
 RE_PYTEST_INICIO = re.compile(r"^# painel: acao=\S+ inicio=(\S+) comando=")
 RE_PYTEST_FIM = re.compile(r"^# painel: fim=(\S+) codigo=(-?\d+)")
@@ -270,8 +268,14 @@ def trava_teste_final(params: dict, raiz: Path) -> dict:
     return {"estado": estado, "texto": texto, "inicio": inicio, "fim": fim, "liberado": liberado}
 
 
+def _re_meta(familia: str, sombra: bool = False) -> re.Pattern:
+    """Meta do modelo da família: `<familia>-AAAA-MM.meta.json`, ou a sombra `<familia>-m1-AAAA-MM.meta.json`."""
+    prefixo = re.escape(f"{familia}-m1-" if sombra else f"{familia}-")
+    return re.compile(rf"^{prefixo}(\d{{4}}-\d{{2}})\.meta\.json$")
+
+
 def _resumo_meta(caminho: Path, mes: str) -> dict | None:
-    """Resumo de um `xgb-AAAA-MM.meta.json` (ou da sombra); None se ilegível."""
+    """Resumo de um `<familia>-AAAA-MM.meta.json` (ou da sombra); None se ilegível."""
     meta = _ler_json(caminho)
     if meta is None:
         return None
@@ -350,9 +354,10 @@ def ler_experimento(raiz: Path, params: dict) -> dict:
     modelo_oficial = bool(params.get("modelo_oficial"))
     publicar_provisorio = bool(params.get("publicar_top_provisorio"))
     pasta_modelos = raiz / "modelos"
+    familia = params.get("familia_producao") or "xgb"  # a família em produção (treino.familia_producao)
 
-    em_uso = _mais_novo(pasta_modelos, RE_META)
-    sombra = _mais_novo(pasta_modelos, RE_META_SOMBRA)
+    em_uso = _mais_novo(pasta_modelos, _re_meta(familia))
+    sombra = _mais_novo(pasta_modelos, _re_meta(familia, sombra=True))
     modelo_em_uso = _resumo_meta(em_uso[1], em_uso[0]) if em_uso else None
     modelo_sombra = _resumo_meta(sombra[1], sombra[0]) if sombra else None
     situacao = "oficial" if modelo_oficial and modelo_em_uso and modelo_em_uso["provisorio"] is False else "provisório"

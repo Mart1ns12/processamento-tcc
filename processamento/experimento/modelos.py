@@ -15,6 +15,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import xgboost as xgb
+from scipy.special import expit
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline, make_pipeline
@@ -69,8 +70,10 @@ def margem_xgb(modelo: xgb.XGBClassifier, X: pd.DataFrame) -> np.ndarray:
     return modelo.get_booster().predict(xgb.DMatrix(X, missing=np.nan), output_margin=True)
 
 
-def contribuicoes(modelo: xgb.XGBClassifier, X: pd.DataFrame) -> pd.DataFrame:
-    """Contribuição de cada variável à margem (SHAP do XGBoost); a última coluna é o viés."""
+def contribuicoes(modelo, X: pd.DataFrame) -> pd.DataFrame:
+    """Contribuição de cada variável à margem (SHAP do XGBoost, ou a conta da logística); a última coluna é o viés."""
+    if isinstance(modelo, ModeloLogistico):
+        return modelo.contribuicoes(X)
     valores = modelo.get_booster().predict(xgb.DMatrix(X, missing=np.nan), pred_contribs=True)
     return pd.DataFrame(valores, columns=[*X.columns, "vies"], index=X.index)
 
@@ -91,6 +94,106 @@ def treinar_logistica(X: pd.DataFrame, y: pd.Series, c: float, semente: int) -> 
 def prob_logistica(pipe: Pipeline, X: pd.DataFrame) -> np.ndarray:
     """Probabilidade da classe 1 da logística."""
     return pipe.predict_proba(X.astype(float))[:, 1]
+
+
+class ModeloLogistico:
+    """Logística gravada em JSON (sem pickle), com a mesma conta do Pipeline de `treinar_logistica`.
+
+    Guarda o que o Pipeline aprendeu: a mediana de cada coluna, as colunas com indicador de ausência, a média e a
+    escala da padronização e os coeficientes. Prever e explicar (contribuição de cada coluna em log-odds) não
+    precisa de sklearn. A entrada continua com NaN: a mediana só entra aqui, como no Pipeline.
+    """
+
+    def __init__(self, colunas, medianas, indicadoras, media, escala, coef, intercepto: float):
+        self.colunas = [str(c) for c in colunas]
+        self.medianas = np.asarray(medianas, dtype=float)
+        self.indicadoras = np.asarray(indicadoras, dtype=int)
+        self.media = np.asarray(media, dtype=float)
+        self.escala = np.asarray(escala, dtype=float)
+        self.coef = np.asarray(coef, dtype=float)
+        self.intercepto = float(intercepto)
+
+    @classmethod
+    def de_pipeline(cls, pipe: Pipeline) -> ModeloLogistico:
+        """Copia os parâmetros de um Pipeline ajustado por `treinar_logistica` (com DataFrame, para ter os nomes)."""
+        imputador, padronizador, logistica = [passo for _, passo in pipe.steps]
+        if not hasattr(imputador, "feature_names_in_"):
+            raise ValueError("o Pipeline precisa ter sido ajustado com DataFrame (colunas com nome)")
+        indicador = imputador.indicator_
+        return cls(
+            colunas=imputador.feature_names_in_,
+            medianas=imputador.statistics_,
+            indicadoras=[] if indicador is None else indicador.features_,
+            media=padronizador.mean_,
+            escala=padronizador.scale_,
+            coef=logistica.coef_[0],
+            intercepto=logistica.intercept_[0],
+        )
+
+    def _contribuicao(self, X: pd.DataFrame) -> np.ndarray:
+        """Termo de cada coluna em log-odds (n × colunas), com o termo do indicador de ausência somado na sua coluna."""
+        x = X[self.colunas].to_numpy(dtype=float)
+        p = x.shape[1]
+        nan = np.isnan(x)
+        imp = np.where(nan, self.medianas, x)
+        cheio = np.hstack([imp, nan[:, self.indicadoras].astype(float)])
+        termo = self.coef * (cheio - self.media) / self.escala
+        contrib = termo[:, :p].copy()
+        contrib[:, self.indicadoras] += termo[:, p:]
+        return contrib
+
+    def margem(self, X: pd.DataFrame) -> np.ndarray:
+        """Margem (logit) de cada linha, antes da sigmoide."""
+        return self._contribuicao(X).sum(axis=1) + self.intercepto
+
+    def predict_proba(self, X: pd.DataFrame) -> np.ndarray:
+        """Duas colunas como no sklearn: [P(classe 0), P(classe 1)]."""
+        p1 = expit(self.margem(X))
+        return np.column_stack([1.0 - p1, p1])
+
+    def contribuicoes(self, X: pd.DataFrame) -> pd.DataFrame:
+        """Contribuição de cada coluna à margem; a última coluna é o viés (intercepto). Soma = logit."""
+        vies = np.full(len(X), self.intercepto)
+        return pd.DataFrame(
+            np.column_stack([self._contribuicao(X), vies]), columns=[*self.colunas, "vies"], index=X.index
+        )
+
+    def save_model(self, caminho: Path | str) -> None:
+        """Grava o modelo em JSON explícito (sem pickle). Os números voltam exatamente iguais ao serem lidos."""
+        dados = {
+            "familia": "logistica",
+            "colunas": self.colunas,
+            "medianas": self.medianas.tolist(),
+            "indicadoras": self.indicadoras.tolist(),
+            "media": self.media.tolist(),
+            "escala": self.escala.tolist(),
+            "coef": self.coef.tolist(),
+            "intercepto": self.intercepto,
+        }
+        Path(caminho).write_text(json.dumps(dados, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    @classmethod
+    def carregar(cls, caminho: Path | str) -> ModeloLogistico:
+        """Relê o JSON gravado por `save_model`."""
+        dados = json.loads(Path(caminho).read_text(encoding="utf-8"))
+        if dados.get("familia") != "logistica":
+            raise ValueError(f"{caminho} não é um modelo logístico (familia={dados.get('familia')!r})")
+        return cls(
+            colunas=dados["colunas"],
+            medianas=dados["medianas"],
+            indicadoras=dados["indicadoras"],
+            media=dados["media"],
+            escala=dados["escala"],
+            coef=dados["coef"],
+            intercepto=dados["intercepto"],
+        )
+
+
+def prob(modelo, X: pd.DataFrame) -> np.ndarray:
+    """Probabilidade da classe 1 de qualquer família (XGBoost ou logística)."""
+    if isinstance(modelo, ModeloLogistico):
+        return modelo.predict_proba(X)[:, 1]
+    return prob_xgb(modelo, X)
 
 
 def treinar_lgbm(X: pd.DataFrame, y: pd.Series, hiper: dict, semente: int):
@@ -134,17 +237,24 @@ def sha256_arquivo(caminho: Path) -> str:
     return h.hexdigest()
 
 
-_PREFIXOS_MODELO = {"1": "xgb-m1-", "3": "xgb-"}
+_PREFIXOS_MODELO = {
+    "xgb": {"1": "xgb-m1-", "3": "xgb-"},
+    "logistica": {"1": "logistica-m1-", "3": "logistica-"},
+}
+FAMILIA_PADRAO = "xgb"
 
 
-def nome_modelo(mes: str, modelo: str = "3") -> str:
-    """Nome-base do arquivo do modelo: "3" -> "xgb-AAAA-MM"; "1" -> "xgb-m1-AAAA-MM"."""
-    if modelo not in _PREFIXOS_MODELO:
-        raise ValueError(f"modelo desconhecido: {modelo!r} (use {', '.join(_PREFIXOS_MODELO)})")
-    return f"{_PREFIXOS_MODELO[modelo]}{mes}"
+def nome_modelo(mes: str, modelo: str = "3", familia: str = FAMILIA_PADRAO) -> str:
+    """Nome-base do arquivo do modelo: "3" -> "xgb-AAAA-MM"; "1" -> "xgb-m1-AAAA-MM" (logística: "logistica-...")."""
+    if familia not in _PREFIXOS_MODELO:
+        raise ValueError(f"família desconhecida: {familia!r} (use {', '.join(_PREFIXOS_MODELO)})")
+    prefixos = _PREFIXOS_MODELO[familia]
+    if modelo not in prefixos:
+        raise ValueError(f"modelo desconhecido: {modelo!r} (use {', '.join(prefixos)})")
+    return f"{prefixos[modelo]}{mes}"
 
 
-def salvar_modelo(modelo: xgb.XGBClassifier, metadados: dict, pasta: Path, nome: str) -> tuple[Path, Path]:
+def salvar_modelo(modelo, metadados: dict, pasta: Path, nome: str) -> tuple[Path, Path]:
     """Grava `<nome>.json` (modelo) e `<nome>.meta.json` (metadados). Falta chave obrigatória -> ValueError."""
     faltando = [chave for chave in CHAVES_METADADOS if chave not in metadados]
     if faltando:
@@ -159,11 +269,16 @@ def salvar_modelo(modelo: xgb.XGBClassifier, metadados: dict, pasta: Path, nome:
     return caminho, caminho_meta
 
 
-def carregar_modelo(caminho_json: Path) -> tuple[xgb.XGBClassifier, dict]:
-    """Relê o modelo e o `.meta.json` ao lado (mesmo nome, sufixo `.meta.json`)."""
+def carregar_modelo(caminho_json: Path) -> tuple[xgb.XGBClassifier | ModeloLogistico, dict]:
+    """Relê o modelo e o `.meta.json` ao lado (mesmo nome, sufixo `.meta.json`).
+
+    A meta é lida antes: `familia` ausente = xgb (modelos antigos). Logística vira `ModeloLogistico`.
+    """
     caminho_json = Path(caminho_json)
-    modelo = xgb.XGBClassifier()
-    modelo.load_model(caminho_json)
     caminho_meta = caminho_json.with_name(f"{caminho_json.stem}.meta.json")
     metadados = json.loads(caminho_meta.read_text(encoding="utf-8"))
+    if metadados.get("familia", FAMILIA_PADRAO) == "logistica":
+        return ModeloLogistico.carregar(caminho_json), metadados
+    modelo = xgb.XGBClassifier()
+    modelo.load_model(caminho_json)
     return modelo, metadados

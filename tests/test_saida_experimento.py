@@ -423,3 +423,16 @@ def test_aviso_provisorio_usa_o_periodo_de_treino_dos_metadados():
         "Modelo provisório: treinado de 2024-01-02 a 2026-06-19 (cerca de 2,5 anos), só para testar a rotina."
     )
     assert aviso_provisorio({}) == "Modelo provisório: período de treino não informado, só para testar a rotina."
+
+
+def test_escolher_modelo_da_familia_logistica_ignora_os_xgb(tmp_path):
+    pasta = _pasta_com(tmp_path, "logi", ["xgb-2026-10.json", "logistica-2026-06.json", "logistica-m1-2026-06.json"])
+    m3, m1, avisos = pe.escolher_modelo(pasta, D, "logistica")
+    assert (m3.name, m1.name) == ("logistica-2026-06.json", "logistica-m1-2026-06.json")
+    assert len(avisos) == 1  # mês de D sem logística: usa o anterior, com aviso
+    assert pe.escolher_modelo(pasta, D)[0].name == "xgb-2026-10.json"  # padrão continua xgb
+
+
+def test_escolher_modelo_logistica_sem_arquivo_nao_serve(tmp_path):
+    pasta = _pasta_com(tmp_path, "logi2", ["xgb-2026-06.json", "xgb-m1-2026-06.json"])
+    assert pe.escolher_modelo(pasta, D, "logistica") == (None, None, [])

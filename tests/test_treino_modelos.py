@@ -9,6 +9,7 @@ import warnings
 import numpy as np
 import pandas as pd
 import pytest
+import xgboost as xgb
 
 from fabrica_treino import dataset_sintetico, gravar_versoes, params_teste
 from processamento.experimento import dataset, modelos, treino, validacao
@@ -162,6 +163,95 @@ def test_sha256_em_blocos_bate_com_hashlib(tmp_path):
 def test_nome_modelo():
     assert modelos.nome_modelo("2026-06") == "xgb-2026-06"
     assert modelos.nome_modelo("2026-06", "1") == "xgb-m1-2026-06"
+
+
+def test_nome_modelo_logistica_e_familia_invalida():
+    assert modelos.nome_modelo("2026-06", familia="logistica") == "logistica-2026-06"
+    assert modelos.nome_modelo("2026-06", "1", "logistica") == "logistica-m1-2026-06"
+    assert modelos.nome_modelo("2026-06", "3", "xgb") == "xgb-2026-06"
+    with pytest.raises(ValueError):
+        modelos.nome_modelo("2026-06", familia="lgbm")
+
+
+# --- Logística em JSON (ModeloLogistico) ----------------------------------------------------------
+
+LINHAS_CASO_LOGISTICO = pd.DataFrame({"a": [0.75, 0.25, NAN], "b": [0.4, NAN, 0.2]})
+
+
+def _logistica_fixture():
+    """Parâmetros fixos do plano (fase 2): a tem mediana 0,5; b tem mediana 0,2 e indicador de ausência."""
+    return modelos.ModeloLogistico(
+        colunas=["a", "b"], medianas=[0.5, 0.2], indicadoras=[1], media=[0.5, 0.2, 0.25],
+        escala=[0.25, 0.1, 0.5], coef=[0.4, -0.2, 0.6], intercepto=-0.1,
+    )
+
+
+def test_logistica_caso_do_plano_contribuicoes_e_prob():
+    modelo = _logistica_fixture()
+    contrib = modelo.contribuicoes(LINHAS_CASO_LOGISTICO)
+    assert list(contrib.columns) == ["a", "b", "vies"]
+    np.testing.assert_allclose(contrib["a"], [0.4, -0.4, 0.0], atol=1e-9)
+    np.testing.assert_allclose(contrib["b"], [-0.7, 0.9, -0.3], atol=1e-9)
+    np.testing.assert_allclose(contrib["vies"], [-0.1, -0.1, -0.1], atol=1e-12)
+    np.testing.assert_allclose(modelos.prob(modelo, LINHAS_CASO_LOGISTICO), [0.40131234, 0.59868766, 0.40131234], atol=1e-8)
+
+
+def test_logistica_pipeline_real_bate_com_a_conta_propria():
+    X, y = _dados_sinteticos()  # beta todo NaN (coluna vazia no ajuste) e tom NaN a cada 7 linhas
+    pipe = modelos.treinar_logistica(X, y, c=1.0, semente=0)
+    modelo = modelos.ModeloLogistico.de_pipeline(pipe)
+    assert modelo.colunas == list(X.columns)
+    p_pipe = pipe.predict_proba(X.astype(float))[:, 1]
+    assert np.max(np.abs(modelos.prob(modelo, X) - p_pipe)) <= 1e-12
+    contrib = modelo.contribuicoes(X)
+    assert np.allclose(contrib.sum(axis=1), pipe.decision_function(X.astype(float)), atol=1e-9)
+
+
+def test_logistica_json_ida_e_volta_identica(tmp_path):
+    X, y = _dados_sinteticos()
+    modelo = modelos.ModeloLogistico.de_pipeline(modelos.treinar_logistica(X, y, c=1.0, semente=0))
+    caminho = tmp_path / "logistica-2026-06.json"
+    modelo.save_model(caminho)
+    assert json.loads(caminho.read_text(encoding="utf-8"))["familia"] == "logistica"  # JSON explícito, sem pickle
+    lido = modelos.ModeloLogistico.carregar(caminho)
+    assert lido.colunas == modelo.colunas and lido.intercepto == modelo.intercepto
+    for atributo in ("medianas", "indicadoras", "media", "escala", "coef"):
+        assert np.array_equal(getattr(lido, atributo), getattr(modelo, atributo)), atributo
+    assert np.array_equal(modelos.prob(lido, X), modelos.prob(modelo, X))
+    regravado = tmp_path / "copia.json"
+    lido.save_model(regravado)
+    assert regravado.read_text(encoding="utf-8") == caminho.read_text(encoding="utf-8")
+
+
+def test_logistica_dois_ajustes_iguais():
+    X, y = _dados_sinteticos()
+    m1 = modelos.ModeloLogistico.de_pipeline(modelos.treinar_logistica(X, y, c=1.0, semente=0))
+    m2 = modelos.ModeloLogistico.de_pipeline(modelos.treinar_logistica(X, y, c=1.0, semente=0))
+    for atributo in ("medianas", "indicadoras", "media", "escala", "coef"):
+        assert np.array_equal(getattr(m1, atributo), getattr(m2, atributo)), atributo
+    assert m1.intercepto == m2.intercepto
+
+
+def test_salvar_e_carregar_logistica_pelo_nome_da_familia(tmp_path):
+    X, y = _dados_sinteticos()
+    modelo = modelos.ModeloLogistico.de_pipeline(modelos.treinar_logistica(X, y, c=1.0, semente=0))
+    meta = _metadados(X)
+    meta["familia"] = "logistica"
+    meta["hiperparametros"] = {"C": 1.0}
+    caminho, _ = modelos.salvar_modelo(modelo, meta, tmp_path, modelos.nome_modelo("2026-06", familia="logistica"))
+    assert caminho.name == "logistica-2026-06.json"
+    carregado, meta_lido = modelos.carregar_modelo(caminho)
+    assert isinstance(carregado, modelos.ModeloLogistico)
+    assert meta_lido["familia"] == "logistica" and meta_lido["hiperparametros"] == {"C": 1.0}
+    assert np.array_equal(modelos.prob(carregado, X), modelos.prob(modelo, X))
+
+
+def test_carregar_modelo_sem_familia_e_xgb(tmp_path):
+    X, y = _dados_sinteticos()
+    modelo = modelos.treinar_xgb(X, y, HIPER, semente=0)
+    caminho, _ = modelos.salvar_modelo(modelo, _metadados(X), tmp_path, "xgb-2026-06")
+    carregado, _ = modelos.carregar_modelo(caminho)
+    assert isinstance(carregado, xgb.XGBClassifier)
 
 
 # --- Logística ------------------------------------------------------------------------------------

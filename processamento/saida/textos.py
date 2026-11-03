@@ -98,6 +98,10 @@ _ROTULOS_PRECO = {
     "ret_vs_setor": "Retorno em relação ao setor",
     "exposicao_dolar": "Efeito do dólar",
     "exposicao_petroleo": "Efeito do petróleo",
+    "posicao_fechamento": "Posição do fechamento no dia",
+    "mom_12_1": "Retorno de 12 meses, sem o último mês",
+    "liquidez_20d": "Giro típico por pregão",
+    "ret_idio_5d": "Retorno em relação ao Ibovespa (5 pregões)",
 }
 
 _PERIODO_RETORNO = {
@@ -182,7 +186,23 @@ def _texto_preco(fator: str, v: float, rank) -> str:
         return "Igual ao setor no último pregão"
     if fator == "exposicao_dolar":
         return f"Efeito estimado do dólar no último pregão: {pct_sinal(v)}"
-    # exposicao_petroleo (único que sobra dos 13 fatores de preço)
+    if fator == "posicao_fechamento":
+        return f"Fechou em {pct_br(v, 0)} da faixa entre a mínima e a máxima do último pregão"
+    if fator == "mom_12_1":
+        if v == 0:
+            verbo_mom = "Ficou estável"
+        else:
+            verbo_mom = "Subiu" if v > 0 else "Caiu"
+        return f"{verbo_mom} {pct_br(abs(v))} em 12 meses, sem contar o último mês{_sufixo_media_acoes(rank)}"
+    if fator == "liquidez_20d":
+        return f"Giro típico de R$ {num_br(v / 1_000_000, 1)} mi por pregão"
+    if fator == "ret_idio_5d":
+        if v > 0:
+            return f"{pct_br(v)} acima do esperado pelo Ibovespa nos últimos 5 pregões"
+        if v < 0:
+            return f"{pct_br(abs(v))} abaixo do esperado pelo Ibovespa nos últimos 5 pregões"
+        return "Igual ao esperado pelo Ibovespa nos últimos 5 pregões"
+    # exposicao_petroleo (único que sobra dos fatores de preço)
     return f"Efeito estimado do petróleo no último pregão: {pct_sinal(v)}"
 
 

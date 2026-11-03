@@ -43,7 +43,7 @@ def _passos(d0: date, fim: date | None) -> list[str]:
     fim_txt = fim.isoformat() if fim is not None else "<fim>"
     return [
         "1. Antes (já feito): histórico completo no banco; regerar os datasets e rodar o treino de "
-        "desenvolvimento com treino.modelo_oficial: true.",
+        "desenvolvimento (família de treino.familia_producao) com treino.modelo_oficial: true.",
         f"2. Conferências (esta etapa): python -m processamento.producao --inicio {d0_txt}",
         f"3. python -m processamento.producao --inicio {d0_txt} --confirmar: move os *.top.json de teste de "
         "funcionamento para registros/experimento/funcionamento-<hoje>/ e grava docs/producao.json. "
@@ -58,7 +58,7 @@ def _passos(d0: date, fim: date | None) -> list[str]:
 
 def _dev_nao_provisorio(pasta_modelos: Path, params_treino: ParametrosTreino) -> str | None:
     """Problema se o `.meta.json` do treino de desenvolvimento não está com `provisorio: false`."""
-    nome = modelos.nome_modelo(params_treino.teste_final_inicio.strftime("%Y-%m"), "3")
+    nome = modelos.nome_modelo(params_treino.teste_final_inicio.strftime("%Y-%m"), "3", params_treino.familia_producao)
     caminho = Path(pasta_modelos) / f"{nome}.meta.json"
     if not caminho.is_file():
         return (f"falta {caminho.name}: rode o treino de desenvolvimento com treino.modelo_oficial: true "

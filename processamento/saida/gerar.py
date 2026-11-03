@@ -288,7 +288,9 @@ def gerar(d: date, *, ler=None, pasta_saida: Path | None = None, pasta_modelos: 
                 avisos.extend(retreinar(df_treino, info_treino, ins.cal, d))
             except Exception as erro:
                 avisos.append(AVISO_RETREINO.format(mes=f"{d.year:04d}-{d.month:02d}", tipo=type(erro).__name__))
-        caminho, caminho_m1, avisos_modelo = pacotes_experimento.escolher_modelo(pasta_modelos, d)
+        caminho, caminho_m1, avisos_modelo = pacotes_experimento.escolher_modelo(
+            pasta_modelos, d, params_treino.familia_producao
+        )
         if caminho is None:
             avisos.append(AVISO_SEM_MODELO.format(pasta=pasta_modelos))
             return None

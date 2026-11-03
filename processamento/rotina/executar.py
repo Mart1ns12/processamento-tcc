@@ -168,7 +168,7 @@ def _abrir_leitor():
 def _gancho_retreino(pasta_modelos: Path, params_treino, relogio) -> Callable[[pd.DataFrame, dict, list, date], list[str]]:
     """Gancho do `gerar` (seção 7): só chama o retreino quando ele é preciso (`precisa_retreinar`)."""
     def gancho(df: pd.DataFrame, info: dict, cal: list, d: date) -> list[str]:
-        if not retreino.precisa_retreinar(pasta_modelos, d, params_treino.teste_final_fim):
+        if not retreino.precisa_retreinar(pasta_modelos, d, params_treino.teste_final_fim, params_treino.familia_producao):
             return []
         return retreino.retreinar_mes(df, info, cal, d, pasta_modelos=pasta_modelos, params=params_treino,
                                       agora=relogio.agora())

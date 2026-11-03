@@ -261,3 +261,45 @@ def test_configuracao_de_familia_lgbm_devolve_2(ambiente, tmp_path, capsys):
 def test_configuracao_inexistente_devolve_2(ambiente, tmp_path, capsys):
     assert treino.main(_argv(ambiente, "--configuracao", str(tmp_path / "nao_existe.json")), params=params_teste()) == 2
     assert "configuração não encontrada" in capsys.readouterr().out
+
+
+def test_configuracao_logistica_grava_os_modelos_da_logistica(ambiente, tmp_path):
+    params = params_teste(familia_producao="logistica")
+    caminho = _gravar_congelado(ambiente, tmp_path / "congelado.json", familia="logistica", hiperparametros=None)
+    assert treino.main(_argv(ambiente, "--configuracao", str(caminho)), params=params) == 0
+
+    meta3 = json.loads((ambiente["modelos"] / "logistica-2026-01.meta.json").read_text(encoding="utf-8"))
+    assert meta3["familia"] == "logistica"
+    assert meta3["hiperparametros"] == {"C": 1.0}
+    assert (ambiente["modelos"] / "logistica-m1-2026-01.json").is_file()
+    assert not (ambiente["modelos"] / "xgb-2026-01.json").exists()
+    modelo, _ = modelos.carregar_modelo(ambiente["modelos"] / "logistica-2026-01.json")
+    assert isinstance(modelo, modelos.ModeloLogistico)
+    # o teste final lê a configuração da família de produção, pela meta
+    cfg = treino._configuracao_congelada(ambiente["modelos"], params)
+    assert cfg["familia"] == "logistica" and cfg["hiperparametros"] == {"C": 1.0}
+
+
+def test_ler_configuracao_recusa_familia_diferente_da_producao(ambiente, tmp_path):
+    caminho = _gravar_congelado(ambiente, tmp_path / "congelado.json", familia="logistica", hiperparametros=None)
+    sha = json.loads(caminho.read_text(encoding="utf-8"))["sha256_dataset"]
+    with pytest.raises(treino.ErroPreRequisito, match="treino.familia_producao"):
+        treino._ler_configuracao(caminho, sha, params_teste())  # produção xgb
+    cfg = treino._ler_configuracao(caminho, sha, params_teste(familia_producao="logistica"))
+    assert cfg["familia"] == "logistica" and cfg["hiperparametros"] == {"C": 1.0}
+    assert cfg["colunas_3"] == json.loads(caminho.read_text(encoding="utf-8"))["colunas_3"]
+
+
+def test_veredito_nomeia_a_terceira_referencia():
+    def bloco(taxa_modelo, taxa_vol, taxa_ref):
+        def top5(taxa, situacao="acima"):
+            return {"topk": {"5": {"taxa_acerto": taxa, "vs_acaso": situacao}}}
+        return {treino.MODELO_CALIBRADO: top5(taxa_modelo), "volatilidade": top5(taxa_vol), "logistica": top5(taxa_ref)}
+
+    venceu = treino._veredito(bloco(0.6, 0.5, 0.4), "o XGBoost")
+    assert venceu["supera_logistica"] is True and venceu["referencia_terceira"] == "o XGBoost"
+    assert venceu["texto"].endswith("e o XGBoost neste período.")
+    perdeu = treino._veredito(bloco(0.6, 0.5, 0.7), "o XGBoost")
+    assert perdeu["texto"].endswith("mas não superou o XGBoost.")
+    padrao = treino._veredito(bloco(0.6, 0.5, 0.4))
+    assert padrao["texto"].endswith("e a logística neste período.") and padrao["referencia_terceira"] == "a logística"

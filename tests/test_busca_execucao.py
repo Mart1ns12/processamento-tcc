@@ -207,7 +207,7 @@ def test_configuracao_final_serve_ao_treino_de_desenvolvimento_quando_xgb(base):
     configuracao = json.loads((amb["docs"] / "configuracao_final_rodada_001.json").read_text(encoding="utf-8"))
     if configuracao["familia"] != "xgb":
         pytest.skip("o vencedor não é XGBoost: a leitura pelo treino ainda não existe (fase C2)")
-    cfg = treino._ler_configuracao(amb["docs"] / "configuracao_final_rodada_001.json", amb["sha"])
+    cfg = treino._ler_configuracao(amb["docs"] / "configuracao_final_rodada_001.json", amb["sha"], params_teste())
     assert cfg["colunas_3"] == configuracao["colunas_3"]
 
 

@@ -186,3 +186,5 @@ No recorte, o dia só entra com pelo menos 5 linhas com alvo e as duas classes; 
 | Eventos depois de 23/06/2026 | Auditar só retornos, antes do treino final. Evento novo gera nova versão e refaz protocolo e busca. Depois de congelar, nada muda: exclusão só como sensibilidade |
 | `liberar_chance` | Continua `false` até o teste ao vivo |
 | Fim do teste final | **Ainda não definido** |
+
+Implementação (02/11/2026): a rotina passa a publicar a família da configuração congelada (`treino.familia_producao: "logistica"`); o modelo logístico é gravado em JSON (`logistica-AAAA-MM.json`, sem pickle), e a configuração da rodada 001 vale sem mudança.

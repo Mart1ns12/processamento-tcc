@@ -122,6 +122,7 @@ def test_ler_parametros_valores_padrao_e_yaml_real(tmp_path):
     raiz = montar_raiz(tmp_path)
     assert leitores.ler_parametros(raiz) == {
         "modelo_oficial": False,
+        "familia_producao": "xgb",  # montar_raiz não traz o yaml de produção: vale o padrão
         "teste_final": {"inicio": "2026-06-23", "fim": None, "liberado": False},
         "publicar_top_provisorio": False,
         "pasta_saida": "saida",

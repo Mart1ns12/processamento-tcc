@@ -296,8 +296,12 @@ def test_caso_7bcd_top_publicado_manda_os_dez(banco_teste, tmp_path, modelos_dir
 # ---------------------------------------------------------------- caso 8: CLI
 
 def test_caso_8_cli_codigos_de_saida(banco_teste, tmp_path, modelos_dir, monkeypatch):
-    # o CLI lê o yaml real (top não publicado); este teste confere a gravação do top, então liga a publicação
+    # o CLI lê o yaml real (top não publicado); este teste confere a gravação do top, então liga a publicação.
+    # O yaml de produção é a logística, e o `modelos_dir` do teste tem XGBoost: a família fica xgb aqui.
     monkeypatch.setattr("processamento.saida.gerar.carregar_parametros_saida", lambda *a, **k: SAIDA_SIM)
+    from processamento.experimento.parametros import carregar_parametros_treino
+    monkeypatch.setattr("processamento.saida.gerar.carregar_parametros_treino",
+                        lambda *a, **k: dataclasses.replace(carregar_parametros_treino(), familia_producao="xgb"))
     raiz = tmp_path / "saida"
     argv = ["--data", "2025-10-22", "--pasta", str(raiz), "--pasta-modelos", str(modelos_dir),
             "--pasta-registros", str(tmp_path / "registros"), "--sem-estado"]
@@ -614,3 +618,42 @@ def test_insumos_balancos_ate_t_e_para_dia_de_resultado_ate_a_vespera_de_d(banco
     assert ins.t == t
     assert ins.balancos["data_entrega"].tolist() == [pd.Timestamp(t)]
     assert ins.balancos_resultado["data_entrega"].tolist() == [pd.Timestamp(t), sabado]
+
+
+# ---------------------------------------------------------------- logística em produção
+
+def _salvar_modelos_logisticos(pasta: Path, versao: int = VERSAO_PREPARACAO) -> None:
+    """Logística pequena de 2025-10 (modelo 3 e modelo 1), em JSON; `versao` vai nos metadados."""
+    prep = preparacao.preparar(dataset_sintetico(n_pregoes=130, n_tickers=12))
+    treino = preparacao.linhas_de_treino(prep)
+    for modelo_id, nome in (("3", "logistica-2025-10"), ("1", "logistica-m1-2025-10")):
+        colunas = preparacao.colunas_do_modelo(modelo_id)
+        pipe = modelos.treinar_logistica(treino[colunas], treino["alvo"], 1.0, PARAMS.semente)
+        meta = {**{chave: None for chave in CHAVES_METADADOS}, "versao_preparacao": versao}
+        meta.update(modelo=modelo_id, familia="logistica", colunas=colunas, provisorio=True,
+                    calibracao={"aprovada": False}, universo="composicao_atual", hiperparametros={"C": 1.0})
+        modelos.salvar_modelo(modelos.ModeloLogistico.de_pipeline(pipe), meta, pasta, nome)
+
+
+PARAMS_LOGISTICA = dataclasses.replace(PARAMS, familia_producao="logistica")
+
+
+def test_top_com_logistica_grava_o_nome_da_logistica(banco_teste, tmp_path):
+    pasta_modelos = tmp_path / "logi"
+    _salvar_modelos_logisticos(pasta_modelos)
+    pasta = _gerar(tmp_path, banco_teste(), modelos=pasta_modelos, params=PARAMS_LOGISTICA, params_saida=SAIDA_SIM)
+    assert _registros(pasta, "experimento_top")[0]["modelo_versao"] == "logistica-2025-10"
+
+
+def test_logistica_de_outra_versao_tira_o_top_e_os_outros_saem(banco_teste, tmp_path):
+    pasta_modelos = tmp_path / "logi_antiga"
+    _salvar_modelos_logisticos(pasta_modelos, versao=VERSAO_PREPARACAO - 1)
+    pasta = _gerar(tmp_path, banco_teste(), modelos=pasta_modelos, usar_estado=True,
+                   params=PARAMS_LOGISTICA, params_saida=SAIDA_NAO)
+
+    assert {p.name for p in pasta.iterdir()} == {f"{nome}.json" for nome in [*SETE, "execucao"]}
+    ex = _execucao(pasta)
+    assert ex["status"] == "ok"
+    assert [p["pacote"] for p in ex["pacotes_enviados"]] == SETE
+    assert any("outra versão de preparação" in aviso for aviso in ex["avisos"])
+    assert not (tmp_path / "registros" / "2025-10-22.top.json").exists()

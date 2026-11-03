@@ -48,6 +48,25 @@ def motivos(contrib: pd.Series, valores: pd.Series, qtd: int, limiar: float) -> 
     return saida
 
 
+_NOTICIAS_SEM_TOM = ("noticias_dia_qtd", "noticias_dia_extremo")
+
+
+def juntar_noticias_sem_tom(contrib_linha: pd.Series, bruto: pd.Series) -> pd.Series:
+    """Logística: sem tom no dia, as contribuições de qtd e extremo viram parte do tom.
+
+    Os três indicadores de notícia são quase idênticos quando não há notícia; sem isto, o motivo "Sem notícias"
+    sairia três vezes. Se o tom tem valor, devolve a linha como está.
+    """
+    if "noticias_dia_tom" not in bruto.index or not pd.isna(bruto["noticias_dia_tom"]):
+        return contrib_linha
+    if not all(c in contrib_linha.index for c in ("noticias_dia_tom", *_NOTICIAS_SEM_TOM)):
+        return contrib_linha
+    soma = contrib_linha["noticias_dia_tom"] + sum(contrib_linha[c] for c in _NOTICIAS_SEM_TOM)
+    juntada = contrib_linha.drop(list(_NOTICIAS_SEM_TOM))
+    juntada["noticias_dia_tom"] = float(soma)
+    return juntada
+
+
 def chance(prob: float, liberar_chance: bool, calibracao_aprovada: bool) -> dict:
     """Chance do top: a probabilidade só aparece com calibração aprovada e `liberar_chance` ligado (F16)."""
     if liberar_chance and calibracao_aprovada:
@@ -97,21 +116,25 @@ def top_do_dia(
         raise ValueError("preparado_dia e bruto_dia precisam ter o mesmo índice e a mesma ordem de linhas")
     colunas = metadados["colunas"]
     X = preparado_dia[colunas]
-    prob = modelos.prob_xgb(modelo, X)
+    prob = modelos.prob(modelo, X)
     # os motivos falam das colunas do dataset, mesmo se o modelo usa uma variante preparada
     contrib = modelos.contribuicoes(modelo, X).rename(columns=preparacao.COLUNA_BRUTA)
     aprovada = metadados["calibracao"]["aprovada"]
     brutos = bruto_dia[[preparacao.COLUNA_BRUTA.get(c, c) for c in colunas]]
+    logistica = isinstance(modelo, modelos.ModeloLogistico)
 
     ranking = _ranking(preparado_dia, prob, params.topk[0])
     itens = []
     for posicao, pos, ticker in zip(ranking["posicao"].tolist(), ranking["pos"].tolist(), ranking["ticker"].tolist()):
+        contrib_linha = contrib.iloc[pos]
+        if logistica:  # só a logística: indicadores de notícia quase idênticos (ver juntar_noticias_sem_tom)
+            contrib_linha = juntar_noticias_sem_tom(contrib_linha, brutos.iloc[pos])
         itens.append(
             {
                 "posicao": int(posicao),
                 "ticker": ticker,
                 "chance": chance(prob[pos], params.liberar_chance, aprovada),
-                "motivos": motivos(contrib.iloc[pos], brutos.iloc[pos], params.motivos_qtd, params.motivos_limiar),
+                "motivos": motivos(contrib_linha, brutos.iloc[pos], params.motivos_qtd, params.motivos_limiar),
             }
         )
     return itens
@@ -123,5 +146,5 @@ def top_sombra_volatilidade(preparado_dia: pd.DataFrame, k: int) -> list[str]:
 
 
 def top_sombra_modelo(preparado_dia: pd.DataFrame, modelo, colunas: list[str], k: int) -> list[str]:
-    """Sombra do modelo 1: os k maiores `prob_xgb` do pregão, com as colunas do modelo 1."""
-    return ordenar_top(preparado_dia, modelos.prob_xgb(modelo, preparado_dia[colunas]), k)
+    """Sombra do modelo 1: os k maiores `prob` do pregão, com as colunas do modelo 1."""
+    return ordenar_top(preparado_dia, modelos.prob(modelo, preparado_dia[colunas]), k)
