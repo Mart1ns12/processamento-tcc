@@ -6,7 +6,7 @@ leitor `ler` (conexão somente leitura, ou um leitor de teste). Cortes:
 - balanços, proventos e índices até t (proventos sem unir as mudanças de ticker: `ligar_proventos` faz isso);
 - `balancos_resultado`: balanços até D − 1 dia, só para `dia_resultado` (entrega no fim de semana cai na noite de t);
 - documentos da CVM até D − 1 dia, como balancos_resultado.
-- notícias até `corte_manha(D)`; cadastro, ações emitidas e mudanças de ticker sem corte.
+- notícias até `corte_manha(D)`; cadastro, ações emitidas, emissores e mudanças de ticker sem corte.
 """
 
 from __future__ import annotations
@@ -46,6 +46,7 @@ class Insumos:
     noticias_ignoradas: dict[str, int] = field(default_factory=dict)   # origem -> notícias descartadas
     balancos_resultado: pd.DataFrame | None = None   # até D − 1 dia, só para `dia_resultado`; None = usa `balancos`
     documentos_cvm: pd.DataFrame | None = None   # até D − 1 dia, só para `fato_relevante_cvm`
+    emissores: pd.DataFrame | None = None   # v1-emissores_ticker (sem corte): CNPJ e tipo por período
 
 
 def ler_insumos(d: date, ler: Callable[..., pd.DataFrame], existe_composicao: bool | None = None) -> Insumos:
@@ -61,6 +62,7 @@ def ler_insumos(d: date, ler: Callable[..., pd.DataFrame], existe_composicao: bo
     noticias = fontes.ler_noticias(ate=calendario.corte_manha(d), ler=ler, com_url_resolvida=True)
     balancos_resultado = fontes.ler_tabela("balancos", ate=d - timedelta(days=1), ler=ler)
     balancos = balancos_resultado[balancos_resultado["data_entrega"] <= pd.Timestamp(t)].reset_index(drop=True)
+    emissores = fontes.ler_emissores(ler)
     return Insumos(
         d=d,
         t=t,
@@ -75,9 +77,10 @@ def ler_insumos(d: date, ler: Callable[..., pd.DataFrame], existe_composicao: bo
         proventos=fontes.ler_tabela("proventos", ate=t, ler=ler, unir_mudancas=False),
         indices=fontes.ler_tabela("indices", ate=t, ler=ler),
         noticias=noticias,
-        composicao=fontes.ler_composicao(ler=ler, existe=existe_composicao),
+        composicao=fontes.ler_composicao(ler=ler, existe=existe_composicao, emissores=emissores),
         exclusoes=carregar_exclusoes(),
         noticias_ignoradas=dict(noticias.attrs.get("origens_ignoradas", {})),
+        emissores=emissores,
     )
 
 

@@ -66,9 +66,7 @@ def test_arquivo_real_carrega_os_valores_do_plano():
     assert params.tipos_principais == ("reportagem",)
     assert params.papeis_principais == ("protagonista", "citada_com_fato")
     assert params.periodos_sem_coleta == ((date(2025, 1, 1), date(2025, 7, 31)),)
-    assert params.periodos_sem_coleta_cvm == (
-        (date(2023, 1, 1), date(2023, 12, 31)), (date(2025, 1, 1), date(2025, 7, 31)),
-    )
+    assert params.periodos_sem_coleta_cvm == ()
 
 
 def test_calendario_continua_carregando_com_o_bloco_experimento():

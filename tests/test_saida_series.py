@@ -536,6 +536,6 @@ def test_aviso_evento_fora_da_janela_ou_lista_vazia_texto_igual():
     assert base == (
         "Retornos diários suspeitos (abaixo de -75% ou acima de 100%) entre 2025-01-02 e 2025-01-07, "
         "fora das séries e das medianas do setor: ABCD3 (2025-01-03).")
-    # evento de 2023 (fora da janela) e lista real (PCAR3 e NATU3, também fora): nenhuma linha a mais
+    # evento de 2023 (fora da janela) e lista real (hoje só PCAR3, também fora): nenhuma linha a mais
     assert aviso_retornos_suspeitos(ins, _params_com_eventos(("ABCD3", date(2023, 8, 23), "Antigo"))) == base
     assert aviso_retornos_suspeitos(ins, carregar_parametros_precos()) == base

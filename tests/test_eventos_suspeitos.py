@@ -15,7 +15,7 @@ import yaml
 import test_exp_suspeitos as sus
 from fabrica_precos import cadastro_de, precos_de, pregoes_uteis
 from processamento import calendario
-from processamento.exclusoes import Exclusoes, carregar_exclusoes
+from processamento.exclusoes import carregar_exclusoes
 from processamento.experimento.alvo import alvos
 from processamento.experimento.variaveis import variaveis_de_preco
 from processamento.fatos import precos as fatos_precos
@@ -113,23 +113,18 @@ def test_tickers_com_suspeita_recebe_os_eventos():
 
 # ---------------------------------------------------------------- carga e validação de fase1.eventos_retorno_suspeito
 
-def test_carga_do_yaml_real_traz_pcar3_e_natu3():
+def test_carga_do_yaml_real_traz_so_pcar3():
     p = carregar_parametros_precos()
     assert [d for t, d in p.eventos_retorno_suspeito if t == "PCAR3"] == [date(2023, 8, 23)]
-    assert [d for t, d in p.eventos_retorno_suspeito if t == "NATU3"] == [
-        date(2025, 6, 27), date(2025, 6, 30), date(2025, 7, 1), date(2025, 7, 2),
-    ]
-    assert len(p.eventos_retorno_suspeito) == 5
+    assert [d for t, d in p.eventos_retorno_suspeito if t == "NATU3"] == []
+    assert len(p.eventos_retorno_suspeito) == 1
 
 
-def test_motivos_do_yaml_real_pcar3_com_1_data_e_natu3_com_4():
+def test_motivos_do_yaml_real_pcar3_com_1_data():
     p = carregar_parametros_precos()
     pcar3 = [(d, m) for t, d, m in p.motivos_eventos_suspeitos if t == "PCAR3"]
     assert pcar3 == [(date(2023, 8, 23), "Cisão do Éxito, sem ajuste no preço")]
-    natu3 = [(d, m) for t, d, m in p.motivos_eventos_suspeitos if t == "NATU3"]
-    assert [d for d, _ in natu3] == [date(2025, 6, 27), date(2025, 6, 30), date(2025, 7, 1), date(2025, 7, 2)]
-    assert {m for _, m in natu3} == {"Preço parado sem volume antes do 1º negócio (NTCO3 → NATU3)"}
-    assert len(p.motivos_eventos_suspeitos) == 5
+    assert len(p.motivos_eventos_suspeitos) == 1
     # mesmos pares de antes: o formato de eventos_retorno_suspeito não mudou
     assert tuple((t, d) for t, d, _ in p.motivos_eventos_suspeitos) == p.eventos_retorno_suspeito
 
@@ -203,20 +198,15 @@ def test_evento_na_data_t_tira_alvo_de_t_menos_1_e_ret_1d_de_t(tmp_path):
 
 # ---------------------------------------------------------------- exclusões: JBSS3
 
-def test_exclusoes_reais_contem_jbss3():
-    assert "JBSS3" in carregar_exclusoes().tickers_excluidos
+def test_exclusoes_reais_nao_contem_mais_jbss3():
+    assert "JBSS3" not in carregar_exclusoes().tickers_excluidos
 
 
-def test_jbss3_fica_excluida_por_decisao_mesmo_com_preco_e_composicao():
+def test_jbss3_entra_com_as_exclusoes_reais():
     cal = DATAS[:3]
     cadastro = cadastro_de([("JBSS3", "22222222000122", "Alimentos", "ON")])
     precos = precos_de("JBSS3", cal, [10, 10, 10])
     composicao = pd.DataFrame({"ticker": ["JBSS3"], "data_inicio": [pd.Timestamp(cal[0])], "data_fim": [pd.NaT]})
 
     uni = montar_universo(cal, cadastro, precos, carregar_exclusoes(), composicao)
-    assert set(uni["motivo"]) == {"excluido_por_decisao"}
-    assert not uni["no_universo"].any()
-
-    # sem a exclusão, o mesmo caso entra: a exclusão é o que tira a JBSS3
-    sem = montar_universo(cal, cadastro, precos, Exclusoes(), composicao)
-    assert set(sem["motivo"]) == {"ok"}
+    assert set(uni["motivo"]) == {"ok"}

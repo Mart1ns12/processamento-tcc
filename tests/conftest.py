@@ -23,13 +23,16 @@ ARQUIVOS = {"precos.csv": "v1-precos", "cadastro.csv": "v1-cadastro",
             "raw_b3_cadastro.csv": "v1-raw_b3_cadastro", "indices.csv": "v1-indices",
             "balancos.csv": "v1-balancos", "acoes_emitidas.csv": "v1-acoes_emitidas",
             "proventos.csv": "v1-proventos", "raw_articles.csv": "raw_articles",
-            "raw_ipe_docs.csv": "v1-raw_ipe_docs"}
+            "raw_ipe_docs.csv": "v1-raw_ipe_docs", "emissores_ticker.csv": "v1-emissores_ticker"}
 
 
 @pytest.fixture
 def banco_teste():
-    """Fábrica: SQLite em memória com tests/dados/*.csv. NUNCA o banco da coleta."""
-    def _criar(alterar: dict | None = None, omitir: frozenset = frozenset()):
+    """Fábrica: SQLite em memória com tests/dados/*.csv. NUNCA o banco da coleta.
+
+    `extras` acrescenta tabelas prontas (DataFrame por nome real), como `v1-composicao_ibov`.
+    """
+    def _criar(alterar: dict | None = None, omitir: frozenset = frozenset(), extras: dict | None = None):
         eng = sqlalchemy.create_engine("sqlite://")
         for arq, tabela in ARQUIVOS.items():
             if tabela in omitir:
@@ -38,5 +41,7 @@ def banco_teste():
             if alterar and tabela in alterar:
                 df = alterar[tabela](df)
             df.to_sql(tabela, eng, index=False)
+        for nome, df in (extras or {}).items():
+            df.to_sql(nome, eng, index=False)
         return lambda sql, params=None: fontes.executar_leitura(sql, params, engine=eng)
     return _criar

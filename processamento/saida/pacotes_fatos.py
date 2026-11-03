@@ -13,6 +13,7 @@ from dataclasses import dataclass
 
 import pandas as pd
 
+from processamento.emissores import cadastro_na_data
 from processamento.fatos.fundamentos import (
     CAMPOS_TRIMESTRAIS,
     DadosFundamentos,
@@ -62,6 +63,7 @@ def dados_fundamentos(ins: Insumos) -> DadosFundamentos:
         acoes_emitidas=ins.acoes_emitidas,
         proventos=ins.proventos,
         mudancas=ins.mudancas,
+        emissores=ins.emissores,
     )
 
 
@@ -116,7 +118,7 @@ def _celulas_do_dia(ins: Insumos, grades: GradesDoDia) -> dict[tuple[str, str], 
 
 
 def _cadastro_por_ticker(ins: Insumos) -> dict[str, dict]:
-    return {linha["ticker"]: linha for linha in ins.cadastro.to_dict("records")}
+    return {linha["ticker"]: linha for linha in cadastro_na_data(ins.cadastro, ins.emissores, ins.t).to_dict("records")}
 
 
 # ---------------------------------------------------------------- acoes
@@ -215,7 +217,7 @@ def montar_resumo_acao(ins: Insumos, grades: GradesDoDia, params_fund: Parametro
     dados = dados_fundamentos(ins)
     cadastro = _cadastro_por_ticker(ins)
     pagos = payout_por_ano(ins.t, dados, ins.exclusoes, params_fund)
-    ligados = ligar_proventos(ins.proventos, ins.cadastro, ins.mudancas)
+    ligados = ligar_proventos(ins.proventos, ins.cadastro, ins.mudancas, ins.emissores)
     balancos = balanco_referencia_no_dia(ins.t, dados, ins.exclusoes).set_index("ticker")
     registros = []
     for ticker in tickers_do_painel(ins.cadastro, ins.exclusoes):
@@ -319,7 +321,7 @@ def montar_proventos(ins: Insumos, params_fund: ParametrosFundamentos, gerado_em
 
     `params_fund` entra para o corte de anos (`anos_historico_proventos`), que o plano exige.
     """
-    ligados = ligar_proventos(ins.proventos, ins.cadastro, ins.mudancas)
+    ligados = ligar_proventos(ins.proventos, ins.cadastro, ins.mudancas, ins.emissores)
     linhas = lista_proventos(ligados, tickers_do_painel(ins.cadastro, ins.exclusoes), ins.t)
     primeiro_ano = ins.t.year - (params_fund.anos_historico_proventos - 1)
     dentro = linhas[pd.to_datetime(linhas["data_com"]).dt.year >= primeiro_ano]

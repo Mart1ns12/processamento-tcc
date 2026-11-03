@@ -50,6 +50,7 @@ from processamento.diagnostico.regras import (
     valores_fora_da_lista,
     veredito_escala,
 )
+from processamento.emissores import cadastro_na_data
 from processamento.exclusoes import Exclusoes, carregar_exclusoes
 from processamento.experimento.relatorio import pct
 from processamento.fatos.fundamentos import (
@@ -457,6 +458,11 @@ def secao_precos(ler, mapa: dict, existentes: set) -> dict:
             continue
         por_ticker.setdefault(tk_txt, []).append(dt_val)
     buracos = buracos_por_ticker(datas_ibov, por_ticker)
+    # Import local: diagnostico/emissores.py importa os helpers deste módulo (evita ciclo).
+    from processamento.diagnostico.emissores import separar_fora_do_pregao
+    fora_real = {tk: b["fora_do_pregao"] for tk, b in buracos.items() if b["fora_do_pregao"]}
+    desconhecidas, conhecidas = separar_fora_do_pregao(
+        fora_real, _entrada(mapa, "precos").get("fora_do_pregao_conhecidas", {}))
     linhas_buracos = []
     for tk in sorted(buracos):
         b = buracos[tk]
@@ -470,8 +476,11 @@ def secao_precos(ler, mapa: dict, existentes: set) -> dict:
         if b["faltando"]:
             secao["notas"].append(
                 f"{tk}: {len(b['faltando'])} pregões faltando (pode ser suspensão)")
-        if b["fora_do_pregao"]:
+        if tk in desconhecidas:
             secao["divergencias"].append(div("preco_fora_do_pregao", nome, tk))
+    if conhecidas:
+        pares = ", ".join(f"{tk} {d.isoformat()}" for tk in sorted(conhecidas) for d in conhecidas[tk])
+        secao["notas"].append(f"linha fora do calendário (conhecida, pedida à coleta): {pares}")
     adicionar_tabela(secao, "Buracos por ticker (só os com problema)",
                      ["ticker", "primeira", "ultima", "n_faltando", "n_fora_do_pregao",
                       "exemplos (5 primeiros)"], linhas_buracos)
@@ -1102,8 +1111,13 @@ def _data_referencia_usada(disponiveis: pd.DataFrame, cnpj: str, ts: pd.Timestam
 
 
 def _suspeitas_em(ts: pd.Timestamp, precos: pd.DataFrame, cadastro: pd.DataFrame, balancos: pd.DataFrame,
-                  acoes: pd.DataFrame, exclusoes: Exclusoes, limite: float, teto_x1000: float) -> list[dict]:
-    """Empresas do painel com quantidade de ações suspeita em `ts` (mesma conta de `calcular_fundamentos_no_dia`)."""
+                  acoes: pd.DataFrame, exclusoes: Exclusoes, limite: float, teto_x1000: float,
+                  emissores: pd.DataFrame | None = None) -> list[dict]:
+    """Empresas do painel com quantidade de ações suspeita em `ts` (mesma conta de `calcular_fundamentos_no_dia`).
+
+    `emissores` (None = sem emissores): o cadastro usado é o da data (`cadastro_na_data`), com o CNPJ do emissor vigente.
+    """
+    cadastro = cadastro_na_data(cadastro, emissores, ts)
     tickers = tickers_do_painel(cadastro, exclusoes)
     _, cnpj_de = mapas_cadastro(cadastro)
     fech = grade_de_precos(precos, [ts], "fechamento", tickers).iloc[0].to_dict()
@@ -1157,8 +1171,9 @@ def secao_quantidade_acoes(ler, mapa: dict, existentes: set, exclusoes: Exclusoe
     cadastro = fontes.ler_tabela("cadastro", ler=ler)
     balancos = fontes.ler_tabela("balancos", ate=ts.date(), ler=ler)
     acoes = fontes.ler_tabela("acoes_emitidas", ler=ler)
+    emissores = fontes.ler_emissores(ler) if _existe(mapa, existentes, "emissores_ticker") else None
 
-    achados = _suspeitas_em(ts, precos, cadastro, balancos, acoes, exclusoes, limite, teto)
+    achados = _suspeitas_em(ts, precos, cadastro, balancos, acoes, exclusoes, limite, teto, emissores)
     if not achados:
         secao["notas"].append(f"nenhuma empresa com quantidade de ações suspeita em {ts.date().isoformat()}")
         return secao
@@ -1225,4 +1240,15 @@ def secao_retornos_suspeitos(ler, mapa: dict, existentes: set) -> dict:
         "do setor; o preço não é corrigido (seção 6)")
     adicionar_tabela(secao, "Retornos diários suspeitos",
                      ["ticker", "data", "aj_anterior", "aj", "retorno_aj", "retorno_fech"], linhas)
+    if _existe(mapa, existentes, "eventos_acoes"):
+        # Import local: diagnostico/emissores.py importa os helpers deste módulo (evita ciclo).
+        from processamento.diagnostico.emissores import eventos_por_pregao
+        por_pregao = eventos_por_pregao(fontes.ler_eventos_acoes(ler), cal)
+        na_data = [[tk, d, por_pregao[(tk, d)]] for tk, d, *_ in linhas if (tk, d) in por_pregao]
+        if na_data:
+            secao["notas"].append(
+                f"{len(na_data)} retornos suspeitos na data de um evento de ações: evento não ajustado no preço "
+                "(pedido à coleta)")
+            adicionar_tabela(secao, "Retornos suspeitos na data de um evento",
+                             ["ticker", "data", "evento"], na_data)
     return secao

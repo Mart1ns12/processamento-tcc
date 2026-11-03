@@ -21,6 +21,7 @@ from dotenv import load_dotenv
 from sqlalchemy import URL, Engine, create_engine, event, text
 from sqlalchemy.exc import SQLAlchemyError
 
+from processamento import emissores as emissores_mod
 from processamento.tickers import (
     aplicar_cortes,
     aplicar_mudancas,
@@ -257,7 +258,14 @@ CONTRATO = {
         ],
         "corte": "data_entrega",
     },
-    "acoes_emitidas": {"datas": ["data_referencia"], "numeros": ["qtd_on", "qtd_pn"], "corte": None},
+    # 03/11/2026: a linha vale em t se data_entrega <= t (D4); a quantidade usada é a base atual (qtd_*_base_atual)
+    "acoes_emitidas": {
+        "datas": ["data_referencia", "data_entrega"],
+        "numeros": ["qtd_on", "qtd_pn", "qtd_on_base_atual", "qtd_pn_base_atual"],
+        "corte": "data_entrega",
+    },
+    "emissores_ticker": {"datas": ["vigencia_inicio", "vigencia_fim"], "numeros": ["ordem", "fator_acoes"], "corte": None},
+    "eventos_acoes": {"datas": ["data_com", "data_aprovacao"], "numeros": ["fator"], "corte": "data_com"},
     "proventos": {
         "datas": ["data_com", "data_pagamento"],
         "numeros": ["valor_por_acao"],
@@ -276,7 +284,7 @@ TABELAS_COM_TICKER = {"precos", "proventos", "noticias"}
 # Coluna de data de cada tabela com ticker, usada pelo corte da série na troca de ação por BDR (Fase 9)
 COLUNA_DATA_TICKER = {"precos": "data", "proventos": "data_com", "noticias": "data_publicacao"}
 _RE_ISO_FUSO = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})")
-_COLUNAS_TICKER = ("ticker", "ticker_antigo", "ticker_novo")
+_COLUNAS_TICKER = ("ticker", "ticker_antigo", "ticker_novo", "ticker_negociado")
 
 
 def _ler_padrao(sql: str, params: dict | None = None) -> pd.DataFrame:
@@ -713,13 +721,51 @@ def normalizar_cnpj(serie: pd.Series, rotulo: str) -> pd.Series:
     return serie.map(_um)
 
 
+def ler_emissores(ler: Callable[..., pd.DataFrame] | None = None) -> pd.DataFrame:
+    """Lê `v1-emissores_ticker` (03/11/2026): empresa emissora de cada ticker por período.
+
+    Leitura estrita: sem a tabela, ou com vigências sobrepostas do mesmo ticker, levanta ErroLeitura.
+    Não une as mudanças de ticker: a tabela é que descreve as trocas cobertas (`_trocas_cobertas`).
+    """
+    df = ler_tabela("emissores_ticker", ler=ler, unir_mudancas=False)
+    sobrepostas = emissores_mod.sobreposicoes(df)
+    if sobrepostas:
+        raise ErroLeitura(f"v1-emissores_ticker: vigências sobrepostas: {sobrepostas[0]}")
+    return df
+
+
+def ler_eventos_acoes(ler: Callable[..., pd.DataFrame] | None = None) -> pd.DataFrame:
+    """Lê `v1-eventos_acoes` (desdobramentos, bonificações e grupamentos). SÓ diagnóstico, nunca variável."""
+    return ler_tabela("eventos_acoes", ler=ler, unir_mudancas=False)
+
+
+def _trocas_cobertas(
+    mudancas: pd.DataFrame, tipos: dict[str, str], ler: Callable[..., pd.DataFrame] | None
+) -> frozenset[tuple[str, str]]:
+    """(antigo, novo) das trocas de ação por BDR que o `v1-emissores_ticker` descreve (JBSS3 -> JBSS32).
+
+    Lazy: só lê o emissor se alguma troca for de ação por BDR. Assim não consulta a tabela à toa.
+    """
+    trocas = [
+        (a, n)
+        for a, n in zip(mudancas["ticker_antigo"], mudancas["ticker_novo"], strict=True)
+        if isinstance(a, str) and isinstance(n, str) and a != n
+    ]
+    if not any(troca_acao_para_bdr(a, n, tipos) for a, n in trocas):
+        return frozenset()
+    return emissores_mod.trocas_cobertas(ler_emissores(ler))
+
+
 def mudancas_como_dict(
-    mudancas: pd.DataFrame, tipo_de: dict[str, str] | None = None
+    mudancas: pd.DataFrame,
+    tipo_de: dict[str, str] | None = None,
+    cobertas: frozenset[tuple[str, str]] = frozenset(),
 ) -> dict[str, str]:
     """Monta {ticker antigo: ticker novo} de `v1-mudancas_ticker`, sem linhas sem destino.
 
     Troca de ação por BDR fica de fora (não une os históricos; seção 6): `tipo_de` é ticker -> tipo_acao do
-    cadastro; sem ele, vale só a classe do código.
+    cadastro; sem ele, vale só a classe do código. Troca de ação por BDR descrita pelo emissor (`cobertas`)
+    entra: une normalmente.
     """
     antigos = normalizar_ticker(mudancas["ticker_antigo"])
     novos = normalizar_ticker(mudancas["ticker_novo"])
@@ -727,19 +773,22 @@ def mudancas_como_dict(
     return {
         a: n
         for a, n in zip(antigos, novos, strict=True)
-        if isinstance(a, str) and isinstance(n, str) and a != n and not troca_acao_para_bdr(a, n, tipos)
+        if isinstance(a, str) and isinstance(n, str) and a != n
+        and (not troca_acao_para_bdr(a, n, tipos) or (a, n) in cobertas)
     }
 
 
 def ler_mudancas(ler: Callable[..., pd.DataFrame] | None = None) -> dict[str, str]:
     """Mapa de união dos históricos (antigo -> novo) lido do banco, sem as trocas de ação por BDR.
 
+    Troca de ação por BDR que o `v1-emissores_ticker` descreve entra (ver `_trocas_cobertas`).
     Lê o cadastro só quando há mudanças (o tipo BDR vem dele).
     """
     mudancas = ler_tabela("mudancas_ticker", ler=ler, unir_mudancas=False)
     if mudancas.empty:
         return {}
-    return mudancas_como_dict(mudancas, _tipo_de(ler_tabela("cadastro", ler=ler)))
+    tipos = _tipo_de(ler_tabela("cadastro", ler=ler))
+    return mudancas_como_dict(mudancas, tipos, _trocas_cobertas(mudancas, tipos, ler))
 
 
 def _tipo_de(cadastro: pd.DataFrame) -> dict[str, str]:
@@ -751,13 +800,15 @@ def _tipo_de(cadastro: pd.DataFrame) -> dict[str, str]:
 def ler_cortes_bdr(ler: Callable[..., pd.DataFrame] | None = None) -> list[tuple[str, str, date]]:
     """Cortes de série das trocas de ação por BDR com data (Fase 9): (antigo, novo, data_mudanca).
 
-    Lê o cadastro só quando há mudanças (o tipo BDR vem dele), como `ler_mudancas`. Sem recursão:
+    Troca que o `v1-emissores_ticker` descreve não corta (une). Lê o cadastro só quando há mudanças
+    (o tipo BDR vem dele), como `ler_mudancas`. Sem recursão:
     cadastro e mudancas_ticker não estão em `TABELAS_COM_TICKER`, então não chamam esta função.
     """
     mudancas = ler_tabela("mudancas_ticker", ler=ler, unir_mudancas=False)
     if mudancas.empty:
         return []
-    return cortes_acao_para_bdr(mudancas, _tipo_de(ler_tabela("cadastro", ler=ler)))
+    tipos = _tipo_de(ler_tabela("cadastro", ler=ler))
+    return cortes_acao_para_bdr(mudancas, tipos, _trocas_cobertas(mudancas, tipos, ler))
 
 
 def unir_historicos(df: pd.DataFrame, mudancas: dict[str, str], chave: list[str]) -> pd.DataFrame:
@@ -834,14 +885,17 @@ def _mudar_ticker(t, mudancas: dict[str, str]) -> str | None:
 
 
 def ler_composicao(
-    ler: Callable[..., pd.DataFrame] | None = None, existe: bool | None = None
+    ler: Callable[..., pd.DataFrame] | None = None,
+    existe: bool | None = None,
+    emissores: pd.DataFrame | None = None,
 ) -> pd.DataFrame | None:
     """Intervalos de permanência no IBOV de `v1-composicao_ibov`.
 
     Colunas: ticker, data_inicio, data_fim (NaT = ainda vigente), participacao (float) e fonte.
     Devolve None só se a tabela não existe na coleta; tabela existente e vazia devolve um
     DataFrame vazio com essas mesmas colunas. O formato (`intervalos`, `fotos` ou `cadastro`)
-    vem do `fontes.yaml`. Os tickers passam pelas mudanças de código.
+    vem do `fontes.yaml`. Os tickers passam, nesta ordem, pelo emissor (`emissores`: código
+    negociado -> ticker, ex.: JBSS3 -> JBSS32, seção 3.5) e pelas mudanças de código.
     """
     if ler is None:
         ler = _ler_padrao
@@ -855,21 +909,25 @@ def ler_composicao(
         if not existe:
             return None
     mudancas = ler_mudancas(ler)
+    negociado = emissores_mod.ticker_de_negociado(emissores) if emissores is not None else {}
+
+    def _atual(t):
+        """Código atual: primeiro pelo emissor (código negociado), depois pelas mudanças."""
+        return _mudar_ticker(negociado.get(t, t) if isinstance(t, str) else t, mudancas)
+
     if formato == "cadastro":
         cadastro = ler_tabela("cadastro", ler=ler)
         intervalos = intervalos_de_cadastro(cadastro, "data_inicio", "data_fim")
-        intervalos["ticker"] = intervalos["ticker"].map(lambda t: _mudar_ticker(t, mudancas))
+        intervalos["ticker"] = intervalos["ticker"].map(_atual)
     elif formato == "fotos":
         bruto = _selecionar("composicao_ibov", ["data_carteira", "ticker"], [], None, ler)
-        bruto["ticker"] = normalizar_ticker(bruto["ticker"]).map(lambda t: _mudar_ticker(t, mudancas))
+        bruto["ticker"] = normalizar_ticker(bruto["ticker"]).map(_atual)
         intervalos = intervalos_de_fotos(bruto)
     else:
         _conferir_tabela("composicao_ibov", ler)  # coluna faltando vira ErroLeitura legível
         colunas = ["ticker", "data_inicio", "data_fim", "participacao", "fonte"]
         intervalos = _selecionar("composicao_ibov", colunas, [], None, ler)
-        intervalos["ticker"] = normalizar_ticker(intervalos["ticker"]).map(
-            lambda t: _mudar_ticker(t, mudancas)
-        )
+        intervalos["ticker"] = normalizar_ticker(intervalos["ticker"]).map(_atual)
         for c in ("data_inicio", "data_fim"):
             intervalos[c] = pd.to_datetime(intervalos[c]).dt.normalize()
         intervalos["participacao"] = pd.to_numeric(intervalos["participacao"]).astype(float)

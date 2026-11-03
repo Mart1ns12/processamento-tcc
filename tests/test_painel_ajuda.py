@@ -116,12 +116,12 @@ def test_codigo_do_modulo_sem_termos_proibidos_no_painel():
         assert termo not in fonte, termo
 
 
-def test_ajuda_de_retornos_cita_os_dois_eventos_com_motivo_do_yaml_real():
+def test_ajuda_de_retornos_cita_o_evento_com_motivo_do_yaml_real():
+    # NATU3 saiu dos eventos em 03/11/2026 (a coleta trouxe o histórico); fica só o PCAR3
     texto = montar_ajuda(leitores.ler_valores_ajuda(RAIZ_REAL))["saude_retornos"]["texto"]
     assert "Também são tratados como suspeitos, mesmo dentro dos limites" in texto
     assert "PCAR3 (23/08/2023): Cisão do Éxito, sem ajuste no preço." in texto
-    assert ("NATU3 (27/06/2025, 30/06/2025, 01/07/2025, 02/07/2025): "
-            "Preço parado sem volume antes do 1º negócio (NTCO3 → NATU3).") in texto
+    assert "NATU3" not in texto
     assert "sem dados" not in texto
 
 

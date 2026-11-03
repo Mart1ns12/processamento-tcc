@@ -31,6 +31,11 @@ tabelas:
     coluna_data: data
     coluna_entidade: ticker
     zero_proibido: [volume]
+    # Pares (ticker, data) com linha fora do calendário do IBOV, conhecidos e pedidos à coleta (03/11/2026).
+    # A grade de preços descarta essas linhas; o diagnóstico só anota (outro par continua divergência).
+    fora_do_pregao_conhecidas:
+      JBSS32: ["2020-11-20"]
+      NATU3: ["2020-11-20"]
   cadastro:
     nome_real: v1-cadastro
     chave: [ticker]
@@ -49,19 +54,23 @@ tabelas:
   balancos:
     nome_real: v1-balancos
     chave: [cnpj, tipo_documento, data_inicio_periodo, data_fim_periodo]
-    colunas: {cnpj: cnpj, tipo_documento: tipo_documento, data_inicio_periodo: data_inicio_periodo, data_fim_periodo: data_fim_periodo, data_entrega: data_entrega, receita_liquida: receita_liquida, lucro_bruto: lucro_bruto, lucro_liquido: lucro_liquido, patrimonio_liquido: patrimonio_liquido, ebit: ebit, depreciacao_amortizacao: depreciacao_amortizacao, emprestimos_curto_prazo: emprestimos_curto_prazo, emprestimos_longo_prazo: emprestimos_longo_prazo, caixa: caixa, aplicacoes_financeiras: aplicacoes_financeiras}
+    colunas: {cnpj: cnpj, tipo_documento: tipo_documento, data_inicio_periodo: data_inicio_periodo, data_fim_periodo: data_fim_periodo, data_entrega: data_entrega, receita_liquida: receita_liquida, lucro_bruto: lucro_bruto, lucro_liquido: lucro_liquido, patrimonio_liquido: patrimonio_liquido, ebit: ebit, depreciacao_amortizacao: depreciacao_amortizacao, emprestimos_curto_prazo: emprestimos_curto_prazo, emprestimos_longo_prazo: emprestimos_longo_prazo, caixa: caixa, aplicacoes_financeiras: aplicacoes_financeiras, situacao: situacao}
     coluna_data: data_fim_periodo
     coluna_entidade: cnpj
     valores_permitidos:
       tipo_documento: [DFP, ITR]
+      situacao: [ok, ajuste_ifrs17, reapresentado]   # 03/11/2026: todas são versões válidas e entram nas contas
     # ebit, D&A, empréstimos, caixa e aplicações: parciais desde 22/10/2026 (como lucro_bruto);
     # sem lista de vazias conhecidas, a regra geral só acusa se voltarem a ficar 100% vazias
   acoes_emitidas:
     nome_real: v1-acoes_emitidas
     chave: [cnpj, data_referencia]
-    colunas: {cnpj: cnpj, data_referencia: data_referencia, qtd_on: qtd_on, qtd_pn: qtd_pn}
+    # 03/11/2026: data_entrega (D4 pela entrega) e a base atual (qtd_*_base_atual, usada no valor de mercado e no payout)
+    colunas: {cnpj: cnpj, data_referencia: data_referencia, data_entrega: data_entrega, qtd_on: qtd_on, qtd_pn: qtd_pn, qtd_on_base_atual: qtd_on_base_atual, qtd_pn_base_atual: qtd_pn_base_atual, situacao: situacao}
     coluna_data: data_referencia
     coluna_entidade: cnpj
+    valores_permitidos:
+      situacao: [ok, corrigido_escala, corrigido_digito, anulado]
   proventos:
     nome_real: v1-proventos
     chave: [ticker, tipo, data_com]
@@ -103,3 +112,13 @@ auxiliares:
     nome_real: v1-raw_ipe_docs
     chave: [protocolo_entrega]
     colunas: {protocolo_entrega: protocolo_entrega, cnpj: cnpj, categoria: categoria, data_entrega: data_entrega, tipo_apresentacao: tipo_apresentacao, versao: versao, data_referencia: data_referencia}
+  emissores_ticker:           # ticker -> empresa emissora por período (03/11/2026); leitura estrita
+    nome_real: v1-emissores_ticker
+    chave: [ticker, ordem]
+    colunas: {ticker: ticker, ordem: ordem, ticker_negociado: ticker_negociado, cd_cvm: cd_cvm, cnpj: cnpj, empresa: empresa, vigencia_inicio: vigencia_inicio, vigencia_fim: vigencia_fim, fator_acoes: fator_acoes}
+  eventos_acoes:              # desdobramento/bonificação/grupamento (03/11/2026); SÓ diagnóstico, nunca variável
+    nome_real: v1-eventos_acoes
+    chave: [ticker, data_com, tipo, isin_emitido]
+    colunas: {ticker: ticker, data_com: data_com, tipo: tipo, fator: fator, isin: isin, isin_emitido: isin_emitido, cnpj: cnpj, data_aprovacao: data_aprovacao}
+    valores_permitidos:
+      tipo: [DESDOBRAMENTO, BONIFICACAO, GRUPAMENTO]

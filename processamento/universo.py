@@ -12,6 +12,7 @@ from datetime import date
 
 import pandas as pd
 
+from processamento import emissores as emissores_mod
 from processamento.exclusoes import Exclusoes
 from processamento.tickers import classe, tipo_por_classe
 
@@ -60,6 +61,7 @@ def montar_universo(
     precos: pd.DataFrame,
     exclusoes: Exclusoes,
     composicao: pd.DataFrame | None = None,
+    emissores: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """Monta o universo de cada pregão para as ações candidatas.
 
@@ -69,6 +71,8 @@ def montar_universo(
     `composicao_historica` onde a composição cobre o dia; senão, `composicao_atual` (ações do
     cadastro, com as regras de sempre; ticker só da composição fica `fora_da_composicao`).
     Sem composição (None ou vazia), todo o universo é `composicao_atual`.
+    `emissores` (`v1-emissores_ticker`, None = sem emissores): o tipo de cada ticker vale por
+    período (JBSS32 é ON até 08/06/2025 e BDR depois); fora dos períodos, o tipo do cadastro.
     """
     tipos_cadastro = {
         t: _tipo_ou_none(tipo) for t, tipo in zip(cadastro["ticker"], cadastro["tipo_acao"])
@@ -89,6 +93,7 @@ def montar_universo(
             intervalos[t].append((_data_ou_none(ini), _data_ou_none(fim)))
 
     tipo_de = {t: tipos_cadastro.get(t) or tipo_por_classe(classe(t)) for t in candidatos}
+    periodos = emissores_mod.tipos_por_periodo(emissores)
 
     linhas = []
     for pregao in pregoes:
@@ -96,7 +101,14 @@ def montar_universo(
         coberto = _dia_coberto(dia, composicao)
         universo = "composicao_historica" if coberto else "composicao_atual"
         for t in sorted(candidatos):
-            tipo = tipo_de[t]
+            tipo = next(
+                (
+                    tp
+                    for ini, fim, tp in periodos.get(t, ())
+                    if (ini is None or ini <= dia) and (fim is None or fim >= dia)
+                ),
+                tipo_de[t],
+            )
             if coberto:
                 fora = not _na_composicao(dia, intervalos.get(t, []))
             else:

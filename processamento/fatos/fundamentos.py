@@ -15,6 +15,7 @@ from dataclasses import dataclass
 import pandas as pd
 
 from processamento import calendario
+from processamento.emissores import cadastro_na_data
 from processamento.exclusoes import Exclusoes
 from processamento.fatos.precos import (
     HIST,
@@ -470,6 +471,8 @@ class DadosFundamentos:
     """Tabelas já lidas (`fontes.ler_tabela`). `proventos` traz os tickers ORIGINAIS.
 
     `mudancas` é o mapa de troca de ticker, usado para ligar os proventos à empresa.
+    `emissores` (v1-emissores_ticker) dá o CNPJ e o tipo de cada ticker por período (`cadastro_na_data`);
+    None (fixtures antigas) vale só o cadastro.
     """
 
     precos: pd.DataFrame
@@ -478,6 +481,7 @@ class DadosFundamentos:
     acoes_emitidas: pd.DataFrame
     proventos: pd.DataFrame
     mudancas: dict[str, str]
+    emissores: pd.DataFrame | None = None
 
 
 def _grade_do_dia(ts: pd.Timestamp, tickers: list[str], celulas: dict[str, tuple[float, str]]) -> Grade:
@@ -507,16 +511,17 @@ def calcular_fundamentos_no_dia(t, cal, dados: DadosFundamentos, exclusoes: Excl
     a empresa inteira (mesmo CNPJ) sai das medianas de P/L, P/VP e yield. Os valores da própria empresa não mudam.
     """
     ts = pd.Timestamp(t).normalize()
+    cad = cadastro_na_data(dados.cadastro, dados.emissores, ts)
     if ts not in indice_pregoes(cal):
         raise ValueError(f"{t} não é pregão")
 
-    tickers = tickers_do_painel(dados.cadastro, exclusoes)
-    pares = pares_do_painel(dados.cadastro, exclusoes)
-    setor_de, cnpj_de = mapas_cadastro(dados.cadastro)
-    subsetor_de = dict(zip(dados.cadastro["ticker"], dados.cadastro["subsetor"]))
-    tipo_de = dict(zip(dados.cadastro["ticker"], dados.cadastro["tipo_acao"]))
+    tickers = tickers_do_painel(cad, exclusoes)
+    pares = pares_do_painel(cad, exclusoes)
+    setor_de, cnpj_de = mapas_cadastro(cad)
+    subsetor_de = dict(zip(cad["ticker"], cad["subsetor"]))
+    tipo_de = dict(zip(cad["ticker"], cad["tipo_acao"]))
     fech = grade_de_precos(dados.precos, [ts], "fechamento", tickers).iloc[0].to_dict()
-    ligados = ligar_proventos(dados.proventos, dados.cadastro, dados.mudancas)
+    ligados = ligar_proventos(dados.proventos, dados.cadastro, dados.mudancas, dados.emissores)
     disp = acoes_disponiveis(dados.acoes_emitidas, dados.balancos, ts)
     cnpjs_com_classe_paga = {cnpj_de[p] for p in pares if cnpj_de.get(p)}
 
@@ -525,7 +530,7 @@ def calcular_fundamentos_no_dia(t, cal, dados: DadosFundamentos, exclusoes: Excl
     financeira_cnpj: dict[str, bool] = {}
     for cnpj in sorted({cnpj_de[k] for k in tickers if cnpj_de.get(k)}):
         foto = foto_dentro_do_prazo(foto_balanco(dados.balancos, cnpj, ts, exclusoes), ts, params.balanco_idade_max_meses)
-        vm = valor_de_mercado(cnpj, fech, dados.cadastro, tickers, acoes_na_data(disp, cnpj, ts))
+        vm = valor_de_mercado(cnpj, fech, cad, tickers, acoes_na_data(disp, cnpj, ts))
         if cnpj in cnpjs_com_classe_paga:
             pago = total_pago(ligados, disp, cnpj, inicio_janela(ts, params.meses_janela), ts)
         else:
@@ -577,13 +582,14 @@ def calcular_fundamentos_no_dia(t, cal, dados: DadosFundamentos, exclusoes: Excl
 def _cnpjs_com_quantidade_suspeita(ts: pd.Timestamp, dados: DadosFundamentos, exclusoes: Exclusoes,
                                    params: ParametrosFundamentos) -> set[str]:
     """CNPJs do painel cuja quantidade de ações é suspeita em `ts` (mesma conta de `calcular_fundamentos_no_dia`)."""
-    tickers = tickers_do_painel(dados.cadastro, exclusoes)
-    _, cnpj_de = mapas_cadastro(dados.cadastro)
+    cad = cadastro_na_data(dados.cadastro, dados.emissores, ts)
+    tickers = tickers_do_painel(cad, exclusoes)
+    _, cnpj_de = mapas_cadastro(cad)
     fech = grade_de_precos(dados.precos, [ts], "fechamento", tickers).iloc[0].to_dict()
     disp = acoes_disponiveis(dados.acoes_emitidas, dados.balancos, ts)
     suspeitas = set()
     for cnpj in {cnpj_de[k] for k in tickers if cnpj_de.get(k)}:
-        vm = valor_de_mercado(cnpj, fech, dados.cadastro, tickers, acoes_na_data(disp, cnpj, ts))
+        vm = valor_de_mercado(cnpj, fech, cad, tickers, acoes_na_data(disp, cnpj, ts))
         foto = foto_balanco(dados.balancos, cnpj, ts, exclusoes)
         if quantidade_suspeita(vm, foto, params.pvp_minimo_plausivel, params.pvp_maximo_plausivel_x1000):
             suspeitas.add(cnpj)
@@ -629,9 +635,10 @@ def payout_por_ano(t, dados: DadosFundamentos, exclusoes: Exclusoes, params: Par
     com CNPJ e base ok; empresa só com BDR fica sem linhas. Colunas: ticker, ano, valor, status.
     """
     ts = pd.Timestamp(t).normalize()
-    pares = pares_do_painel(dados.cadastro, exclusoes)
-    _, cnpj_de = mapas_cadastro(dados.cadastro)
-    ligados = ligar_proventos(dados.proventos, dados.cadastro, dados.mudancas)
+    cad = cadastro_na_data(dados.cadastro, dados.emissores, ts)
+    pares = pares_do_painel(cad, exclusoes)
+    _, cnpj_de = mapas_cadastro(cad)
+    ligados = ligar_proventos(dados.proventos, dados.cadastro, dados.mudancas, dados.emissores)
     disp = acoes_disponiveis(dados.acoes_emitidas, dados.balancos, ts)
 
     suspeitas = _cnpjs_com_quantidade_suspeita(ts, dados, exclusoes, params)
@@ -660,9 +667,10 @@ def balanco_referencia_no_dia(t, dados: DadosFundamentos, exclusoes: Exclusoes) 
     indisponivel). Sem balanço utilizável, as datas saem None.
     """
     ts = pd.Timestamp(t).normalize()
-    _, cnpj_de = mapas_cadastro(dados.cadastro)
+    cad = cadastro_na_data(dados.cadastro, dados.emissores, ts)
+    _, cnpj_de = mapas_cadastro(cad)
     registros = []
-    for ticker in tickers_do_painel(dados.cadastro, exclusoes):
+    for ticker in tickers_do_painel(cad, exclusoes):
         foto = foto_balanco(dados.balancos, cnpj_de.get(ticker), ts, exclusoes)
         registros.append({
             "ticker": ticker,
@@ -750,12 +758,13 @@ def tabela_trimestral(t, dados: DadosFundamentos, exclusoes: Exclusoes,
     Só entram balanços com `data_entrega` ≤ `t` e proventos com `data_com` ≤ `t`.
     """
     ts = pd.Timestamp(t).normalize()
-    tickers = tickers_do_painel(dados.cadastro, exclusoes)
-    _, cnpj_de = mapas_cadastro(dados.cadastro)
-    subsetor_de = dict(zip(dados.cadastro["ticker"], dados.cadastro["subsetor"]))
-    pares = pares_do_painel(dados.cadastro, exclusoes)
+    cad = cadastro_na_data(dados.cadastro, dados.emissores, ts)
+    tickers = tickers_do_painel(cad, exclusoes)
+    _, cnpj_de = mapas_cadastro(cad)
+    subsetor_de = dict(zip(cad["ticker"], cad["subsetor"]))
+    pares = pares_do_painel(cad, exclusoes)
     cnpjs_com_classe_paga = {cnpj_de[p] for p in pares if cnpj_de.get(p)}
-    ligados = ligar_proventos(dados.proventos, dados.cadastro, dados.mudancas)
+    ligados = ligar_proventos(dados.proventos, dados.cadastro, dados.mudancas, dados.emissores)
     disp = acoes_disponiveis(dados.acoes_emitidas, dados.balancos, ts)
 
     suspeitas = _cnpjs_com_quantidade_suspeita(ts, dados, exclusoes, params)

@@ -24,6 +24,7 @@ import numpy as np
 import pandas as pd
 
 from processamento import calendario, fontes
+from processamento import emissores as emissores_mod
 from processamento.exclusoes import Exclusoes, carregar_exclusoes
 from processamento.experimento.alvo import alvos
 from processamento.experimento.noticias import VERSOES, preparar_noticias
@@ -73,6 +74,7 @@ class DadosExperimento:
     proventos: pd.DataFrame | None = None        # tickers ORIGINAIS (unir_mudancas=False); None = dy_12m vazia
     documentos_cvm: pd.DataFrame | None = None   # v1-raw_ipe_docs; None = fato_relevante_cvm vazia
     exclusoes: Exclusoes | None = None           # cnpjs_sem_balanco (dias_desde_resultado, var_lucro_aa); None = nenhuma
+    emissores: pd.DataFrame | None = None        # v1-emissores_ticker; None = empresa do cadastro em todas as datas
 
 
 def _mascara(modelo: pd.DataFrame, cal: list, tickers: list[str]) -> pd.DataFrame:
@@ -99,13 +101,13 @@ def _juntar(base: pd.DataFrame, longos: list[pd.DataFrame]) -> pd.DataFrame:
     return df
 
 
-def _juntar_por_empresa(base: pd.DataFrame, grades: dict[str, pd.DataFrame]) -> pd.DataFrame:
-    """Encadeia grades pregão × empresa à `base`, em (data, empresa): o mesmo valor para todas as classes."""
+def _juntar_por_empresa(base: pd.DataFrame, grades: dict[str, pd.DataFrame], coluna: str = "empresa") -> pd.DataFrame:
+    """Encadeia grades pregão × empresa à `base`, em (data, `coluna`): o mesmo valor para todas as classes."""
     df = base
     for nome, g in grades.items():
-        longo = (g.rename_axis(index="data", columns="empresa").reset_index()
-                 .melt(id_vars="data", var_name="empresa", value_name=nome))
-        df = df.merge(longo, on=["data", "empresa"], how="left")
+        longo = (g.rename_axis(index="data", columns=coluna).reset_index()
+                 .melt(id_vars="data", var_name=coluna, value_name=nome))
+        df = df.merge(longo, on=["data", coluna], how="left")
     return df
 
 
@@ -142,6 +144,10 @@ def montar_dataset(
     setor_de, cnpj_de, herdados = mapas_por_empresa(tickers, setor_de, cnpj_de, dados.mudancas)
     empresa_de = {t: ligar_a_cnpj(t, cnpj_de, dados.mudancas)[0] or t for t in tickers}
     modelo["empresa"] = modelo["ticker"].map(empresa_de)
+    # CNPJ do emissor vigente em cada data: liga balanços e CVM. Interna; sai antes de COLUNAS_DATASET.
+    modelo["cnpj_emissor"] = emissores_mod.cnpj_por_linha(
+        dados.emissores, modelo["ticker"], modelo["data"], modelo["empresa"]
+    )
     modelo["setor"] = modelo["ticker"].map(setor_de)
     mascara = _mascara(modelo, cal, tickers)
 
@@ -166,16 +172,16 @@ def montar_dataset(
 
     resultado, info_res = dias_de_resultado(dados.balancos, cal, proximo_ao_vivo)
     marcados = pd.MultiIndex.from_frame(resultado[["data", "empresa"]])
-    df["dia_resultado"] = pd.MultiIndex.from_frame(df[["data", "empresa"]]).isin(marcados)
+    df["dia_resultado"] = pd.MultiIndex.from_frame(df[["data", "cnpj_emissor"]]).isin(marcados)
     sem_balanco = (dados.exclusoes or Exclusoes()).cnpjs_sem_balanco
-    empresas = sorted(modelo["empresa"].unique())
+    empresas = sorted(modelo["cnpj_emissor"].unique())
     df = _juntar_por_empresa(df, {
         "dias_desde_resultado": dias_desde_resultado(dados.balancos, cal, empresas, params_fund.balanco_idade_max_meses,
                                                      sem_balanco, proximo_ao_vivo),
         "var_lucro_aa": var_lucro_aa(dados.balancos, cal, empresas, params_fund.balanco_idade_max_meses, sem_balanco),
         "fato_relevante_cvm": fato_relevante_cvm(dados.documentos_cvm, cal, empresas, params.periodos_sem_coleta_cvm,
                                                  proximo_ao_vivo),
-    })
+    }, coluna="cnpj_emissor")
     df["controle_sorteado"] = controle_sorteado(df[["data", "ticker"]], semente)
     cobertura_cvm = inicio_cobertura_cvm(dados.documentos_cvm)
 
@@ -291,7 +297,8 @@ def executar(
     corte_entregas = proximo - timedelta(days=1) if proximo is not None else ate
     exclusoes = carregar_exclusoes()
     cadastro = fontes.ler_tabela("cadastro", ler=ler)
-    composicao = fontes.ler_composicao(ler=ler, existe=existe_composicao)
+    emissores = fontes.ler_emissores(ler)
+    composicao = fontes.ler_composicao(ler=ler, existe=existe_composicao, emissores=emissores)
     dados = DadosExperimento(
         precos=precos,
         cadastro=cadastro,
@@ -301,12 +308,13 @@ def executar(
             com_url_resolvida=True,
         ),
         balancos=fontes.ler_tabela("balancos", ate=corte_entregas, ler=ler),
-        universo=montar_universo(cal, cadastro, precos, exclusoes, composicao),
+        universo=montar_universo(cal, cadastro, precos, exclusoes, composicao, emissores),
         mudancas=fontes.ler_mudancas(ler),
         indices=fontes.ler_tabela("indices", ate=ate, ler=ler),
         proventos=fontes.ler_tabela("proventos", ate=ate, ler=ler, unir_mudancas=False),
         documentos_cvm=fontes.ler_tabela("raw_ipe_docs", ate=corte_entregas, ler=ler),
         exclusoes=exclusoes,
+        emissores=emissores,
     )
     df, info = montar_dataset(
         dados,

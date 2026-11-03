@@ -143,9 +143,10 @@ def secao_historico(ler, mapa: dict, existentes: set, exclusoes: Exclusoes | Non
     if not cal:
         secao["notas"].append("Cobertura do experimento: sem pregão com preço do IBOV")
         return secao
+    emissores = fontes.ler_emissores(ler) if _existe(mapa, existentes, "emissores_ticker") else None
     universo = montar_universo(cal, fontes.ler_tabela("cadastro", ler=ler), precos,
                                exclusoes if exclusoes is not None else carregar_exclusoes(),
-                               fontes.ler_composicao(ler=ler))
+                               fontes.ler_composicao(ler=ler), emissores=emissores)
     linhas = cobertura_por_ano(universo, cal)
     adicionar_tabela(secao, "Cobertura do experimento por ano (universo com a composição, motivo ok)",
                      COLUNAS_COBERTURA, linhas)

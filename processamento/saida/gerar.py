@@ -196,7 +196,7 @@ def gerar(d: date, *, ler=None, pasta_saida: Path | None = None, pasta_modelos: 
 
     @functools.cache
     def universo():
-        return montar_universo(ins.cal, ins.cadastro, ins.precos, ins.exclusoes, ins.composicao)
+        return montar_universo(ins.cal, ins.cadastro, ins.precos, ins.exclusoes, ins.composicao, ins.emissores)
 
     @functools.cache
     def multiplos():
@@ -214,6 +214,7 @@ def gerar(d: date, *, ler=None, pasta_saida: Path | None = None, pasta_modelos: 
             balancos=ins.balancos if ins.balancos_resultado is None else ins.balancos_resultado,
             universo=universo(), mudancas=ins.mudancas, indices=ins.indices,
             proventos=ins.proventos, documentos_cvm=ins.documentos_cvm, exclusoes=ins.exclusoes,
+            emissores=ins.emissores,
         )
         df, info = montar_dataset(dados, ins.cal, versao_noticias="todas", proximo_ao_vivo=d,
                                   params=params_exp, params_precos=params_precos, params_fund=params_fund)

@@ -163,9 +163,7 @@ fase1:
     - ticker: PCAR3
       datas: ["2023-08-23"]
       motivo: "Cisão do Éxito, sem ajuste no preço"
-    - ticker: NATU3
-      datas: ["2025-06-27", "2025-06-30", "2025-07-01", "2025-07-02"]
-      motivo: "Preço parado sem volume antes do 1º negócio (NTCO3 → NATU3)"
+    # NATU3 saiu em 03/11/2026: a coleta trouxe o histórico; os 4 dias de preço parado não existem mais
 # Fase 1: fundamentos e proventos (seções 5 e 6 da especificação; plano da etapa 4).
 fundamentos:
   # bancos, seguradoras e holdings (subsetor do v1-cadastro): margens, EBITDA e endividamento = nao_se_aplica.
@@ -199,9 +197,8 @@ experimento:
   periodos_sem_coleta:
     - {inicio: "2025-01-01", fim: "2025-07-31"}
   # Só para a CVM (fato_relevante_cvm): pregões sem documentos coletados ficam vazios, nunca 0. Não mexe nas notícias.
-  periodos_sem_coleta_cvm:
-    - {inicio: "2023-01-01", fim: "2023-12-31"}
-    - {inicio: "2025-01-01", fim: "2025-07-31"}
+  # Esvaziado em 03/11/2026: a coleta preencheu 2023 e jan–jul/2025. Mecanismo mantido (lista vazia = nenhum período).
+  periodos_sem_coleta_cvm: []
   noticias_mes_fracao_minima: 0.25   # diagnóstico: mês abaixo desta fração da mediana dos 12 meses anteriores gera aviso
   principais:
     origens: ["cvm_ipe"]

@@ -179,12 +179,20 @@ No recorte, o dia só entra com pelo menos 5 linhas com alvo e as duas classes; 
 | Histórico | 2021 em diante, com a lacuna de jan–jul/2025 como limitação, conta como histórico completo. `modelo_oficial` muda antes do treino final, não agora |
 | Medida primária | Ganho de AUC por pregão, modelo 3 − modelo 1, com IC 95% acima de 0. Secundária: top 5 frente ao acaso |
 | Congelado | Logística, configuração final da rodada 001; referências: acaso, volatilidade e XGBoost do ponto de partida |
-| Jan–jul/2025 preenchido depois | Fica vazio no resultado principal; depois do teste, só como sensibilidade |
+| Jan–jul/2025 preenchido depois | **Substituída pela D5 revista (03/11/2026), abaixo.** Texto original: fica vazio no resultado principal; depois do teste, só como sensibilidade |
 | Dataset | Treino no sha `741e781122d0…`, com cópia guardada; o sha do dataset do teste é registrado antes de rodar |
 | Preços reescritos | Comparar a parte de desenvolvimento, nova × congelada, sem abrir o teste, com tolerância 1e-6; acima disso, parar e perguntar |
 | Custos | Bruto como primário; líquido com um custo único definido antes do teste |
 | Eventos depois de 23/06/2026 | Auditar só retornos, antes do treino final. Evento novo gera nova versão e refaz protocolo e busca. Depois de congelar, nada muda: exclusão só como sensibilidade |
 | `liberar_chance` | Continua `false` até o teste ao vivo |
 | Fim do teste final | **Ainda não definido** |
+
+**Decisões do usuário de 03/11/2026 (registradas antes de regenerar o dataset):**
+
+| Tema | Decisão |
+|---|---|
+| D5 revista (dados novos antes do teste final) | Se a coleta preencher jan–jul/2025 (ou outras pendências) **antes** do teste final, regeneramos o dataset e rodamos uma nova rodada do protocolo e da busca, que passa a ser a oficial; as rodadas anteriores continuam no registro. Depois do teste final, dados novos ficam restritos a sensibilidade |
+| Critério 5 com a recarga da WordPress | Fica como está escrito (seção 3; pregões de 2024, seção 7), apesar de a recarga de 2023 a 2025 desfazer a premissa "2023–2024 sem `wordpress`". O relatório registra a mudança de regime |
+| P/VP na rodada 3 | Fica fora (seção 2). A correção do valor de mercado (quantidade na base atual, 03/11/2026) não o traz de volta nesta rodada |
 
 Implementação (02/11/2026): a rotina passa a publicar a família da configuração congelada (`treino.familia_producao: "logistica"`); o modelo logístico é gravado em JSON (`logistica-AAAA-MM.json`, sem pickle), e a configuração da rodada 001 vale sem mudança.

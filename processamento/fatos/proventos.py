@@ -12,6 +12,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from processamento import emissores as emissores_mod
 from processamento.fatos.precos import INDISPONIVEL, OK
 from processamento.tickers import aplicar_mudancas, classe, ligar_a_cnpj, tipo_por_classe
 
@@ -23,13 +24,16 @@ def inicio_janela(t, meses: int) -> pd.Timestamp:
     return pd.Timestamp(t) - pd.DateOffset(months=meses)
 
 
-def ligar_proventos(proventos: pd.DataFrame, cadastro: pd.DataFrame, mudancas: dict[str, str]) -> pd.DataFrame:
+def ligar_proventos(proventos: pd.DataFrame, cadastro: pd.DataFrame, mudancas: dict[str, str],
+                    emissores: pd.DataFrame | None = None) -> pd.DataFrame:
     """Liga cada provento à empresa e marca se ele conta para o ticker atual.
 
     Colunas extras:
     - `ticker_atual`: código após as mudanças de ticker;
-    - `cnpj` e `ligacao`: empresa do código atual (`tickers.ligar_a_cnpj`);
-    - `tipo_classe`: ON, PN, UNIT ou BDR pela classe do ticker ORIGINAL;
+    - `cnpj` e `ligacao`: empresa do código atual (`tickers.ligar_a_cnpj`); com `emissores`
+      (v1-emissores_ticker), a linha vigente na `data_com` do provento dá o CNPJ (`ligacao` = "emissor");
+    - `tipo_classe`: ON, PN, UNIT ou BDR pela classe do ticker ORIGINAL; com `emissores`, se a linha
+      vigente negocia outro código, a classe dele (JBSS3 -> ON);
     - `mesma_classe`: a classe do ticker original é a do ticker atual (ex.: KKKK6 -> KKKK3 não é);
     - `duplicada`: linha trocada, da mesma classe, que colide com provento já lançado no ticker
       atual (mesmo tipo e data_com); mesma regra de `fontes.unir_historicos`;
@@ -46,10 +50,26 @@ def ligar_proventos(proventos: pd.DataFrame, cadastro: pd.DataFrame, mudancas: d
         bool(tr and mc and ((a, tipo, data) in lancados))
         for tr, mc, a, tipo, data in zip(trocada, mesma, atuais, df["tipo"], df["data_com"])
     ]
+    cnpjs = [c for c, _ in ligados]
+    ligacoes = [motivo for _, motivo in ligados]
+    tipos = [tipo_por_classe(classe(t)) for t in df["ticker"]]
+    if emissores is not None and len(emissores) > 0:
+        ind = emissores_mod.indice(emissores)
+        for i, (ticker_atual, data_com) in enumerate(zip(atuais, df["data_com"])):
+            linha = emissores_mod.vigente_em(ind, ticker_atual, data_com)
+            if linha is None:
+                continue
+            if isinstance(linha.get("cnpj"), str) and linha["cnpj"].strip():
+                cnpjs[i], ligacoes[i] = linha["cnpj"], "emissor"
+            negociado = linha.get("ticker_negociado")
+            if isinstance(negociado, str) and negociado != ticker_atual:
+                tipo_negociado = tipo_por_classe(classe(negociado))
+                if tipo_negociado is not None:
+                    tipos[i] = tipo_negociado
     df["ticker_atual"] = atuais
-    df["cnpj"] = [c for c, _ in ligados]
-    df["ligacao"] = [motivo for _, motivo in ligados]
-    df["tipo_classe"] = [tipo_por_classe(classe(t)) for t in df["ticker"]]
+    df["cnpj"] = cnpjs
+    df["ligacao"] = ligacoes
+    df["tipo_classe"] = tipos
     df["mesma_classe"] = pd.Series(mesma, index=df.index, dtype=bool)
     df["duplicada"] = pd.Series(duplicada, index=df.index, dtype=bool)
     df["conta_no_ticker"] = df["mesma_classe"] & ~df["duplicada"]
@@ -98,24 +118,31 @@ def dividend_yield(ligados: pd.DataFrame, ticker: str, tipo_acao: str | None, fe
 def acoes_disponiveis(acoes_emitidas: pd.DataFrame, balancos: pd.DataFrame, t) -> pd.DataFrame:
     """Linhas de ações emitidas já conhecidas em `t` (D4).
 
-    Ações não têm data de entrega: a linha vale em `t` se existir balanço do mesmo CNPJ com
-    data_fim_periodo igual a data_referencia e data_entrega ≤ t.
+    Com a coluna `data_entrega` (leitura real, 03/11/2026): a linha vale em `t` se a própria
+    `data_entrega` ≤ t (NaT nunca vale); `balancos` não é usado. Sem essa coluna, só fixtures antigas
+    (a leitura real sempre traz): a linha vale se existe balanço do mesmo CNPJ com data_fim_periodo
+    igual a data_referencia e data_entrega ≤ t.
     """
     t_ts = pd.Timestamp(t)
-    entregues = balancos[balancos["data_entrega"] <= t_ts]
-    chaves = set(zip(entregues["cnpj"], entregues["data_fim_periodo"]))
-    mascara = pd.Series(
-        [(c, d) in chaves for c, d in zip(acoes_emitidas["cnpj"], acoes_emitidas["data_referencia"])],
-        index=acoes_emitidas.index, dtype=bool,
-    )
+    if "data_entrega" in acoes_emitidas.columns:
+        mascara = acoes_emitidas["data_entrega"] <= t_ts
+    else:
+        entregues = balancos[balancos["data_entrega"] <= t_ts]
+        chaves = set(zip(entregues["cnpj"], entregues["data_fim_periodo"]))
+        mascara = pd.Series(
+            [(c, d) in chaves for c, d in zip(acoes_emitidas["cnpj"], acoes_emitidas["data_referencia"])],
+            index=acoes_emitidas.index, dtype=bool,
+        )
     return acoes_emitidas[mascara].sort_values(["cnpj", "data_referencia"]).reset_index(drop=True)
 
 
 def acoes_na_data(disponiveis: pd.DataFrame, cnpj: str, data) -> tuple[float, float, str]:
     """Quantidades (ON, PN) da empresa na data: a mais recente ≤ data.
 
-    Sem linha anterior à data, usa a de menor data_referencia (fallback, D3). Sem linha da empresa,
-    ou com quantidade NaN, sai indisponível. `qtd_pn` igual a zero é válido.
+    Usa `qtd_on_base_atual`/`qtd_pn_base_atual` quando existem (quantidade na base de hoje, 03/11/2026);
+    senão, `qtd_on`/`qtd_pn` (fixtures antigas). Sem linha anterior à data, usa a de menor
+    data_referencia (fallback, D3). Sem linha da empresa, ou com quantidade NaN (ex.: `anulado`),
+    sai indisponível. `qtd_pn` igual a zero é válido.
     """
     linhas = disponiveis[disponiveis["cnpj"] == cnpj]
     if linhas.empty:
@@ -126,7 +153,9 @@ def acoes_na_data(disponiveis: pd.DataFrame, cnpj: str, data) -> tuple[float, fl
         escolhida = linhas.sort_values("data_referencia").iloc[0]
     else:
         escolhida = anteriores.sort_values("data_referencia").iloc[-1]
-    qtd_on, qtd_pn = escolhida["qtd_on"], escolhida["qtd_pn"]
+    col_on = "qtd_on_base_atual" if "qtd_on_base_atual" in linhas.columns else "qtd_on"
+    col_pn = "qtd_pn_base_atual" if "qtd_pn_base_atual" in linhas.columns else "qtd_pn"
+    qtd_on, qtd_pn = escolhida[col_on], escolhida[col_pn]
     if pd.isna(qtd_on) or pd.isna(qtd_pn):
         return float("nan"), float("nan"), INDISPONIVEL
     return float(qtd_on), float(qtd_pn), OK

@@ -76,10 +76,13 @@ def troca_acao_para_bdr(antigo: str, novo: str, tipo_de: dict[str, str]) -> bool
     return tipo_por_classe(classe(novo)) == "BDR"
 
 
-def cortes_acao_para_bdr(mudancas: pd.DataFrame, tipo_de: dict[str, str]) -> list[tuple[str, str, date]]:
+def cortes_acao_para_bdr(
+    mudancas: pd.DataFrame, tipo_de: dict[str, str], cobertas: frozenset[tuple[str, str]] = frozenset()
+) -> list[tuple[str, str, date]]:
     """Cortes de série (Fase 9): (antigo, novo, data_mudanca) das trocas de ação por BDR com data.
 
     Só entra a troca que `troca_acao_para_bdr` aceita e com `data_mudanca` preenchida; sem data, sem corte.
+    Troca descrita pelo emissor (`cobertas`, de `v1-emissores_ticker`) não corta: a série une.
     """
     cortes = []
     for antigo, novo, data in zip(
@@ -88,6 +91,8 @@ def cortes_acao_para_bdr(mudancas: pd.DataFrame, tipo_de: dict[str, str]) -> lis
         if not isinstance(antigo, str) or not isinstance(novo, str) or antigo == novo:
             continue
         if pd.isna(data):
+            continue
+        if (antigo, novo) in cobertas:
             continue
         if troca_acao_para_bdr(antigo, novo, tipo_de):
             cortes.append((antigo, novo, pd.Timestamp(data).date()))

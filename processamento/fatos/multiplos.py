@@ -2,8 +2,10 @@
 
 Função pura: DataFrames entram, grades saem. Mesmas regras e status de
 `fundamentos.calcular_fundamentos_no_dia`, mas calculados por trechos entre entregas de balanço:
-entre duas entregas do CNPJ, a foto do balanço e as ações emitidas não mudam, então são calculadas
-uma vez por trecho. Ausência é NaN + `status` (nunca 0).
+entre duas entregas do CNPJ (balanço ou ações emitidas), a foto do balanço e as ações emitidas não
+mudam, então são calculadas uma vez por trecho. Os trechos também são cortados nas fronteiras do
+emissor por período (`emissores.trechos`): dentro de um trecho, o CNPJ e o tipo de cada ticker são os mesmos.
+Ausência é NaN + `status` (nunca 0).
 """
 
 from __future__ import annotations
@@ -14,6 +16,7 @@ import math
 import numpy as np
 import pandas as pd
 
+from processamento.emissores import cadastro_na_data, trechos
 from processamento.exclusoes import Exclusoes
 from processamento.fatos.fundamentos import (
     LUCRO_NEGATIVO,
@@ -71,29 +74,17 @@ def _yield_diario(ligados: pd.DataFrame, tickers: list[str], tipo_de: dict, fech
     return valor, status
 
 
-def multiplos_diarios(dados: DadosFundamentos, cal: list, exclusoes: Exclusoes,
-                      params: ParametrosFundamentos, desde=None) -> dict[str, Grade]:
-    """P/L, P/VP e yield de todos os tickers do painel em cada pregão de `cal`.
+def _multiplos_no_trecho(dados: DadosFundamentos, cad: pd.DataFrame, idx: pd.DatetimeIndex, tickers: list[str],
+                         lig: pd.DataFrame, exclusoes: Exclusoes, params: ParametrosFundamentos) -> dict[str, Grade]:
+    """P/L, P/VP e yield dos `tickers` nos pregões de `idx`, com o cadastro `cad` do período (emissor vigente).
 
-    Chaves "pl", "pvp" e "dividend_yield"; cada uma é uma `Grade` pregão × ticker (ordem de
-    `tickers_do_painel`). `desde` (S19): só os pregões com data >= desde; as tabelas continuam
-    inteiras (foto do balanço e janela de 12 meses usam o histórico todo). BDR: P/L, P/VP e yield
-    sempre indisponíveis (D9). Sem CNPJ: P/L e P/VP indisponíveis.
+    `idx` é um trecho de `emissores.trechos`: o cadastro `cad` vale em todo ele.
     """
-    tickers = tickers_do_painel(dados.cadastro, exclusoes)
-    idx = indice_pregoes(cal)
-    if desde is not None:
-        idx = idx[idx >= pd.Timestamp(desde)]
-    if len(idx) == 0:
-        vazio = pd.DataFrame(index=idx, columns=tickers, dtype=float)
-        return {k: Grade(vazio.copy(), vazio.copy().astype(object)) for k in ("pl", "pvp", "dividend_yield")}
-
-    _, cnpj_de = mapas_cadastro(dados.cadastro)
-    tipo_de = dict(zip(dados.cadastro["ticker"], dados.cadastro["tipo_acao"]))
+    _, cnpj_de = mapas_cadastro(cad)
+    tipo_de = dict(zip(cad["ticker"], cad["tipo_acao"]))
     gf = grade_de_precos(dados.precos, list(idx), "fechamento", tickers)
     fech = gf.to_numpy(dtype=float)
     fechs = gf.to_dict("records")  # um dict por pregão: ticker -> fechamento
-    lig = ligar_proventos(dados.proventos, dados.cadastro, dados.mudancas)
 
     dy_valor, dy_status = _yield_diario(lig, tickers, tipo_de, fech, idx, params)
 
@@ -108,10 +99,11 @@ def multiplos_diarios(dados: DadosFundamentos, cal: list, exclusoes: Exclusoes,
             colunas_de_cnpj.setdefault(cnpj, []).append(j)
 
     for cnpj, colunas in sorted(colunas_de_cnpj.items()):
-        cad_c = dados.cadastro[dados.cadastro["cnpj"] == cnpj]
-        entregas = sorted({
-            pd.Timestamp(d) for d in dados.balancos.loc[dados.balancos["cnpj"] == cnpj, "data_entrega"].dropna()
-        })
+        cad_c = cad[cad["cnpj"] == cnpj]
+        datas_entrega = list(dados.balancos.loc[dados.balancos["cnpj"] == cnpj, "data_entrega"].dropna())
+        if "data_entrega" in dados.acoes_emitidas.columns:  # D4 pela entrega das próprias ações (03/11/2026)
+            datas_entrega += list(dados.acoes_emitidas.loc[dados.acoes_emitidas["cnpj"] == cnpj, "data_entrega"].dropna())
+        entregas = sorted({pd.Timestamp(d) for d in datas_entrega})
         cache: dict[int, tuple] = {}
         for i, ts in enumerate(idx):
             trecho = bisect.bisect_right(entregas, ts) - 1
@@ -133,4 +125,34 @@ def multiplos_diarios(dados: DadosFundamentos, cal: list, exclusoes: Exclusoes,
         "pl": _grade(pl_valor, pl_status, idx, tickers),
         "pvp": _grade(pvp_valor, pvp_status, idx, tickers),
         "dividend_yield": _grade(dy_valor, dy_status, idx, tickers),
+    }
+
+
+def multiplos_diarios(dados: DadosFundamentos, cal: list, exclusoes: Exclusoes,
+                      params: ParametrosFundamentos, desde=None) -> dict[str, Grade]:
+    """P/L, P/VP e yield de todos os tickers do painel em cada pregão de `cal`.
+
+    Chaves "pl", "pvp" e "dividend_yield"; cada uma é uma `Grade` pregão × ticker (ordem de
+    `tickers_do_painel`). `desde` (S19): só os pregões com data >= desde; as tabelas continuam
+    inteiras (foto do balanço e janela de 12 meses usam o histórico todo). BDR: P/L, P/VP e yield
+    sempre indisponíveis (D9). Sem CNPJ: P/L e P/VP indisponíveis. O CNPJ e o tipo vêm do emissor
+    vigente em cada trecho (`dados.emissores`); sem emissores, é o cadastro.
+    """
+    tickers = tickers_do_painel(dados.cadastro, exclusoes)
+    idx = indice_pregoes(cal)
+    if desde is not None:
+        idx = idx[idx >= pd.Timestamp(desde)]
+    if len(idx) == 0:
+        vazio = pd.DataFrame(index=idx, columns=tickers, dtype=float)
+        return {k: Grade(vazio.copy(), vazio.copy().astype(object)) for k in ("pl", "pvp", "dividend_yield")}
+
+    lig = ligar_proventos(dados.proventos, dados.cadastro, dados.mudancas, dados.emissores)
+    partes = [
+        _multiplos_no_trecho(dados, cadastro_na_data(dados.cadastro, dados.emissores, sub[0]), sub,
+                             tickers, lig, exclusoes, params)
+        for sub in trechos(idx, dados.emissores)
+    ]
+    return {
+        k: Grade(pd.concat([p[k].valor for p in partes]), pd.concat([p[k].status for p in partes]))
+        for k in ("pl", "pvp", "dividend_yield")
     }
