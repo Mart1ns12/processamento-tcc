@@ -759,3 +759,18 @@ def test_resumo_ignora_cartao_informativo_em_warn():
     sem_flag = {"disponivel": True, "cartoes": [{**cartao, "informativo": False}]}
     r = resumo(HOJE_OK, TRAVA_VAZIA, fluxo(ITEM), LT, sem_flag, TESTES_OK)
     assert [p["alvo"] for p in r["pontos"]] == ["saude-c-indicadores_indisponiveis"]
+
+
+def test_bloco_api_traz_http_e_serie_das_medicoes():
+    r = bloco_api(_situacao(OK_API, MEDICOES_API), 2.0)
+    assert r["http"] == 200
+    assert r["serie"] == [{"em": None, "hhmm": None, "ms": 800, "ok": None},
+                          {"em": None, "hhmm": None, "ms": 1000, "ok": None},
+                          {"em": None, "hhmm": None, "ms": None, "ok": None},
+                          {"em": None, "hhmm": None, "ms": 900, "ok": None}]
+    medicao = {"em": "2026-10-27T10:58:03-03:00", "ms": True, "ok": False}
+    assert bloco_api(_situacao(OK_API, [medicao]), 2.0)["serie"] == [
+        {"em": "2026-10-27T10:58:03-03:00", "hhmm": "10:58", "ms": None, "ok": False}]
+    nao = bloco_api({"configurada": False, "erro_config": "Sem painel.api_url no parametros.yaml.",
+                     "consulta": None, "medicoes": []}, 2.0)
+    assert nao["serie"] == [] and nao["http"] is None

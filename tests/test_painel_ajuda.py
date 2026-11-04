@@ -13,11 +13,13 @@ IDS = {"hoje", "fluxo", "progresso", "coleta", "processamento", "interface", "pa
        "carga_vs_rotina", "linha_tempo", "prazo", "folga", "saude", "saude_contrato",
        "saude_quantidade_acoes", "saude_retornos", "saude_lacunas", "saude_horario_noticias",
        "saude_cobertura", "experimento", "teste_funcionamento", "cadeado", "modelo", "top5_retido",
-       "chance", "modelo_sombra", "grafico", "faixa_acaso", "historico", "testes", "acao_rotina",
+       "historico", "testes", "acao_rotina",
        "acao_carga", "acao_diagnostico", "acao_testes", "api", "banco_api", "tempo_api", "o_que_mudou",
        "dia_atipico", "mercado", "etapas_coleta", "saude_coerencia_mercado", "acao_dia",
        "saude_indicadores_indisponiveis", "coleta_indicadores", "pedidos_coleta", "noticias_ano_origem",
-       "noticias_mes", "diagnostico_divergencias", "diagnostico_relatorio"}
+       "noticias_mes", "diagnostico_divergencias", "diagnostico_relatorio",
+       "agendador", "detalhe_dia", "api_correcoes", "api_pacotes",
+       "experimento_dataset", "experimento_rodadas", "experimento_checklist"}
 CHAVES_FAZER = {"saude_contrato", "saude_quantidade_acoes", "saude_retornos", "saude_lacunas",
                 "saude_horario_noticias", "saude_cobertura", "saude_sem_dados", "saude_sem_diagnostico",
                 "coleta_warn", "coleta_bad", "rotina_falhou", "rotina_parcial", "rotina_interrompida",
@@ -25,7 +27,7 @@ CHAVES_FAZER = {"saude_contrato", "saude_quantidade_acoes", "saude_retornos", "s
                 "trava_abandonada", "api_sem_resposta", "api_banco_fora", "api_lenta", "banco_atrasado",
                 "saude_coerencia_mercado", "dia_atipico_amplo", "dia_atipico_isolado"}
 TERMOS_GLOSSARIO = ["Pregão", "Ibovespa", "Indicador", "Indisponível", "Histórico insuficiente",
-                    "Pacote", "Rodada", "Diagnóstico", "Walk-forward", "Faixa do acaso", "Calibração",
+                    "Pacote", "Rodada", "Diagnóstico", "Walk-forward", "Calibração",
                     "P/L", "P/VP", "Payout", "Dividend yield"]
 PROIBIDAS = ["compre", "oportunidade", "melhores ações", "recomendação", "http", "select"]
 
@@ -143,8 +145,8 @@ def test_ajuda_de_retornos_sem_eventos_nao_fala_de_eventos():
     assert texto.endswith("esses dias voltam a entrar sozinhos.")
 
 
-def test_glossario_tem_15_itens_na_ordem():
-    assert len(GLOSSARIO) == 15
+def test_glossario_tem_14_itens_na_ordem():
+    assert len(GLOSSARIO) == 14
     assert [termo for termo, _ in GLOSSARIO] == TERMOS_GLOSSARIO
 
 

@@ -14,7 +14,6 @@ from processamento.calendario import SP
 from processamento.painel import relatorios
 from processamento.painel.relatorios import (
     analisar_log_rotina,
-    caminho_ultimo_relatorio,
     ler_diagnostico,
     ler_experimento,
     ler_logs_rotina,
@@ -170,50 +169,26 @@ def test_experimento_resumo(tmp_path):
     raiz = montar_raiz(tmp_path)
     resultado = ler_experimento(raiz, PARAMS)
 
+    assert set(resultado) == {"situacao_modelo", "top_publicado", "modelo_em_uso", "n_meta", "registros", "trava_teste_final"}
     assert resultado["situacao_modelo"] == "provisório"
     assert resultado["top_publicado"] is False
-    assert resultado["mostrar_aviso"] is True
     assert resultado["trava_teste_final"]["estado"] == "ativa"
     assert resultado["n_meta"] == 3
 
     assert resultado["modelo_em_uso"] == {
         "arquivo": "xgb-2026-06.meta.json",
         "mes": "2026-06",
+        "familia": "xgb",
         "modelo": "3",
+        "versao_preparacao": None,
+        "versao_noticias": None,
         "provisorio": True,
         "periodo_treino": {"inicio": "2024-01-02", "fim": "2026-06-19"},
         "n_linhas_treino": 45765,
         "gerado_em": "2026-10-24T18:42:20-03:00",
-        "auc_medio_pregao": 0.5174,
-        "acerto_top5": 0.5023,
-        "calibracao_aprovada": True,
-        "chance_exibida": False,
+        "dataset": None,
         "aviso": "modelo provisório: treinado com ~1 ano; só teste de funcionamento",
     }
-    assert resultado["modelo_sombra"]["arquivo"] == "xgb-m1-2026-06.meta.json"
-    assert resultado["modelo_sombra"]["calibracao_aprovada"] is None
-
-    dev = resultado["desenvolvimento"]
-    assert dev["disponivel"] is True
-    assert dev["pasta"] == "dev-2026-10-23"
-    assert dev["modo"] == "desenvolvimento"
-    assert dev["aviso_funcionamento"] is True
-    assert dev["gerado_em"] == "2026-10-24T18:42:18-03:00"
-    assert dev["periodo"]["n_pregoes"] == 616
-    assert dev["acaso_top5"] == {"media": 0.4811, "faixa": [0.4638, 0.4987]}
-    assert dev["modelos"] == [
-        {"nome": "modelo_3", "rotulo": "Modelo 3 (com notícias)", "auc_medio_pregao": 0.5174,
-         "acerto_top5": 0.5023, "ic_top5": [0.4836, 0.5204]},
-        {"nome": "modelo_1", "rotulo": "Modelo 1 (sem notícias)", "auc_medio_pregao": 0.5145,
-         "acerto_top5": 0.5088, "ic_top5": [0.4894, 0.5276]},
-        {"nome": "logistica", "rotulo": "Regressão logística", "auc_medio_pregao": 0.5218,
-         "acerto_top5": 0.5305, "ic_top5": [0.5117, 0.5488]},
-        {"nome": "volatilidade", "rotulo": "Regra da volatilidade", "auc_medio_pregao": 0.5175,
-         "acerto_top5": 0.5056, "ic_top5": [0.4847, 0.5268]},
-    ]
-    assert dev["veredito"] == "No top 5, o modelo 3 ficou acima do acaso, mas não superou a regra da volatilidade nem a logística."
-    assert dev["calibracao"] == {"ece": 0.0157, "aprovada": True, "chance_exibida": False}
-    assert dev["tem_relatorio"] is True
 
     assert resultado["registros"] == {"tops": 1, "resultados": 1, "ultimo_top": "2026-10-23"}
 
@@ -223,7 +198,6 @@ def test_experimento_modelo_oficial_continua_provisorio(tmp_path):
     resultado = ler_experimento(raiz, _com(modelo_oficial=True))
     assert resultado["situacao_modelo"] == "provisório"
     assert resultado["top_publicado"] is True
-    assert resultado["mostrar_aviso"] is True
 
 
 def test_experimento_publicar_provisorio(tmp_path):
@@ -257,17 +231,13 @@ def test_trava_teste_final_direto(tmp_path):
     assert set(trava) >= {"inicio", "fim", "liberado"}
 
 
-def test_experimento_sem_modelos_e_sem_treino(tmp_path):
+def test_experimento_sem_modelos(tmp_path):
     raiz = montar_raiz(tmp_path)
     shutil.rmtree(raiz / "modelos")
-    shutil.rmtree(raiz / "saida" / "experimento")
 
     resultado = ler_experimento(raiz, PARAMS)
     assert resultado["modelo_em_uso"] is None
-    assert resultado["modelo_sombra"] is None
-    assert resultado["desenvolvimento"]["disponivel"] is False
     assert resultado["n_meta"] == 0
-    assert caminho_ultimo_relatorio(raiz) is None
 
 
 def test_experimento_meta_quebrado_nao_levanta(tmp_path):
@@ -276,12 +246,6 @@ def test_experimento_meta_quebrado_nao_levanta(tmp_path):
     resultado = ler_experimento(raiz, PARAMS)
     assert resultado["modelo_em_uso"] is None
     assert resultado["situacao_modelo"] == "provisório"
-
-
-def test_caminho_ultimo_relatorio(tmp_path):
-    raiz = montar_raiz(tmp_path)
-    assert caminho_ultimo_relatorio(raiz) == raiz / "saida/experimento/treino/dev-2026-10-23/relatorio.md"
-    assert caminho_ultimo_relatorio(tmp_path / "sem_raiz") is None
 
 
 # ---------------------------------------------------------------- último pytest
@@ -416,12 +380,16 @@ def test_duracao_ultima_acao_e_duracoes_painel(tmp_path):
 def test_experimento_com_familia_logistica_le_as_metas_da_logistica(tmp_path):
     raiz = montar_raiz(tmp_path)
     shutil.copy(raiz / "modelos" / "xgb-2026-06.meta.json", raiz / "modelos" / "logistica-2026-06.meta.json")
-    shutil.copy(raiz / "modelos" / "xgb-m1-2026-06.meta.json", raiz / "modelos" / "logistica-m1-2026-06.meta.json")
 
     com_logistica = ler_experimento(raiz, _com(familia_producao="logistica"))
     assert com_logistica["modelo_em_uso"]["arquivo"] == "logistica-2026-06.meta.json"
-    assert com_logistica["modelo_sombra"]["arquivo"] == "logistica-m1-2026-06.meta.json"
+    assert com_logistica["modelo_em_uso"]["familia"] == "logistica"
     assert ler_experimento(raiz, PARAMS)["modelo_em_uso"]["arquivo"] == "xgb-2026-06.meta.json"
+
+    # a sombra "logistica-m1-..." não é a meta da família principal
+    (raiz / "modelos" / "logistica-2026-06.meta.json").unlink()
+    shutil.copy(raiz / "modelos" / "xgb-m1-2026-06.meta.json", raiz / "modelos" / "logistica-m1-2026-06.meta.json")
+    assert ler_experimento(raiz, _com(familia_producao="logistica"))["modelo_em_uso"] is None
 
 
 # ---------------------------------------------------------------- tempos e médias das etapas do dia

@@ -376,20 +376,35 @@ def _ponto_api(nivel: str, texto: str, chave: str) -> dict:
     return {"nivel": nivel, "texto": texto, "chave": chave}
 
 
+def _serie_api(medicoes: list[dict]) -> list[dict]:
+    """Medições para o gráfico: em (texto), hhmm (São Paulo), ms (int ou None) e ok (bool ou None)."""
+    serie = []
+    for m in medicoes:
+        hora = _sp(m.get("em"))
+        serie.append({"em": m.get("em") if isinstance(m.get("em"), str) else None,
+                      "hhmm": None if hora is None else f"{hora:%H:%M}",
+                      "ms": m.get("ms") if _inteiro(m.get("ms")) else None,
+                      "ok": m.get("ok") if isinstance(m.get("ok"), bool) else None})
+    return serie
+
+
 def bloco_api(situacao: object, limite_s: object) -> dict:
     """Bloco "API": se o serviço respondeu, se o banco dele respondeu e quanto tempo a resposta levou."""
     s = _dic(situacao)
     limite = limite_s if _real(limite_s) else None
     medicoes = [m for m in s.get("medicoes") or [] if isinstance(m, dict)]
     tempo = resumo_tempos(medicoes, limite)
+    serie = _serie_api(medicoes)
     if s.get("configurada") is not True:
         return {"configurada": False, "estado": "idle", "titulo": "Não configurada", "status": None, "banco": None,
                 "ultima_publicacao": None, "consultado_em": None, "tempo": tempo,
-                "linhas": [s.get("erro_config") or "API não configurada."], "pontos": []}
+                "linhas": [s.get("erro_config") or "API não configurada."], "pontos": [],
+                "http": None, "serie": []}
     consulta = s.get("consulta")
     if not isinstance(consulta, dict):
         return {"configurada": True, "estado": "idle", "titulo": "sem dados", "status": None, "banco": None,
-                "ultima_publicacao": None, "consultado_em": None, "tempo": tempo, "linhas": [], "pontos": []}
+                "ultima_publicacao": None, "consultado_em": None, "tempo": tempo, "linhas": [], "pontos": [],
+                "http": None, "serie": serie}
 
     hora = _sp(s.get("consultado_em"))
     ultima = _data_de(consulta.get("ultima_publicacao"))
@@ -426,7 +441,7 @@ def bloco_api(situacao: object, limite_s: object) -> dict:
     return {"configurada": True, "estado": estado, "titulo": titulo, "status": status, "banco": banco,
             "ultima_publicacao": None if ultima is None else ultima.isoformat(),
             "consultado_em": None if hora is None else f"{hora:%H:%M:%S}", "tempo": tempo,
-            "linhas": linhas, "pontos": pontos}
+            "linhas": linhas, "pontos": pontos, "http": http, "serie": serie}
 
 
 def bloco_banco(situacao: object, esperado: object, pregao: object) -> dict:

@@ -21,6 +21,8 @@ RE_KPI_NOTICIAS = re.compile(r"^(\d+) linhas = (\d+) artigos")
 RE_DATA = re.compile(r"\d{4}-\d{2}-\d{2}")
 MOTIVO_SEM_SECAO = "Seção não encontrada no diagnóstico."
 MOTIVO_SEM_TABELA = "Tabela não encontrada na seção."
+TABELA_MES_ORIGEM = "Artigos por mês e origem (artigos distintos)"
+FALTA_GOOGLE = "A tabela por mês e origem do diagnóstico não tem a coluna google_news."
 
 
 # ---------------------------------------------------------------- auxiliares
@@ -188,9 +190,33 @@ def noticias_ano_origem(docs_md: Path) -> dict:
             "fonte": f"Seção {numero}: {titulo} · artigos distintos"}
 
 
+def _google_por_mes(corpo: list[str], meses: list[dict], secao: str) -> tuple[bool, str | None, dict | None, list[str]]:
+    """(serie_completa, falta, google, origens) da tabela por mês e origem (§15).
+
+    Tabela ausente (diagnóstico antigo) = série incompleta, como antes. Sem a coluna google_news = sem Google.
+    """
+    tabela = tabela_md(corpo, TABELA_MES_ORIGEM)
+    if tabela is None:
+        return False, FALTA_SERIE, None, []
+    origens = [coluna for coluna in (tabela[0] if tabela else {}) if coluna != "mes"]
+    if "google_news" not in origens:
+        return True, FALTA_GOOGLE, None, origens
+    estado_do_mes = {m["mes"]: m["estado"] for m in meses}
+    por_mes = []
+    for linha in tabela:
+        mes = linha.get("mes", "")
+        por_mes.append({"mes": mes, "mes_texto": _data_br(mes), "artigos": _int(linha.get("google_news", "")),
+                        "estado": estado_do_mes.get(mes)})
+    valores = [m["artigos"] for m in por_mes if m["artigos"] is not None]
+    google = {"origem": "google_news", "rotulo": ROTULOS_ORIGEM["google_news"], "meses": por_mes,
+              "maximo": max(valores) if valores else None, "fonte": f"{secao} · {TABELA_MES_ORIGEM}"}
+    return True, None, google, origens
+
+
 def noticias_mes(docs_md: Path) -> dict:
-    """Meses com poucas notícias (§15), com todas as origens somadas."""
-    vazio = {"nota": None, "meses": [], "serie_completa": False, "falta": None, "fonte": None}
+    """Meses com poucas notícias (§15), com todas as origens somadas; e a série mês a mês do Google News."""
+    vazio = {"nota": None, "meses": [], "serie_completa": False, "falta": None, "origens": [], "google": None,
+             "fonte": None}
     lido = ler_md(docs_md)
     if lido is None:
         return {"disponivel": False, "motivo": _motivo(docs_md), **vazio}
@@ -221,8 +247,10 @@ def noticias_mes(docs_md: Path) -> dict:
             estado = "outro"
         meses.append({"mes": mes, "mes_texto": _data_br(mes), "artigos": artigos, "mediana": mediana,
                       "fracao": fracao, "situacao": situacao, "estado": estado})
+    serie_completa, falta, google, origens = _google_por_mes(corpo, meses, f"Seção {numero}: {titulo}")
     return {"disponivel": True, "motivo": None, "nota": notas[0] if notas else None, "meses": meses,
-            "serie_completa": False, "falta": FALTA_SERIE, "fonte": f"Seção {numero}: {titulo}"}
+            "serie_completa": serie_completa, "falta": falta, "origens": origens, "google": google,
+            "fonte": f"Seção {numero}: {titulo}"}
 
 
 def falhas_etapas(docs_md: Path) -> dict:

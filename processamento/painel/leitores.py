@@ -136,7 +136,7 @@ def ler_prazo_rotina(raiz: Path) -> str | None:
 
 
 CHAVES_AJUDA = ("prazo", "prazo_tardio", "inicio_consulta", "intervalo", "limite_historico", "corte_noite",
-                "retorno_min", "retorno_max", "defasagem", "pvp_min", "pvp_max_x1000", "sorteios", "teste_final_inicio",
+                "retorno_min", "retorno_max", "defasagem", "pvp_min", "pvp_max_x1000", "teste_final_inicio",
                 "tempo_limite_api", "atipico_min_acoes", "atipico_retorno", "atipico_ibov", "coerencia_ivvb11",
                 "coerencia_dif", "etapas_conferidas", "eventos_suspeitos")
 
@@ -168,7 +168,7 @@ def ler_valores_ajuda(raiz: Path) -> dict[str, str | None]:
     teste = _secao(treino, "teste_final")
     rmin, rmax = fase1.get("retorno_suspeito_min"), fase1.get("retorno_suspeito_max")
     intervalo, defas = rotina.get("intervalo_minutos"), fase1.get("base_defasagem_max_pregoes")
-    pvp, sorteios = fund.get("pvp_minimo_plausivel"), treino.get("acaso_sorteios")
+    pvp = fund.get("pvp_minimo_plausivel")
     pvp_max_x1000 = fund.get("pvp_maximo_plausivel_x1000")
     painel, checagem = _ler_painel_yaml(raiz), _secao(rotina, "checagem")
     tempo_lim, n_min = painel.get("api_tempo_limite_s"), painel.get("dia_atipico_min_acoes")
@@ -194,7 +194,6 @@ def ler_valores_ajuda(raiz: Path) -> dict[str, str | None]:
         "defasagem": str(defas) if _inteiro(defas) else None,
         "pvp_min": f"{pvp:g}".replace(".", ",") if _numero(pvp) else None,
         "pvp_max_x1000": f"{pvp_max_x1000:g}".replace(".", ",") if _numero(pvp_max_x1000) else None,
-        "sorteios": f"{sorteios:,}".replace(",", ".") if _inteiro(sorteios) else None,
         "teste_final_inicio": tf,
         "tempo_limite_api": f"{tempo_lim:g}".replace(".", ",") + " s" if _numero(tempo_lim) else None,
         "atipico_min_acoes": str(n_min) if _inteiro(n_min) else None,
@@ -268,6 +267,21 @@ def _ler_painel_yaml(raiz: Path) -> dict:
     return dados if isinstance(dados, dict) else {}
 
 
+DIAS_AGENDADOR = ("seg", "ter", "qua", "qui", "sex", "sab", "dom")
+
+
+def _agendador(v: object) -> bool:
+    """{"dias": lista não vazia, sem repetição, de DIAS_AGENDADOR; "hora": "HH:MM"; "descricao" opcional (texto)}."""
+    if not isinstance(v, dict):
+        return False
+    dias, hora, descricao = v.get("dias"), v.get("hora"), v.get("descricao")
+    return (isinstance(dias, list) and bool(dias)
+            and all(isinstance(d, str) and d in DIAS_AGENDADOR for d in dias)
+            and len(set(dias)) == len(dias)
+            and isinstance(hora, str) and RE_HHMM.match(hora) is not None
+            and (descricao is None or isinstance(descricao, str)))
+
+
 # Parâmetros do painel (`painel.yaml` e `rotina.checagem.retorno_maximo_abs` do parametros.yaml) e o validador de cada um.
 PARAMETROS_PAINEL = {
     "api_url": _nao_vazio, "api_timeout_s": _positivo, "api_intervalo_s": _nao_negativo,
@@ -276,7 +290,7 @@ PARAMETROS_PAINEL = {
     "coerencia_ivvb11_min_abs": _positivo, "coerencia_ibov_mediana_dif": _positivo,
     "afetadas_max": _inteiro_positivo, "retorno_dia_abs": _positivo,
     "dia_media_execucoes": _inteiro_positivo, "diagnosticos_manter": _inteiro_positivo,
-    "mercado_pregoes_linha": _inteiro_positivo,
+    "mercado_pregoes_linha": _inteiro_positivo, "agendador": _agendador,
 }
 
 

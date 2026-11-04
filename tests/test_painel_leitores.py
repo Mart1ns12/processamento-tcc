@@ -291,7 +291,7 @@ def test_ler_valores_ajuda_da_fixture(tmp_path):
     assert leitores.ler_valores_ajuda(raiz) == {
         "prazo": "09:45", "prazo_tardio": "12:00", "inicio_consulta": "08:00", "intervalo": "5",
         "limite_historico": "10:00", "corte_noite": "08:00", "retorno_min": "-75%", "retorno_max": "+100%",
-        "defasagem": "5", "pvp_min": "0,05", "pvp_max_x1000": "20", "sorteios": "10.000",
+        "defasagem": "5", "pvp_min": "0,05", "pvp_max_x1000": "20",
         "teste_final_inicio": "23/06/2026",
         "tempo_limite_api": "2 s", "atipico_min_acoes": "5", "atipico_retorno": "30%", "atipico_ibov": "5%",
         "coerencia_ivvb11": "3%", "coerencia_dif": "2%", "etapas_conferidas": "precos, noticias, enriquecimento",
@@ -338,6 +338,7 @@ def test_ler_parametros_painel_real_so_leitura():
     assert p["dir_api"] == "../api-tcc"
     assert p["retorno_dia_abs"] == 0.30
     assert p["dia_atipico_ibov_amplo"] == 0.05
+    assert p["agendador"] is None  # no painel.yaml real o bloco está comentado
 
 
 def test_ler_parametros_painel_invalidos_viram_none(tmp_path):
@@ -357,6 +358,32 @@ def test_ler_parametros_painel_sem_painel_yaml(tmp_path):
     assert all(p[c] is None for c in leitores.PARAMETROS_PAINEL if c != "retorno_dia_abs")
     assert p["retorno_dia_abs"] == 0.30
     assert leitores.ler_valores_ajuda(raiz)["tempo_limite_api"] is None
+
+
+def test_ler_parametros_painel_agendador_valido(tmp_path):
+    raiz = montar_raiz(tmp_path)
+    caminho = raiz / "processamento" / "config" / "painel.yaml"
+    caminho.write_text('agendador:\n  dias: ["seg", "ter"]\n  hora: "07:55"\n  descricao: "rotina"\n', encoding="utf-8")
+    p = leitores.ler_parametros_painel(raiz)
+    assert p["agendador"] == {"dias": ["seg", "ter"], "hora": "07:55", "descricao": "rotina"}
+
+
+def test_ler_parametros_painel_agendador_invalido_vira_none(tmp_path):
+    raiz = montar_raiz(tmp_path)
+    caminho = raiz / "processamento" / "config" / "painel.yaml"
+    casos = ['agendador:\n  dias: ["seg"]\n  hora: 755\n',
+             'agendador:\n  dias: ["seg", "seg"]\n  hora: "07:55"\n',
+             'agendador:\n  dias: ["segunda"]\n  hora: "07:55"\n',
+             'agendador:\n  dias: [["seg"]]\n  hora: "07:55"\n',
+             'agendador: "07:55"\n']
+    for texto in casos:
+        caminho.write_text(texto, encoding="utf-8")
+        assert leitores.ler_parametros_painel(raiz)["agendador"] is None, texto
+
+
+def test_ler_parametros_painel_sem_chave_agendador_vira_none(tmp_path):
+    raiz = montar_raiz(tmp_path)
+    assert leitores.ler_parametros_painel(raiz)["agendador"] is None
 
 
 def test_parametros_yaml_real_continua_valido_para_o_calendario():

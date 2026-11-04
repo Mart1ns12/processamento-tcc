@@ -96,7 +96,6 @@ def test_contem_ids_da_estrutura_nova():
         'id="run"',
         'id="steps"',
         'id="saude-cartoes"',
-        'id="grafico"',
         'id="cal"',
         'id="tema"',
         'id="carga-linha"',
@@ -108,7 +107,6 @@ def test_contem_ids_da_estrutura_nova():
         'id="cadeado-aberto"',
         'id="exp-kv"',
         'id="hist-tabela"',
-        'id="link-relatorio"',
     ]:
         assert trecho in texto, trecho
 
@@ -125,14 +123,9 @@ def test_textos_da_fase_f():
         "Top 5 publicado na interface",
         "Top 5 retido (não enviado à interface)",
         "Teste final trancado",
-        "Escondida até a calibração ser aprovada",
-        "m.chance_exibida",
-        "faixa cinza = acaso (95% dos sorteios)",
-        "Ver relatório completo",
         "Histórico de execuções",
         "Testes automáticos",
         "Saúde dos dados",
-        "Experimento: top 5 com maior chance de superar o Ibovespa",
         "Rodadas registradas no log da rotina",
         "Diagnóstico do banco",
         "Gerar",
@@ -141,13 +134,37 @@ def test_textos_da_fase_f():
         assert trecho in texto, trecho
 
 
-def test_teste_de_funcionamento_com_legenda_fixa_e_selo_em_avaliacao():
+def test_faixa_de_teste_de_funcionamento():
     texto = _pagina()
-    assert "Teste de funcionamento (treino " in texto
-    assert "), não é o resultado do TCC" in texto
-    assert "não é o resultado do TCC" in texto
-    assert "em avaliação" in texto
     assert "TESTE DE FUNCIONAMENTO, NÃO É RESULTADO" in texto
+
+
+def test_experimento_so_operacao():
+    texto = _pagina()
+    for trecho in [
+        'id="exp-modelo"',
+        'id="exp-dataset"',
+        'id="exp-teste-final"',
+        'id="exp-rodadas-lista"',
+        'id="exp-checklist-lista"',
+        "Modelo em produção",
+        "Registro do protocolo",
+        "Antes do teste final",
+        "Pregões acumulados",
+        "experimento_operacao",
+    ]:
+        assert trecho in texto, trecho
+    for proibido in [
+        "/api/relatorio",
+        "renderGrafico",
+        "acerto_top5",
+        "modelo_sombra",
+        "veredito",
+        "chance_exibida",
+        "faixa_acaso",
+        'data-ajuda="grafico"',
+    ]:
+        assert proibido not in texto, proibido
 
 
 def test_sem_destravar_teste_final_pelo_painel():
@@ -239,7 +256,7 @@ def test_seis_abas_com_ancoras_na_ordem():
 
 def test_blocos_na_ordem_das_abas():
     texto = _pagina()
-    ordem = ['id="aba-hoje"', 'id="hoje-situacao"', 'id="hoje-fluxo"', 'id="agora"', 'id="novidades"', 'id="saude"', 'id="mercado"', 'id="dia-atipico"', 'id="aba-coleta"', 'id="coleta-kpis"', 'id="pedidos-card"', 'id="coleta-etapas"', 'id="noticias-ano-card"', 'id="noticias-mes-card"', 'id="aba-diagnostico"', 'id="saude-completa"', 'id="aba-execucoes"', 'id="historico"', 'id="linha-tempo"', 'id="comandos"', 'id="run"', 'id="testes"', 'id="aba-api"', 'id="api-cartao"', 'id="aba-experimento"', 'id="experimento"']
+    ordem = ['id="aba-hoje"', 'id="hoje-situacao"', 'id="hoje-fluxo"', 'id="agora"', 'id="novidades"', 'id="saude"', 'id="mercado"', 'id="dia-atipico"', 'id="aba-coleta"', 'id="coleta-kpis"', 'id="pedidos-card"', 'id="coleta-etapas"', 'id="noticias-ano-card"', 'id="noticias-mes-card"', 'id="aba-diagnostico"', 'id="saude-completa"', 'id="aba-execucoes"', 'id="exec-agendador"', 'id="historico"', 'id="dia-detalhe"', 'id="exec-log"', 'id="testes"', 'id="comandos"', 'id="run"', 'id="linha-tempo"', 'id="hist-lista"', 'id="aba-api"', 'id="api-cartao"', 'id="aba-experimento"', 'id="experimento"', 'id="exp-rodadas"', 'id="exp-checklist"']
     posicoes = [texto.index(trecho) for trecho in ordem]
     assert posicoes == sorted(posicoes)
 
@@ -281,7 +298,7 @@ def test_ids_de_ajuda_batem_com_o_dicionario():
     literais = set(re.findall(r'botaoAjuda\("([a-z0-9_]+)"\)', texto))
     dinamicos = {"saude_" + c[0] for c in _CARTOES} | {"saude_coerencia_mercado", "saude_indicadores_indisponiveis"} | {"acao_" + a for a in ACOES}
     assert estaticos | literais | dinamicos == set(AJUDA)
-    assert len(estaticos) == 23
+    assert len(estaticos) == 29
     assert 'botaoAjuda("saude_" + id)' in texto
     assert 'botaoAjuda("acao_" + id)' in texto
 
@@ -289,7 +306,7 @@ def test_ids_de_ajuda_batem_com_o_dicionario():
 def test_botoes_de_ajuda_estaticos_acessiveis():
     texto = _pagina()
     tags = re.findall(r'<button class="ajuda-btn"[^>]*>', texto)
-    assert len(tags) == 23
+    assert len(tags) == 29
     for tag in tags:
         for trecho in ['type="button"', 'aria-label="Ajuda"', 'aria-expanded="false"', 'aria-controls="ajuda-caixa"', " hidden"]:
             assert trecho in tag, (trecho, tag)
@@ -494,6 +511,60 @@ def test_aba_coleta_ids_e_textos():
         "coleta_falhas",
         "Falhas no histórico: ",
         "Diagnóstico de ",
+    ]:
+        assert trecho in texto, trecho
+
+
+def test_f1_grafico_google_por_mes_presente():
+    texto = _pagina()
+    for trecho in [
+        'id="noticias-mes-grafico"',
+        'id="h-noticias-mes"',
+        'id="noticias-mes-baixos-tit"',
+        "Notícias por mês (Google News)",
+        "Notícias por mês (todas as origens)",
+        "nm.google",
+        "graficoGoogle",
+    ]:
+        assert trecho in texto, trecho
+
+
+def test_f2_execucoes_ids_e_textos():
+    texto = _pagina()
+    for trecho in [
+        'id="agendador-texto"',
+        'id="dia-barras"',
+        'id="exec-log-pre"',
+        'id="hist-tabela"',
+        "Histórico em lista",
+        "Log do último dia completo",
+        "Outras ações",
+        "rotuloDia",
+        "renderDiaDetalhe",
+        "renderLogDia",
+        ".execucoes",
+        ".agendador",
+    ]:
+        assert trecho in texto, trecho
+    for proibido in ["schtasks", "git commit"]:
+        assert proibido not in texto, proibido
+
+
+def test_f3_api_ordem_ids_e_textos():
+    texto = _pagina()
+    ordem = ['id="aba-api"', 'id="api-kpis"', 'id="api-cartao"', 'id="api-correcoes-card"', 'id="api-pacotes-card"', 'id="aba-experimento"']
+    posicoes = [texto.index(trecho) for trecho in ordem]
+    assert posicoes == sorted(posicoes)
+    for trecho in [
+        'id="btn-conferir-api"',
+        "/api/conferir-api",
+        "Conferir a API",
+        "Correções por publicação",
+        "Pacotes do último dia",
+        "graficoTempos",
+        "api_publicacoes",
+        "a.serie",
+        "Math.log10",
     ]:
         assert trecho in texto, trecho
 

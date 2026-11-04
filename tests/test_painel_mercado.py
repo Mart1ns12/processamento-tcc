@@ -292,6 +292,7 @@ def test_ler_dia_conta_empresas_e_status_fora_de_ok(tmp_path):
     dia = ler_dia(tmp_path, "saida", "2026-10-30")
     assert dia["n_empresas"] == 3
     assert dia["status_empresas"] == [["AAAA3", ["lucro_negativo"]], ["BBBB3", ["indisponivel", "nao_se_aplica"]]]
+    assert dia["indisponiveis_empresas"] == [["BBBB3", ["payout_por_ano (2025)", "pvp"]]]
 
 
 def test_cartao_indisponiveis_com_empresas_fora_de_ok(tmp_path):
@@ -301,26 +302,24 @@ def test_cartao_indisponiveis_com_empresas_fora_de_ok(tmp_path):
         "id": "indicadores_indisponiveis",
         "titulo": "Indicadores indisponíveis",
         "farol": "warn",
-        "numero": "2 de 3 empresas",
-        "texto": ("Empresas com algum indicador fora de ok no pregão de 30/10/2026: indisponível 1, "
-                  "lucro negativo 1, não se aplica 1 (uma empresa pode aparecer em mais de um)."),
+        "numero": "1 de 3 empresas",
+        "texto": ("Empresas com algum indicador indisponível no pregão de 30/10/2026 (falta de dado na coleta, balanço antigo, setor pequeno ou regra do BDR). "
+                  "Lucro negativo, não se aplica e histórico insuficiente não entram nesta conta."),
         "fonte": "saida/2026-10-30/mercado_dia.json e resumo_acao.json · pregão de 30/10/2026",
         "informativo": True,
     }
     assert c["afetadas"] == {
         "titulo": "Empresas afetadas",
-        "itens": [{"rotulo": "AAAA3", "detalhe": "lucro negativo"},
-                  {"rotulo": "BBBB3", "detalhe": "indisponível, não se aplica"}],
-        "total": 2,
+        "itens": [{"rotulo": "BBBB3", "detalhe": "payout_por_ano (2025), pvp"}],
+        "total": 1,
     }
 
 
 def test_cartao_indisponiveis_sem_pregao_usa_o_ultimo_processado(tmp_path):
     _grava_empresas(tmp_path, "2026-10-30", None, EMPRESAS_30[:1])
     c = cartao_indisponiveis(ler_dia(tmp_path, "saida", "2026-10-30"))
-    assert c["cartao"]["texto"] == (
-        "Empresas com algum indicador fora de ok no último pregão processado: lucro negativo 1 "
-        "(uma empresa pode aparecer em mais de um).")
+    assert c["cartao"]["farol"] == "ok"
+    assert c["cartao"]["texto"] == "Nenhuma empresa com indicador indisponível no último pregão processado."
     assert c["cartao"]["fonte"] == "saida/2026-10-30/mercado_dia.json e resumo_acao.json"
 
 
@@ -329,9 +328,20 @@ def test_cartao_indisponiveis_sem_nenhum_status_fora_de_ok_fica_ok(tmp_path):
     c = cartao_indisponiveis(ler_dia(tmp_path, "saida", "2026-10-30"))
     assert c["cartao"]["farol"] == "ok"
     assert c["cartao"]["numero"] == "0 de 1 empresas"
-    assert c["cartao"]["texto"] == "Todos os indicadores das 1 empresas estão em ok no pregão de 30/10/2026."
+    assert c["cartao"]["texto"] == "Nenhuma empresa com indicador indisponível no pregão de 30/10/2026."
     assert c["cartao"]["informativo"] is True
     assert c["afetadas"] is None
+
+
+def test_indisponiveis_nomeia_caminho_com_ponto(tmp_path):
+    registro = {"ticker": "DDDD3",
+                "pl": {"valor": None, "status": "indisponivel",
+                       "setor": {"valor": None, "status": "indisponivel"}},
+                "endividamento": {"dl_pl": {"valor": None, "status": "indisponivel"}},
+                "margem_bruta": {"valor": None, "status": "nao_se_aplica"}}
+    _grava_empresas(tmp_path, "2026-10-30", "2026-10-30", [registro])
+    dia = ler_dia(tmp_path, "saida", "2026-10-30")
+    assert dia["indisponiveis_empresas"] == [["DDDD3", ["endividamento.dl_pl", "pl", "pl.setor"]]]
 
 
 def test_cartao_indisponiveis_pregao_23_fixture_raiz(tmp_path):
@@ -347,6 +357,7 @@ def test_cartao_indisponiveis_sem_resumo_acao_vira_sem_dados(pregao):
     dia = ler_dia(pregao, "saida", "2026-10-27")
     assert dia["n_empresas"] is None
     assert dia["status_empresas"] == []
+    assert dia["indisponiveis_empresas"] == []
     c = cartao_indisponiveis(dia)
     assert c["cartao"]["farol"] == "idle"
     assert c["cartao"]["numero"] == "sem dados"
@@ -359,6 +370,7 @@ def test_cartao_indisponiveis_sem_dia_de_referencia_vira_sem_dados(tmp_path):
     dia = ler_dia(tmp_path, "saida", None)
     assert dia["n_empresas"] is None
     assert dia["status_empresas"] == []
+    assert dia["indisponiveis_empresas"] == []
     c = cartao_indisponiveis(dia)
     assert c["cartao"]["farol"] == "idle"
     assert c["cartao"]["texto"] == dia["motivo"]

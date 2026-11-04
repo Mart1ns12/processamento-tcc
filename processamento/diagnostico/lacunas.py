@@ -1,5 +1,5 @@
 """Lacunas nas séries de preços e índices (nota do diagnóstico; seção 6 da especificação, "Base velha"),
-e meses com poucas notícias (`secao_noticias_por_mes`).
+e meses com poucas notícias e artigos por mês e origem (`secao_noticias_por_mes`).
 
 Só notas e tabelas (não é divergência). Lê só por `fontes.ler_tabela` / `fontes.ler_noticias` (camada de leitura, sessão só leitura).
 """
@@ -24,6 +24,7 @@ REGRA_INDICES = ("IDIV, SMLL e IFIX: mais de {n} pregões, inclusive no fim; CDI
 REFERENCIA_NOTICIAS = 12        # meses anteriores que formam a mediana de referência
 MINIMO_REFERENCIA_NOTICIAS = 6  # abaixo disso o mês não é avaliado
 COLUNAS_NOTICIAS = ["mes", "artigos", "mediana_referencia", "situacao"]
+TABELA_MES_ORIGEM = "Artigos por mês e origem (artigos distintos)"
 
 
 def lacunas_em_pregoes(datas_com_valor, cal: list, minimo: int,
@@ -176,6 +177,22 @@ def meses_com_poucas_noticias(contagem: dict[str, int], fracao: float, periodos:
     return baixos, rever
 
 
+def artigos_por_mes_origem(validos: pd.DataFrame) -> tuple[list[str], list[list]]:
+    """Colunas ["mes", <origens em ordem alfabética>] e uma linha por mês, do primeiro ao último (sem artigo = 0).
+
+    `validos`: colunas mes (pd.Period mensal), id, origem. Conta ids distintos por (mes, origem).
+    """
+    if validos.empty:
+        return [], []
+    origem = validos["origem"].fillna("sem_origem").astype(str).replace("", "sem_origem")
+    base = validos.assign(origem=origem)
+    cont = base.groupby(["mes", "origem"])["id"].nunique()
+    origens = sorted(set(base["origem"]))
+    meses = pd.period_range(base["mes"].min(), base["mes"].max(), freq="M")
+    linhas = [[str(m)] + [int(cont.get((m, o), 0)) for o in origens] for m in meses]
+    return ["mes", *origens], linhas
+
+
 def secao_noticias_por_mes(ler, mapa: dict, existentes: set) -> dict:
     """Meses com poucas notícias (nota e tabela; nunca divergência). Parâmetros em `experimento` (parametros.yaml)."""
     secao = nova_secao("Notícias por mês")
@@ -186,7 +203,7 @@ def secao_noticias_por_mes(ler, mapa: dict, existentes: set) -> dict:
     fracao = params.noticias_mes_fracao_minima
     noticias = fontes.ler_noticias(ler=ler)
     meses = pd.to_datetime(noticias["data_publicacao"], errors="coerce").dt.to_period("M")
-    validos = pd.DataFrame({"mes": meses, "id": noticias["id"]}).dropna(subset=["mes"])
+    validos = pd.DataFrame({"mes": meses, "id": noticias["id"], "origem": noticias["origem"]}).dropna(subset=["mes"])
     contagem = {str(m): int(n) for m, n in validos.groupby("mes")["id"].nunique().items()}
     baixos, rever, avaliados = _avaliar_meses_noticias(
         contagem, fracao, params.periodos_sem_coleta, REFERENCIA_NOTICIAS, MINIMO_REFERENCIA_NOTICIAS)
@@ -199,7 +216,10 @@ def secao_noticias_por_mes(ler, mapa: dict, existentes: set) -> dict:
                          [[l[c] for c in COLUNAS_NOTICIAS] for l in baixos])
     else:
         secao["notas"].append(f"nenhum mês abaixo de {limite} da mediana dos meses anteriores")
-    fora = sum(1 for l in baixos if l["situacao"].startswith("rever: fora"))
+    colunas_mo, linhas_mo = artigos_por_mes_origem(validos)
+    if linhas_mo:
+        adicionar_tabela(secao, TABELA_MES_ORIGEM, colunas_mo, linhas_mo)
+    fora =sum(1 for l in baixos if l["situacao"].startswith("rever: fora"))
     if fora:
         secao["notas"].append(
             f"Atenção: {fora} mês(es) com poucas notícias fora de experimento.periodos_sem_coleta: rever o parâmetro.")

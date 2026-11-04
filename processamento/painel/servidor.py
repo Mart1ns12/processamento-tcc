@@ -19,8 +19,9 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 from processamento.calendario import SP
-from processamento.painel import (acoes, ajuda, aba_coleta, aba_diagnostico, api, dia, leitores, marcos, mercado,
-                                  novidades, pedidos, relatorios, saude, visao)
+from processamento.painel import (acoes, ajuda, aba_api, aba_coleta, aba_diagnostico, aba_execucoes, aba_experimento,
+                                  agendador, api, dia, leitores, marcos, mercado, novidades, pedidos, relatorios,
+                                  saude, visao)
 
 PORTA_PADRAO = 8765
 LIMITE_CORPO = 1024
@@ -213,6 +214,10 @@ def montar_painel(raiz: Path, executor: acoes.Executor, agora: datetime, caminho
     pasta_painel = raiz / params["pasta_logs"] / "painel"
     painel_p = _seguro(leitores.ler_parametros_painel, raiz)
     painel_p = painel_p if "disponivel" not in painel_p else {}
+    logs_dia = _seguro(aba_execucoes.ler_logs_dia, pasta_painel)
+    logs_dia = logs_dia if isinstance(logs_dia, list) else []
+    agend = _seguro(agendador.bloco_agendador, painel_p.get("agendador"), agora, caminho_calendario)
+    exp_v = _seguro(relatorios.ler_experimento, raiz, params)
     valida = leitores.ultima_execucao_valida(itens_diarias)
     d_valida = valida.get("data_referencia") if valida else None
     dados_dia = _seguro(mercado.ler_dia, raiz, params["pasta_saida"], d_valida)
@@ -254,7 +259,7 @@ def montar_painel(raiz: Path, executor: acoes.Executor, agora: datetime, caminho
         "historico": {"diarias": diarias, "completas": completas},
         "etapas": _seguro(relatorios.ler_logs_rotina, raiz / params["pasta_logs"]),
         "saude": _seguro(relatorios.ler_diagnostico, docs_md),
-        "experimento": _seguro(relatorios.ler_experimento, raiz, params),
+        "experimento": exp_v,
         "testes": testes,
         "acao": _seguro(functools.partial(estado_com_marcos, pasta_logs_painel=pasta_painel,
                                          n_media=painel_p.get("dia_media_execucoes"), agora=agora),
@@ -287,6 +292,12 @@ def montar_painel(raiz: Path, executor: acoes.Executor, agora: datetime, caminho
                                raiz / "processamento" / "config" / "pedidos_coleta.yaml", docs_md),
             "diagnostico": _seguro(aba_diagnostico.diagnostico_aba, docs_md, pasta_painel,
                                    saude_base.get("cartoes") or []),
+            "execucoes": _seguro(aba_execucoes.bloco_execucoes, logs_dia),
+            "agendador": agend,
+            "proxima_execucao": agend.get("proxima_texto"),
+            "api_publicacoes": _seguro(aba_api.publicacoes, logs_dia),
+            "experimento_operacao": _seguro(aba_experimento.operacao, raiz, params, exp_v, hoje_iso,
+                                            caminho_calendario),
         },
     }
 
@@ -371,13 +382,6 @@ class _Handler(BaseHTTPRequestHandler):
             self._json(200, estado_com_marcos(
                 srv.executor, _desde(partes.query), pasta_logs_painel=srv.pasta_painel,
                 n_media=leitores.ler_parametros_painel(srv.raiz).get("dia_media_execucoes"), agora=srv.relogio()))
-        elif caminho == "/api/relatorio":
-            arquivo = relatorios.caminho_ultimo_relatorio(srv.raiz)
-            if arquivo is None or not arquivo.is_file():
-                self._json(404, {"erro": "sem relatório"})
-                return
-            texto = arquivo.read_text(encoding="utf-8", errors="replace")
-            self._enviar(200, "text/plain; charset=utf-8", texto.encode("utf-8"))
         elif caminho == "/api/diagnostico-md":
             arquivo = srv.raiz / "docs" / "diagnostico_banco.md"
             if not arquivo.is_file():
@@ -421,8 +425,20 @@ class _Handler(BaseHTTPRequestHandler):
                 self._json(200, {"ok": True})
             else:
                 self._json(409, {"erro": msg})
+        elif caminho == "/api/conferir-api":
+            self._conferir_api()
         else:
             self._json(404, {"erro": "não encontrado"})
+
+    def _conferir_api(self) -> None:
+        """Consulta a API agora (sem esperar api_intervalo_s) e devolve o bloco da API."""
+        srv = self.server
+        painel_p = leitores.ler_parametros_painel(srv.raiz)
+        situacao = srv.monitor.situacao(painel_p, srv.relogio(), forcar=True)
+        if situacao.get("configurada") is not True:
+            self._json(409, {"erro": situacao.get("erro_config") or "API não configurada."})
+            return
+        self._json(200, {"ok": True, "api": visao.bloco_api(situacao, painel_p.get("api_tempo_limite_s"))})
 
     def _iniciar(self, corpo: bytes) -> None:
         srv = self.server

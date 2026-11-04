@@ -142,8 +142,10 @@ class MonitorApi:
         self._consulta: dict | None = None
         self._consultado_em: str | None = None
 
-    def situacao(self, params_painel: dict, agora: datetime) -> dict:
-        """{"configurada","erro_config","timeout_s","consulta","consultado_em","medicoes"}; usa cache por api_intervalo_s (threading.Lock)."""
+    def situacao(self, params_painel: dict, agora: datetime, forcar: bool = False) -> dict:
+        """{"configurada","erro_config","timeout_s","consulta","consultado_em","medicoes"}; usa cache por api_intervalo_s (threading.Lock).
+
+        forcar=True consulta já, ignorando o intervalo (botão Conferir a API)."""
         base, erro = validar_url(params_painel.get("api_url"))
         timeout_s = params_painel.get("api_timeout_s")
         intervalo_s = params_painel.get("api_intervalo_s")
@@ -156,7 +158,7 @@ class MonitorApi:
         arquivo = self._pasta / ARQUIVO_TEMPOS
         with self._lock:
             agora_mono = self._monotonic()
-            if self._ultima_t is None or agora_mono - self._ultima_t >= intervalo_s:
+            if forcar or self._ultima_t is None or agora_mono - self._ultima_t >= intervalo_s:
                 consulta = self._consultar(base, timeout_s)
                 self._ultima_t = agora_mono
                 self._consulta = consulta

@@ -67,10 +67,6 @@ def _registro_mercado(pasta: Path) -> tuple[dict | None, str | None]:
     return reg, erro
 
 
-TEXTO_STATUS = {"indisponivel": "indisponível", "nao_se_aplica": "não se aplica", "lucro_negativo": "lucro negativo",
-                "historico_insuficiente": "histórico insuficiente"}
-
-
 def _status_fora_de_ok(bloco: object, achados: set[str]) -> None:
     """Junta em `achados` os status diferentes de "ok" dos indicadores do bloco (dict com "status" e "valor").
 
@@ -87,6 +83,31 @@ def _status_fora_de_ok(bloco: object, achados: set[str]) -> None:
             _status_fora_de_ok(filho, achados)
 
 
+def _indisponiveis(bloco: object, caminho: list[str], achados: dict[str, set[int]]) -> None:
+    """Junta em `achados` {nome do indicador: anos} dos indicadores com status "indisponivel".
+
+    Nome = chaves do registro até o indicador, com ponto ("pl", "pl.setor", "endividamento.dl_pl"). Item de lista
+    herda o nome da lista; se tiver "ano" inteiro, o ano entra no conjunto.
+    """
+    if isinstance(bloco, dict):
+        if "valor" in bloco and bloco.get("status") == "indisponivel" and caminho:
+            anos = achados.setdefault(".".join(caminho), set())
+            ano = bloco.get("ano")
+            if isinstance(ano, int) and not isinstance(ano, bool):
+                anos.add(ano)
+        for chave, filho in bloco.items():
+            if isinstance(filho, (dict, list)):
+                _indisponiveis(filho, caminho + [str(chave)], achados)
+    elif isinstance(bloco, list):
+        for filho in bloco:
+            _indisponiveis(filho, caminho, achados)
+
+
+def _nomes_indisponiveis(achados: dict[str, set[int]]) -> list[str]:
+    return [f"{nome} ({', '.join(str(a) for a in sorted(anos))})" if anos else nome
+            for nome, anos in sorted(achados.items())]
+
+
 def ler_dia(raiz: Path, pasta_saida: str, d: str | None) -> dict:
     """{"disponivel","motivo","d","data_pregao","ibov","ibov_nivel","usd","ivvb11","smll","retornos","n_empresas",
     "status_empresas","fonte"}.
@@ -96,11 +117,12 @@ def ler_dia(raiz: Path, pasta_saida: str, d: str | None) -> dict:
     resumo_acao: (ticker, rentabilidade.d1.valor) só com status "ok".
     n_empresas: registros com ticker (None se resumo_acao ausente ou ilegível).
     status_empresas: [[ticker, [status diferentes de "ok"]]] só das empresas que têm algum.
+    indisponiveis_empresas: [[ticker, [nomes dos indicadores com status "indisponivel"]]] só das que têm algum.
     disponivel só é True quando o mercado_dia tem um registro. Pasta ou arquivo ausente/quebrado vira motivo.
     """
     vazio = {"disponivel": False, "motivo": None, "d": d, "data_pregao": None, "ibov": None, "ibov_nivel": None,
              "usd": None, "ivvb11": None, "smll": None, "retornos": [], "n_empresas": None, "status_empresas": [],
-             "fonte": None}
+             "indisponiveis_empresas": [], "fonte": None}
     if not isinstance(d, str) or not d:
         return {**vazio, "motivo": "sem dia de referência"}
     pasta = Path(raiz) / pasta_saida / d
@@ -117,7 +139,7 @@ def ler_dia(raiz: Path, pasta_saida: str, d: str | None) -> dict:
     lista = resumo.get("registros") if isinstance(resumo, dict) else None
     empresas = ([x for x in lista if isinstance(x, dict) and isinstance(x.get("ticker"), str)]
                 if isinstance(lista, list) else None)
-    retornos, status_empresas = [], []
+    retornos, status_empresas, indisponiveis_empresas = [], [], []
     for x in empresas or []:
         v = _valor_ok(_sub(x, "rentabilidade", "d1"))
         if v is not None:
@@ -126,6 +148,10 @@ def ler_dia(raiz: Path, pasta_saida: str, d: str | None) -> dict:
         _status_fora_de_ok(x, achados)
         if achados:
             status_empresas.append([x["ticker"], sorted(achados)])
+        indisponiveis: dict[str, set[int]] = {}
+        _indisponiveis(x, [], indisponiveis)
+        if indisponiveis:
+            indisponiveis_empresas.append([x["ticker"], _nomes_indisponiveis(indisponiveis)])
 
     data = reg.get("data_referencia")
     return {
@@ -141,6 +167,7 @@ def ler_dia(raiz: Path, pasta_saida: str, d: str | None) -> dict:
         "retornos": retornos,
         "n_empresas": None if empresas is None else len(empresas),
         "status_empresas": status_empresas,
+        "indisponiveis_empresas": indisponiveis_empresas,
         "fonte": fonte,
     }
 
@@ -323,9 +350,9 @@ def cartao_coerencia(dados: dict, limites: dict) -> dict:
 
 
 def cartao_indisponiveis(dados: dict) -> dict:
-    """Cartão "Indicadores indisponíveis" (sempre informativo): empresas do pregão com algum indicador fora de ok.
+    """Cartão "Indicadores indisponíveis" (sempre informativo): empresas do pregão com algum indicador "indisponivel".
 
-    dados: saída de ler_dia (n_empresas, status_empresas). Devolve {"cartao": {...}, "afetadas": {...} | None}.
+    dados: saída de ler_dia (n_empresas, indisponiveis_empresas). Devolve {"cartao": {...}, "afetadas": {...} | None}.
     """
     n = dados.get("n_empresas")
     data = _data_br(dados.get("data_pregao"))
@@ -338,25 +365,18 @@ def cartao_indisponiveis(dados: dict) -> dict:
                   "texto": dados.get("motivo") or "resumo_acao.json ausente ou ilegível"}
         return {"cartao": cartao, "afetadas": None}
 
-    itens = []
-    contagem: dict[str, int] = {}
-    for ticker, statuses in dados.get("status_empresas") or []:
-        statuses = sorted(statuses)
-        itens.append({"rotulo": ticker, "detalhe": ", ".join(TEXTO_STATUS.get(s, s) for s in statuses)})
-        for s in statuses:
-            contagem[s] = contagem.get(s, 0) + 1
+    itens = [{"rotulo": ticker, "detalhe": ", ".join(nomes)}
+             for ticker, nomes in dados.get("indisponiveis_empresas") or []]
     k = len(itens)
     if k == 0:
         farol = "ok"
         numero = f"0 de {n} empresas"
-        texto = f"Todos os indicadores das {n} empresas estão em ok {quando}."
+        texto = f"Nenhuma empresa com indicador indisponível {quando}."
     else:
-        partes_status = ", ".join(f"{TEXTO_STATUS.get(s, s)} {c}"
-                                  for s, c in sorted(contagem.items(), key=lambda kv: (-kv[1], kv[0])))
         farol = "warn"
         numero = f"{k} de {n} empresas"
-        texto = (f"Empresas com algum indicador fora de ok {quando}: {partes_status} "
-                 "(uma empresa pode aparecer em mais de um).")
+        texto = (f"Empresas com algum indicador indisponível {quando} (falta de dado na coleta, balanço antigo, setor pequeno ou regra do BDR). "
+                 "Lucro negativo, não se aplica e histórico insuficiente não entram nesta conta.")
     cartao = {**base, "farol": farol, "numero": numero, "texto": texto}
     afetadas = {"titulo": "Empresas afetadas", "itens": itens, "total": k} if k else None
     return {"cartao": cartao, "afetadas": afetadas}

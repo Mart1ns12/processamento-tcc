@@ -14,6 +14,8 @@ from processamento import fontes
 from processamento.diagnostico import lacunas
 from processamento.diagnostico.lacunas import (
     COLUNAS,
+    TABELA_MES_ORIGEM,
+    artigos_por_mes_origem,
     lacunas_em_meses,
     lacunas_em_pregoes,
     meses_com_poucas_noticias,
@@ -261,6 +263,39 @@ def test_n_contagem_vazia_e_vazia():
     assert meses_com_poucas_noticias({}, 0.25, ()) == ([], [])
 
 
+# Notícias por mês: artigos_por_mes_origem (função pura)
+
+def _mes_origem(linhas):
+    """DataFrame de validos (mes, id, origem) a partir de (mês "AAAA-MM", id, origem)."""
+    return pd.DataFrame({"mes": [pd.Period(m, "M") for m, _, _ in linhas],
+                         "id": [i for _, i, _ in linhas],
+                         "origem": [o for _, _, o in linhas]})
+
+
+def test_n_mes_origem_conta_distintos_e_preenche_meses_vazios():
+    validos = _mes_origem([
+        ("2024-01", "g1", "google_news"), ("2024-01", "g2", "google_news"),
+        ("2024-01", "w1", "wordpress"), ("2024-01", "w1", "wordpress"),
+        ("2024-03", "g3", "google_news"), ("2024-03", "c1", "cvm_ipe"),
+    ])
+    colunas, linhas = artigos_por_mes_origem(validos)
+    assert colunas == ["mes", "cvm_ipe", "google_news", "wordpress"]
+    assert linhas == [["2024-01", 0, 2, 1], ["2024-02", 0, 0, 0], ["2024-03", 1, 1, 0]]
+
+
+def test_n_mes_origem_vazio_e_vazio():
+    validos = pd.DataFrame({"mes": pd.Series([], dtype="period[M]"), "id": pd.Series([], dtype=object),
+                            "origem": pd.Series([], dtype=object)})
+    assert artigos_por_mes_origem(validos) == ([], [])
+
+
+def test_n_mes_origem_origem_nula_vira_sem_origem():
+    validos = _mes_origem([("2024-01", "w1", "wordpress"), ("2024-01", "x1", None)])
+    colunas, linhas = artigos_por_mes_origem(validos)
+    assert colunas == ["mes", "sem_origem", "wordpress"]
+    assert linhas == [["2024-01", 1, 1]]
+
+
 # Notícias por mês: secao_noticias_por_mes (com banco de teste em SQLite)
 
 @pytest.fixture
@@ -300,14 +335,21 @@ def test_n_secao_noticias_com_banco_de_teste(banco_teste, mapa, params_noticias)
 
     assert secao["titulo"] == "Notícias por mês"
     assert secao["divergencias"] == []
-    assert secao["tabelas"] == [{
+    assert len(secao["tabelas"]) == 2
+    assert secao["tabelas"][0] == {
         "subtitulo": "Meses com poucas notícias",
         "colunas": ["mes", "artigos", "mediana_referencia", "situacao"],
         "linhas": [
             ["2025-01", 1, 8, "rever: fora de periodos_sem_coleta"],
             ["2025-02", 0, 8, "rever: fora de periodos_sem_coleta"],
         ],
-    }]
+    }
+    assert secao["tabelas"][1] == {
+        "subtitulo": TABELA_MES_ORIGEM,
+        "colunas": ["mes", "wordpress"],
+        "linhas": [[f"2024-{m:02d}", 8] for m in range(1, 13)] + [["2025-01", 1], ["2025-02", 0],
+                                                                   ["2025-03", 8], ["2025-04", 8]],
+    }
     assert "9 meses avaliados" in secao["notas"][0]
     assert "Atenção: 2 mês(es) com poucas notícias fora de experimento.periodos_sem_coleta: rever o parâmetro." \
         in secao["notas"]

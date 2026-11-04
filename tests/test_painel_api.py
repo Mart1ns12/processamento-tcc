@@ -153,6 +153,26 @@ def test_monitor_consulta_no_intervalo_e_grava_log_limitado(tmp_path):
     assert len((pasta / "api_tempos.log").read_text(encoding="utf-8").splitlines()) == 3
 
 
+def test_monitor_forcar_consulta_mesmo_dentro_do_intervalo(tmp_path):
+    chamadas = []
+
+    def falso(base, timeout):
+        chamadas.append(base)
+        return {"respondeu": True, "http": 200, "ms": 500, "status": "ok", "banco": "ok",
+                "ultima_publicacao": None, "erro": None}
+
+    monitor = MonitorApi(tmp_path, consultar=falso, monotonic=lambda: 0.0)
+    params = {"api_url": "https://api.exemplo.invalid", "api_timeout_s": 5,
+              "api_intervalo_s": 60, "api_medicoes": 10}
+    monitor.situacao(params, AGORA)
+    monitor.situacao(params, AGORA)
+    assert len(chamadas) == 1
+
+    situacao = monitor.situacao(params, AGORA, forcar=True)
+    assert len(chamadas) == 2
+    assert len(situacao["medicoes"]) == 2
+
+
 def test_monitor_sem_url_ou_parametro_nao_consulta(tmp_path):
     chamadas = []
     monitor = MonitorApi(tmp_path, consultar=lambda b, t: chamadas.append(b), monotonic=lambda: 0.0)

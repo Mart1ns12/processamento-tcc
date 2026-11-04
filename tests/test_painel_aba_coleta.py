@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from processamento.painel.aba_coleta import (
+    FALTA_GOOGLE,
     FALTA_SERIE,
     contagem_finbert,
     contagem_juiza,
@@ -46,6 +47,12 @@ def _com_linha_depois(texto: str, marca: str, nova: str) -> str:
         if linha.startswith(marca):
             saida.append(nova)
     return "\n".join(saida) + "\n"
+
+
+def _fixture_sem_tabela_por_mes_origem() -> str:
+    texto = FIXTURE.read_text(encoding="utf-8")
+    inicio = texto.index("### Artigos por mês e origem")
+    return texto[:inicio] + texto[texto.index("## 16."):]
 
 
 def test_ler_md_devolve_diagnostico_e_linhas():
@@ -168,8 +175,22 @@ def test_noticias_mes_da_fixture():
         "64 meses avaliados (mês abaixo de 25% da mediana dos até 12 meses anteriores; "
         "o último mês da coleta fica de fora por estar incompleto)"
     )
-    assert resultado["serie_completa"] is False
-    assert resultado["falta"] == FALTA_SERIE
+    assert resultado["serie_completa"] is True
+    assert resultado["falta"] is None
+    assert resultado["origens"] == ["cvm_ipe", "google_news", "wordpress"]
+    assert resultado["google"] == {
+        "origem": "google_news",
+        "rotulo": "Google News",
+        "meses": [
+            {"mes": "2024-12", "mes_texto": "12/2024", "artigos": 2712, "estado": None},
+            {"mes": "2025-01", "mes_texto": "01/2025", "artigos": 8, "estado": "conhecido"},
+            {"mes": "2025-06", "mes_texto": "06/2025", "artigos": 13, "estado": "conhecido"},
+            {"mes": "2025-07", "mes_texto": "07/2025", "artigos": 12, "estado": "conhecido"},
+            {"mes": "2025-08", "mes_texto": "08/2025", "artigos": 2650, "estado": None},
+        ],
+        "maximo": 2712,
+        "fonte": "Seção 15: Notícias por mês · Artigos por mês e origem (artigos distintos)",
+    }
     assert resultado["fonte"] == "Seção 15: Notícias por mês"
     meses = resultado["meses"]
     assert [(m["mes"], m["artigos"], m["mediana"], m["estado"]) for m in meses] == [
@@ -181,10 +202,42 @@ def test_noticias_mes_da_fixture():
     assert meses[0]["fracao"] == pytest.approx(288 / 2698.5)
 
 
+def test_noticias_mes_sem_tabela_por_mes_origem_vira_serie_incompleta(tmp_path):
+    resultado = noticias_mes(_escrever(tmp_path, _fixture_sem_tabela_por_mes_origem()))
+    assert resultado["disponivel"] is True
+    assert resultado["serie_completa"] is False
+    assert resultado["falta"] == FALTA_SERIE
+    assert resultado["google"] is None
+    assert resultado["origens"] == []
+    assert len(resultado["meses"]) == 3
+
+
+def test_noticias_mes_tabela_sem_coluna_google_news(tmp_path):
+    texto = _fixture_sem_tabela_por_mes_origem().replace(
+        "## 16.",
+        "### Artigos por mês e origem (artigos distintos)\n\n| mes | cvm_ipe |\n|---|---|\n| 2025-01 | 280 |\n\n## 16.",
+    )
+    resultado = noticias_mes(_escrever(tmp_path, texto))
+    assert resultado["serie_completa"] is True
+    assert resultado["falta"] == FALTA_GOOGLE
+    assert resultado["google"] is None
+    assert resultado["origens"] == ["cvm_ipe"]
+
+
+def test_noticias_mes_celula_invalida_do_google_vira_none(tmp_path):
+    texto = FIXTURE.read_text(encoding="utf-8").replace(
+        "| 2025-06 | 205 | 13 | 0 |", "| 2025-06 | 205 | x | 0 |"
+    )
+    google = noticias_mes(_escrever(tmp_path, texto))["google"]
+    mes_junho = next(m for m in google["meses"] if m["mes"] == "2025-06")
+    assert mes_junho["artigos"] is None
+    assert google["maximo"] == 2712
+
+
 def test_noticias_mes_situacao_rever(tmp_path):
     texto = _com_linha_depois(
         FIXTURE.read_text(encoding="utf-8"),
-        "| 2025-07 |",
+        "| 2025-07 | 255 |",
         "| 2024-03 | 500 | 2600 | rever: fora de periodos_sem_coleta |",
     )
     meses = noticias_mes(_escrever(tmp_path, texto))["meses"]

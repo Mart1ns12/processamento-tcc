@@ -1,4 +1,4 @@
-"""Leitura dos relatórios do painel: logs da rotina, diagnóstico, experimento e último pytest.
+"""Leitura dos relatórios do painel: logs da rotina, diagnóstico, experimento (só a operação) e último pytest.
 
 Só lê arquivos gerados pelo projeto (nenhum SQL, nenhum banco). Nenhuma função levanta exceção
 por arquivo ausente ou quebrado: devolve `disponivel False` com `motivo`, ou `None`.
@@ -19,7 +19,6 @@ RE_SEM_PREGAO = re.compile(r"não é pregão previsto \((.+)\): nada a gerar\.$"
 RE_LOG_ROTINA = re.compile(r"^rotina-(\d{4}-\d{2}-\d{2})\.log$")
 RE_SECAO = re.compile(r"^## (\d+)\. (.+)$")
 RE_SEPARADOR = re.compile(r"^\|[\s:|-]*-[\s:|-]*$")
-RE_DEV = re.compile(r"^dev-(\d{4}-\d{2}-\d{2})$")
 RE_TOP = re.compile(r"^(\d{4}-\d{2}-\d{2})\.top\.json$")
 RE_PYTEST_INICIO = re.compile(r"^# painel: acao=\S+ inicio=(\S+) comando=")
 RE_PYTEST_FIM = re.compile(r"^# painel: fim=(\S+) codigo=(-?\d+)")
@@ -36,12 +35,6 @@ RE_DIA_PULADA = re.compile(r"^# dia: etapa=(\w+) pulada motivo=(.*)$")
 IDS_ETAPAS_DIA = ("rotina", "carga", "publicador")
 
 TITULO_DIVERGENCIAS = "## Divergências × especificação"
-ORDEM_MODELOS = [
-    ("modelo_3", "Modelo 3 (com notícias)"),
-    ("modelo_1", "Modelo 1 (sem notícias)"),
-    ("logistica", "Regressão logística"),
-    ("volatilidade", "Regra da volatilidade"),
-]
 NORMALIZA_CONTAGEM = {"error": "errors", "warning": "warnings"}
 
 
@@ -86,18 +79,6 @@ def _mais_novo(pasta: Path, regex: re.Pattern) -> tuple[str, Path] | None:
         return None
     grupo, caminho = max(candidatos, key=lambda t: t[0])
     return grupo, caminho
-
-
-def _ultima_pasta_dev(raiz: Path) -> Path | None:
-    """Pasta `dev-AAAA-MM-DD` de saida/experimento/treino com a maior data no nome."""
-    candidatos = []
-    for p in _listar(raiz / "saida" / "experimento" / "treino"):
-        m = RE_DEV.match(p.name)
-        if m and p.is_dir():
-            candidatos.append((m.group(1), p))
-    if not candidatos:
-        return None
-    return max(candidatos, key=lambda t: t[0])[1]
 
 
 # ---------------------------------------------------------------- logs da rotina
@@ -274,101 +255,51 @@ def trava_teste_final(params: dict, raiz: Path) -> dict:
     return {"estado": estado, "texto": texto, "inicio": inicio, "fim": fim, "liberado": liberado}
 
 
-def _re_meta(familia: str, sombra: bool = False) -> re.Pattern:
-    """Meta do modelo da família: `<familia>-AAAA-MM.meta.json`, ou a sombra `<familia>-m1-AAAA-MM.meta.json`."""
-    prefixo = re.escape(f"{familia}-m1-" if sombra else f"{familia}-")
+def _re_meta(familia: str) -> re.Pattern:
+    """Meta do modelo da família: `<familia>-AAAA-MM.meta.json`."""
+    prefixo = re.escape(f"{familia}-")
     return re.compile(rf"^{prefixo}(\d{{4}}-\d{{2}})\.meta\.json$")
 
 
-def _resumo_meta(caminho: Path, mes: str) -> dict | None:
-    """Resumo de um `<familia>-AAAA-MM.meta.json` (ou da sombra); None se ilegível."""
+def _resumo_meta(caminho: Path, mes: str, familia: str) -> dict | None:
+    """Resumo de um `<familia>-AAAA-MM.meta.json` (sem métricas de desempenho); None se ilegível."""
     meta = _ler_json(caminho)
     if meta is None:
         return None
-    validacao = _d(meta.get("metricas_validacao"))
-    calibracao = _d(meta.get("calibracao"))
+    dataset = meta.get("dataset")
+    versao_preparacao = meta.get("versao_preparacao")
+    versao_noticias = meta.get("versao_noticias")
     return {
         "arquivo": caminho.name,
         "mes": mes,
+        "familia": meta["familia"] if isinstance(meta.get("familia"), str) else familia,
         "modelo": meta.get("modelo"),
+        "versao_preparacao": (
+            versao_preparacao
+            if isinstance(versao_preparacao, int) and not isinstance(versao_preparacao, bool) else None
+        ),
+        "versao_noticias": versao_noticias if isinstance(versao_noticias, str) else None,
         "provisorio": meta.get("provisorio"),
         "periodo_treino": meta.get("periodo_treino"),
         "n_linhas_treino": meta.get("n_linhas_treino"),
         "gerado_em": meta.get("gerado_em"),
-        "auc_medio_pregao": validacao.get("auc_medio_pregao"),
-        "acerto_top5": validacao.get("taxa_acerto_top5"),
-        "calibracao_aprovada": calibracao.get("aprovada"),
-        "chance_exibida": calibracao.get("chance_exibida"),
+        "dataset": (
+            {"arquivo": dataset.get("arquivo"), "sha256": dataset.get("sha256")} if isinstance(dataset, dict) else None
+        ),
         "aviso": meta.get("aviso"),
     }
 
 
-def _ler_desenvolvimento(raiz: Path) -> dict:
-    """Resumo do treino de desenvolvimento mais recente (`dev-AAAA-MM-DD/metricas.json`)."""
-    pasta = _ultima_pasta_dev(raiz)
-    if pasta is None:
-        return {"disponivel": False, "motivo": "nenhum treino de desenvolvimento em saida/experimento/treino/"}
-    metricas = _ler_json(pasta / "metricas.json")
-    if metricas is None:
-        return {"disponivel": False, "motivo": f"metricas.json ausente ou ilegível em {pasta.name}"}
-
-    modelos_json = _d(metricas.get("modelos"))
-    modelos = []
-    for nome, rotulo in ORDEM_MODELOS:
-        bloco = _d(modelos_json.get(nome))
-        if not bloco:
-            continue
-        top5 = _d(_d(bloco.get("topk")).get("5"))
-        modelos.append({
-            "nome": nome,
-            "rotulo": rotulo,
-            "auc_medio_pregao": bloco.get("auc_medio_pregao"),
-            "acerto_top5": top5.get("taxa_acerto"),
-            "ic_top5": top5.get("ic_taxa"),
-        })
-
-    acaso = _d(_d(metricas.get("acaso")).get("5"))
-    acaso_top5 = {"media": acaso.get("media"), "faixa": [acaso.get("p2_5"), acaso.get("p97_5")]} if acaso else None
-    calibracao = _d(metricas.get("calibracao"))
-    return {
-        "disponivel": True,
-        "pasta": pasta.name,
-        "modo": metricas.get("modo"),
-        "aviso_funcionamento": metricas.get("aviso_funcionamento"),
-        "gerado_em": metricas.get("gerado_em"),
-        "periodo": _d(metricas.get("periodo")),
-        "acaso_top5": acaso_top5,
-        "modelos": modelos,
-        "veredito": _d(metricas.get("veredito_modelo_3")).get("texto"),
-        "calibracao": {
-            "ece": calibracao.get("ece"),
-            "aprovada": calibracao.get("aprovada"),
-            "chance_exibida": calibracao.get("chance_exibida"),
-        },
-        "tem_relatorio": (pasta / "relatorio.md").is_file(),
-    }
-
-
-def caminho_ultimo_relatorio(raiz: Path) -> Path | None:
-    """`relatorio.md` do treino de desenvolvimento mais recente; None se não há pasta de treino."""
-    pasta = _ultima_pasta_dev(raiz)
-    return None if pasta is None else pasta / "relatorio.md"
-
-
 def ler_experimento(raiz: Path, params: dict) -> dict:
-    """Situação do modelo, modelo sombra, treino de desenvolvimento, registros e teste final."""
+    """Situação do modelo em produção, registros e teste final (sem métricas de desempenho)."""
     modelo_oficial = bool(params.get("modelo_oficial"))
     publicar_provisorio = bool(params.get("publicar_top_provisorio"))
     pasta_modelos = raiz / "modelos"
     familia = params.get("familia_producao") or "xgb"  # a família em produção (treino.familia_producao)
 
     em_uso = _mais_novo(pasta_modelos, _re_meta(familia))
-    sombra = _mais_novo(pasta_modelos, _re_meta(familia, sombra=True))
-    modelo_em_uso = _resumo_meta(em_uso[1], em_uso[0]) if em_uso else None
-    modelo_sombra = _resumo_meta(sombra[1], sombra[0]) if sombra else None
+    modelo_em_uso = _resumo_meta(em_uso[1], em_uso[0], familia) if em_uso else None
     situacao = "oficial" if modelo_oficial and modelo_em_uso and modelo_em_uso["provisorio"] is False else "provisório"
-
-    desenvolvimento = _ler_desenvolvimento(raiz)
 
     pasta_registros = raiz / "registros" / "experimento"
     tops = [p for p in _listar(pasta_registros) if RE_TOP.match(p.name)]
@@ -378,11 +309,8 @@ def ler_experimento(raiz: Path, params: dict) -> dict:
     return {
         "situacao_modelo": situacao,
         "top_publicado": modelo_oficial or publicar_provisorio,
-        "mostrar_aviso": (not modelo_oficial) or desenvolvimento.get("aviso_funcionamento") is not False,
         "modelo_em_uso": modelo_em_uso,
-        "modelo_sombra": modelo_sombra,
         "n_meta": sum(1 for p in _listar(pasta_modelos) if p.name.endswith(".meta.json")),
-        "desenvolvimento": desenvolvimento,
         "registros": {
             "tops": len(tops),
             "resultados": len(resultados),

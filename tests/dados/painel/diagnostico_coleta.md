@@ -173,6 +173,16 @@
 | 2025-06 | 218 | 2698.5 | cadastrado |
 | 2025-07 | 255 | 2698.5 | cadastrado |
 
+### Artigos por mês e origem (artigos distintos)
+
+| mes | cvm_ipe | google_news | wordpress |
+|---|---|---|---|
+| 2024-12 | 310 | 2712 | 105 |
+| 2025-01 | 280 | 8 | 0 |
+| 2025-06 | 205 | 13 | 0 |
+| 2025-07 | 243 | 12 | 0 |
+| 2025-08 | 298 | 2650 | 140 |
+
 ## 16. Vazios e zeros
 
 - `v1-noticias.titulo`: 3 textos vazios ('') (a leitura trata como vazio); ids (até 10): n326413, n380792, n395868

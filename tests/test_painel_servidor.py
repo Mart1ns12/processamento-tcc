@@ -201,7 +201,8 @@ def test_api_painel_visao_com_as_fixtures(srv):
     assert set(dados["visao"]) == {"fluxo", "linha_tempo", "saude", "calendario", "resumo", "tempos", "ajuda",
                                    "dia", "glossario", "api", "banco", "coleta_etapas", "novidades", "dia_atipico",
                                    "mercado", "fluxo_nos", "coleta_indicadores", "noticias_ano_origem",
-                                   "noticias_mes", "coleta_falhas", "pedidos", "diagnostico"}
+                                   "noticias_mes", "coleta_falhas", "pedidos", "diagnostico", "execucoes",
+                                   "agendador", "proxima_execucao", "api_publicacoes", "experimento_operacao"}
     fluxo = dados["visao"]["fluxo"]
     assert fluxo["coleta"]["estado"] == "ok"
     assert fluxo["coleta"]["etapas_concluidas"] == 9
@@ -234,6 +235,40 @@ def test_api_painel_visao_com_as_fixtures(srv):
     assert dia_23["status"] == "ok"
     assert dia_23["completa"] is True
     assert dados["acao"]["marcos"] == []
+    execucoes = dados["visao"]["execucoes"]
+    assert execucoes["disponivel"] is False
+    assert execucoes["dias"] == {}
+    assert dados["visao"]["agendador"]["configurado"] is False
+    assert dados["visao"]["proxima_execucao"] is None
+    assert dados["visao"]["api_publicacoes"]["disponivel"] is False
+    operacao = dados["visao"]["experimento_operacao"]
+    assert operacao["modelo"]["arquivo"] == "xgb-2026-06.meta.json"
+    assert operacao["checklist"]["disponivel"] is False
+    assert set(dados["experimento"]) == {"situacao_modelo", "top_publicado", "modelo_em_uso", "n_meta", "registros",
+                                         "trava_teste_final"}
+
+
+# O mesmo log de dia completo de tests/test_painel_aba_execucoes.py, com a data trocada.
+LOG_DIA_ANTERIOR = [
+    "# painel: acao=dia inicio=2026-10-23T08:00:00-03:00 comando=python -m processamento.painel.dia --data 2026-10-23",
+    "# dia: etapa=rotina inicio=2026-10-23T08:00:01-03:00",
+    "# dia: etapa=rotina fim codigo=0 em=2026-10-23T08:05:01-03:00 detalhe=status ok",
+    "# dia: etapa=carga inicio=2026-10-23T08:05:02-03:00",
+    "# dia: etapa=carga fim codigo=0 em=2026-10-23T08:09:02-03:00 detalhe=status ok",
+    "# dia: etapa=publicador inicio=2026-10-23T08:09:03-03:00",
+    "# dia: etapa=publicador fim codigo=0 em=2026-10-23T08:09:13-03:00 detalhe=publicado (completo)",
+    "# dia: resultado=completa publicado no banco da API (completo)",
+    "# painel: fim=2026-10-23T08:09:14-03:00 codigo=0",
+]
+
+
+def test_log_do_dia_entra_em_execucoes_sem_publicacao_da_api(srv):
+    srv.pasta_painel.mkdir(parents=True, exist_ok=True)
+    (srv.pasta_painel / "dia-2026-10-23_090000.log").write_text("\n".join(LOG_DIA_ANTERIOR) + "\n", encoding="utf-8")
+    _, _, corpo = pedir(srv, "GET", "/api/painel")
+    visao = _json(corpo)["visao"]
+    assert len(visao["execucoes"]["dias"]["2026-10-23"]["etapas"]) == 3
+    assert visao["api_publicacoes"]["disponivel"] is False
 
 
 def test_api_painel_resumo_tempos_e_ajuda(srv):
@@ -275,7 +310,7 @@ def test_api_painel_dia_e_glossario(srv):
     dados = _json(corpo)
     assert dados["visao"]["dia"] == ("Hoje é sexta, 23/10/2026 (dia de pregão). "
                                      "A última rotina diária é a de hoje.")
-    assert len(dados["visao"]["glossario"]) == 15
+    assert len(dados["visao"]["glossario"]) == 14
     assert dados["visao"]["glossario"][0][0] == "Pregão"
     assert all(isinstance(par, list) and len(par) == 2 for par in dados["visao"]["glossario"])
 
@@ -389,7 +424,7 @@ def test_env_e_arquivos_fora_das_rotas_nao_sao_servidos(srv):
 
 
 def test_segredos_do_env_nao_aparecem_nas_respostas(srv):
-    for caminho in ["/", "/api/painel", "/api/acao?desde=0", "/api/relatorio", "/api/diagnostico-md"]:
+    for caminho in ["/", "/api/painel", "/api/acao?desde=0", "/api/diagnostico-md"]:
         _, _, corpo = pedir(srv, "GET", caminho)
         assert b"segredo123" not in corpo, caminho
         assert b"usuario_teste" not in corpo, caminho
@@ -411,6 +446,46 @@ def test_post_sem_token_ou_com_origem_errada_e_recusado(srv):
     assert status == 403
     status, _, _ = pedir(srv, "POST", "/api/acao/iniciar", {"acao": "testes"}, origem=None)
     assert status == 403
+
+
+def test_conferir_api_recusa_origem_errada_sem_token_e_token_errado(srv):
+    status, _, _ = pedir(srv, "POST", "/api/conferir-api", {}, origem=None)
+    assert status == 403
+    status, _, _ = pedir(srv, "POST", "/api/conferir-api", {}, origem="http://evil.example")
+    assert status == 403
+    status, _, _ = pedir(srv, "POST", "/api/conferir-api", {}, token=None)
+    assert status == 403
+    status, _, _ = pedir(srv, "POST", "/api/conferir-api", {}, token="errado")
+    assert status == 403
+    status, _, _ = pedir(srv, "POST", "/api/conferir-api", {}, host="evil.example:" + str(srv.porta))
+    assert status == 403
+
+
+def test_conferir_api_sem_api_configurada_e_409(srv, sem_rede):
+    status, _, corpo = pedir(srv, "POST", "/api/conferir-api", {})
+    assert status == 409
+    assert _json(corpo) == {"erro": "Sem painel.api_url no parametros.yaml."}
+
+
+def test_conferir_api_consulta_agora_e_devolve_o_bloco(subir, tmp_path, sem_rede):
+    consultas: list = []
+    s = subir(nome="conf", consultar_api=_consultor_falso(consultas))
+    _configurar_api(tmp_path / "projeto_api", s.raiz)
+    pedir(s, "GET", "/api/painel")
+    status, _, corpo = pedir(s, "POST", "/api/conferir-api", {})
+    assert status == 200, corpo
+    dados = _json(corpo)
+    assert dados["ok"] is True
+    assert dados["api"]["titulo"] == "No ar"
+    assert len(dados["api"]["serie"]) == 2
+    assert len(consultas) == 2
+    assert b"chave-secreta-xyz" not in corpo
+
+
+def test_get_relatorio_removido_e_404(srv):
+    status, _, corpo = pedir(srv, "GET", "/api/relatorio")
+    assert status == 404
+    assert _json(corpo) == {"erro": "não encontrado"}
 
 
 def test_post_corpo_grande_recebe_413(srv):

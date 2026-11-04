@@ -196,3 +196,20 @@ No recorte, o dia só entra com pelo menos 5 linhas com alvo e as duas classes; 
 | P/VP na rodada 3 | Fica fora (seção 2). A correção do valor de mercado (quantidade na base atual, 03/11/2026) não o traz de volta nesta rodada |
 
 Implementação (02/11/2026): a rotina passa a publicar a família da configuração congelada (`treino.familia_producao: "logistica"`); o modelo logístico é gravado em JSON (`logistica-AAAA-MM.json`, sem pickle), e a configuração da rodada 001 vale sem mudança.
+
+### Checklist antes do teste final (D1 a D10)
+
+Registrado em 04/11/2026 a partir das decisões acima, para o painel (aba Experimento) ler. Não muda as seções 1 a 7. Situação: `fechada` (decisão tomada) ou `pendente`. A D2 passa a contar como fechada sozinha quando `treino.teste_final.fim` for preenchido no `parametros.yaml`.
+
+| Id | Decisão | Situação |
+|---|---|---|
+| D1 | Histórico desde 2021, com as lacunas como limitação | fechada |
+| D2 | Data de fim do teste final (a definir) | pendente |
+| D3 | Hipótese e medida principal: ganho de AUC por pregão do modelo 3 sobre o 1, com IC 95% acima de 0 | fechada |
+| D4 | Família, colunas e referências congeladas | fechada |
+| D5 | Dados novos antes do teste final geram nova rodada | fechada |
+| D6 | Dataset congelado com hash registrado | pendente |
+| D7 | Conferência de preços reescritos (tolerância 1e-6) | fechada |
+| D8 | Custos definidos antes | fechada |
+| D9 | Auditoria de eventos após 23/06 | pendente |
+| D10 | Chance oculta até o teste ao vivo | fechada |
