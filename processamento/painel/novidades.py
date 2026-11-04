@@ -11,6 +11,7 @@ import json
 import os
 import re
 import threading
+from collections import Counter
 from pathlib import Path
 
 from processamento.painel.relatorios import ler_diagnostico
@@ -47,6 +48,8 @@ RE_MOMENTO = re.compile(r"^(\d{4})-(\d{2})-(\d{2}) (\d{2}:\d{2})")
 RE_NOME = re.compile(r"^\d{4}-\d{2}-\d{2}_\d{4}\.json$")
 MOTIVO_SEM_ANTERIOR = ("Ainda sem diagnóstico anterior guardado: "
                        "as novidades aparecem a partir do próximo diagnóstico.")
+MOTIVO_SEM_LISTA = ("O resumo anterior é de antes de o painel guardar a lista de divergências: "
+                    "resolvidas e novas aparecem a partir do próximo diagnóstico.")
 
 
 # ---------------------------------------------------------------- auxiliares
@@ -126,6 +129,7 @@ def resumir(docs_md: Path) -> dict | None:
         "gerado_em": diag.get("gerado_em"),
         "periodo": periodo,
         "divergencias": len(diag["divergencias"]),
+        "divergencias_lista": [[d["tema"], d["tabela"], d["detalhe"]] for d in diag["divergencias"]],
         "quantidade_acoes": {"n": qtd[0], "tickers": qtd[1]} if qtd is not None else None,
         "retornos": {"n": ret[0], "pares": [list(p) for p in ret[1]]} if ret is not None else None,
         "lacunas": {s: list(v) for s, v in lac.items()} if lac is not None else None,
@@ -430,3 +434,104 @@ def novidades(docs_md: Path, pasta_painel: Path, manter: int | None = None) -> d
     if rb is None:
         return _indisponivel("diagnóstico anterior não pode ser lido", atual_em, None)
     return comparar_resumos(ra, rb)
+
+
+# ---------------------------------------------------------------- divergências: identidade e histórico
+
+def _chave(tema: str, tabela: str, detalhe: str) -> tuple[str, str, str]:
+    """Identidade de uma divergência: detalhe com cada número trocado por '#', exceto anos (19xx/20xx)."""
+    return tema, tabela, re.sub(r"\d+(?:[.,]\d+)*",
+                                lambda m: m.group(0) if re.fullmatch(r"(19|20)\d{2}", m.group(0)) else "#",
+                                detalhe)
+
+
+def _identidade(item: dict) -> tuple[str, str, str]:
+    return _chave(item["tema"], item["tabela"], item["detalhe"])
+
+
+def _lista_resumo(resumo: dict) -> list | None:
+    lista = resumo.get("divergencias_lista")
+    return lista if isinstance(lista, list) else None
+
+
+def _itens(lista: list) -> list[dict]:
+    """Lista [[tema, tabela, detalhe], ...] do resumo como dicts; entradas malformadas ficam de fora."""
+    itens = []
+    for e in lista:
+        if isinstance(e, list) and len(e) == 3:
+            itens.append({"tema": e[0], "tabela": e[1], "detalhe": e[2]})
+    return itens
+
+
+def _diferenca(origem: list[dict], outra: list[dict]) -> list[dict]:
+    """Itens de `origem` sem correspondente em `outra` (comparação por multiconjunto de identidades)."""
+    restante = Counter(_identidade(i) for i in outra)
+    sobra = []
+    for item in origem:
+        chave = _identidade(item)
+        if restante[chave] > 0:
+            restante[chave] -= 1
+        else:
+            sobra.append(item)
+    return sobra
+
+
+def _dia_br(gerado: str | None) -> str | None:
+    m = RE_MOMENTO.match(gerado or "")
+    return f"{m.group(3)}/{m.group(2)}/{m.group(1)}" if m else None
+
+
+def _desde(chave: tuple, cadeia: list[tuple[str | None, list | None]]) -> tuple[str | None, str]:
+    """(desde, desde_texto) de uma divergência.
+
+    `cadeia` vai do resumo mais novo ao mais antigo, como (gerado_em, lista ou None). A divergência começa
+    no resumo mais antigo da sequência contínua em que aparece; parar sem lista ou sem a chave encerra a busca.
+    """
+    desde, achou = None, 0
+    for gerado, lista in cadeia:
+        if lista is None:
+            return (desde, f"{_dia_br(desde)} ou antes") if achou else (None, "sem dados")
+        if chave not in {_identidade(i) for i in _itens(lista)}:
+            if achou == 0:
+                return None, "nova"
+            return desde, _dia_br(desde)
+        desde, achou = gerado, achou + 1
+    if achou == 0:
+        return None, "sem dados"
+    return desde, f"{_dia_br(desde)} ou antes"
+
+
+def historico_divergencias(docs_md: Path, pasta_painel: Path) -> dict | None:
+    """Divergências do diagnóstico atual em relação ao resumo anterior guardado. Só lê; não grava nada.
+
+    Formato de `diagnostico.divergencias` do painel. None se o diagnóstico não pode ser resumido.
+    """
+    atual = resumir(docs_md)
+    if atual is None:
+        return None
+    itens = _itens(atual["divergencias_lista"])
+    nome = _nome_resumo(atual["gerado_em"])
+    pasta = pasta_painel / PASTA_RESUMOS
+    anteriores = [n for n in _nomes_resumos(pasta) if nome is not None and n < nome]
+    lidos = [_ler_resumo(pasta / n) for n in reversed(anteriores)]
+    cadeia = [(r.get("gerado_em"), _lista_resumo(r)) if r is not None else (None, None) for r in lidos]
+    lista = []
+    for item in itens:
+        desde, texto = _desde(_identidade(item), cadeia)
+        lista.append({**item, "desde": desde, "desde_texto": texto})
+    base = {"atual": len(itens), "lista": lista}
+    if not anteriores:
+        return {**base, "anterior": None, "anterior_em": None, "resolvidas": None, "novas": None,
+                "motivo_comparacao": MOTIVO_SEM_ANTERIOR}
+    rb = lidos[0]
+    if rb is None:
+        return {**base, "anterior": None, "anterior_em": None, "resolvidas": None, "novas": None,
+                "motivo_comparacao": "diagnóstico anterior não pode ser lido"}
+    anterior_em = _momento_br(rb.get("gerado_em"))
+    lista_anterior = _lista_resumo(rb)
+    if lista_anterior is None:
+        return {**base, "anterior": rb.get("divergencias"), "anterior_em": anterior_em,
+                "resolvidas": None, "novas": None, "motivo_comparacao": MOTIVO_SEM_LISTA}
+    antes = _itens(lista_anterior)
+    return {**base, "anterior": rb.get("divergencias"), "anterior_em": anterior_em,
+            "resolvidas": _diferenca(antes, itens), "novas": _diferenca(itens, antes), "motivo_comparacao": None}

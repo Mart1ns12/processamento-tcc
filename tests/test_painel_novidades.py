@@ -14,10 +14,14 @@ from fabrica_painel import montar_raiz
 
 from processamento.painel.novidades import (
     ANTERIOR,
+    MOTIVO_SEM_ANTERIOR,
+    MOTIVO_SEM_LISTA,
     PASTA_RESUMOS,
     VISTO,
+    _chave,
     comparar,
     comparar_resumos,
+    historico_divergencias,
     novidades,
     resumir,
 )
@@ -130,8 +134,8 @@ def test_comparar_resumos_com_json_ida_e_volta_igual_a_comparar(tmp_path):
 def test_resumo_tem_chaves_do_plano(tmp_path):
     resumo = resumir(FIX_ATUAL)
 
-    assert set(resumo) == {"versao", "gerado_em", "periodo", "divergencias", "quantidade_acoes",
-                           "retornos", "lacunas", "cobertura", "farois"}
+    assert set(resumo) == {"versao", "gerado_em", "periodo", "divergencias", "divergencias_lista",
+                           "quantidade_acoes", "retornos", "lacunas", "cobertura", "farois"}
     assert resumo["gerado_em"] == "2026-10-27 10:44 (America/Sao_Paulo)"
     assert resumo["versao"] == 1
 
@@ -185,4 +189,98 @@ def test_docs_inexistente_fica_indisponivel_e_nao_cria_arquivos(tmp_path):
     assert resultado["motivo"]
     assert resultado["itens"] == []
     assert _resumos(pasta) == []
+    assert not (pasta / PASTA_RESUMOS).exists()
+
+
+# ---------------------------------------------------------------- divergências: identidade e histórico
+
+LINHA_1 = "| 1 | coluna_faltando | v1-precos | falta a coluna volume |"
+LINHA_2025 = "| 2 | noticia_sem_hora | v1-noticias | 2025: 1060 de 30654 sem hora |"
+LINHA_2025_NOVA = "| 2 | noticia_sem_hora | v1-noticias | 2025: 1100 de 30700 sem hora |"
+LINHA_CADASTRO = "| 3 | coluna_faltando | v1-cadastro | falta a coluna setor |"
+TEXTO_A = FIX_ANTERIOR.read_text(encoding="utf-8")
+TEXTO_B = (TEXTO_A.replace("- Gerado em: 2026-10-25 12:48", "- Gerado em: 2026-10-26 09:00")
+           .replace(LINHA_1, LINHA_1 + "\n" + LINHA_2025))
+TEXTO_C = (TEXTO_B.replace("- Gerado em: 2026-10-26 09:00", "- Gerado em: 2026-10-27 09:00")
+           .replace(LINHA_2025, LINHA_2025_NOVA))
+TEXTO_D = TEXTO_C.replace(LINHA_2025_NOVA, LINHA_2025_NOVA + "\n" + LINHA_CADASTRO)
+
+
+def test_resumo_guarda_a_lista_de_divergencias():
+    assert resumir(FIX_ANTERIOR)["divergencias_lista"] == [["coluna_faltando", "v1-precos", "falta a coluna volume"]]
+
+
+def test_chave_troca_numeros_e_mantem_anos():
+    assert _chave("noticia_sem_hora", "v1-noticias", "2025: 1.060 de 30654 sem hora") == (
+        "noticia_sem_hora", "v1-noticias", "2025: # de # sem hora")
+
+
+def test_historico_resolvida_contra_o_anterior(tmp_path):
+    docs, pasta = _preparar(tmp_path, FIX_ANTERIOR)
+    novidades(docs, pasta)
+
+    resultado = historico_divergencias(FIX_ATUAL, pasta)
+
+    assert resultado["atual"] == 0
+    assert resultado["anterior"] == 1
+    assert resultado["anterior_em"] == "25/10/2026 12:48"
+    assert resultado["resolvidas"] == [{"tema": "coluna_faltando", "tabela": "v1-precos", "detalhe": "falta a coluna volume"}]
+    assert resultado["novas"] == []
+    assert resultado["lista"] == []
+    assert resultado["motivo_comparacao"] is None
+
+
+def test_historico_desde_quando_cada_divergencia_aparece(tmp_path):
+    docs, pasta = _preparar(tmp_path, FIX_ANTERIOR)
+    novidades(docs, pasta)
+    docs.write_text(TEXTO_B, encoding="utf-8")
+    novidades(docs, pasta)
+    docs.write_text(TEXTO_C, encoding="utf-8")
+
+    resultado = historico_divergencias(docs, pasta)
+
+    assert [i["desde_texto"] for i in resultado["lista"]] == ["25/10/2026 ou antes", "26/10/2026"]
+    assert resultado["resolvidas"] == []
+    assert resultado["novas"] == []
+
+
+def test_historico_nova_divergencia_aparece_como_nova(tmp_path):
+    docs, pasta = _preparar(tmp_path, FIX_ANTERIOR)
+    novidades(docs, pasta)
+    docs.write_text(TEXTO_B, encoding="utf-8")
+    novidades(docs, pasta)
+    docs.write_text(TEXTO_D, encoding="utf-8")
+
+    resultado = historico_divergencias(docs, pasta)
+
+    assert [i["desde_texto"] for i in resultado["lista"]] == ["25/10/2026 ou antes", "26/10/2026", "nova"]
+    assert resultado["novas"] == [{"tema": "coluna_faltando", "tabela": "v1-cadastro", "detalhe": "falta a coluna setor"}]
+    assert resultado["resolvidas"] == []
+
+
+def test_historico_resumo_anterior_sem_lista(tmp_path):
+    docs, pasta = _preparar(tmp_path, FIX_ANTERIOR)
+    sem_lista = {k: v for k, v in resumir(FIX_ANTERIOR).items() if k != "divergencias_lista"}
+    (pasta / PASTA_RESUMOS).mkdir(parents=True)
+    (pasta / PASTA_RESUMOS / "2026-10-25_1248.json").write_text(json.dumps(sem_lista, ensure_ascii=False), encoding="utf-8")
+
+    resultado = historico_divergencias(FIX_ATUAL, pasta)
+
+    assert resultado["anterior"] == 1
+    assert resultado["resolvidas"] is None
+    assert resultado["novas"] is None
+    assert resultado["motivo_comparacao"] == MOTIVO_SEM_LISTA
+
+
+def test_historico_sem_anterior_guardado(tmp_path):
+    docs, pasta = _preparar(tmp_path, FIX_ANTERIOR)
+
+    resultado = historico_divergencias(docs, pasta)
+
+    assert resultado["anterior"] is None
+    assert resultado["anterior_em"] is None
+    assert resultado["resolvidas"] is None
+    assert resultado["novas"] is None
+    assert resultado["motivo_comparacao"] == MOTIVO_SEM_ANTERIOR
+    assert [(i["desde"], i["desde_texto"]) for i in resultado["lista"]] == [(None, "sem dados")]
     assert not (pasta / PASTA_RESUMOS).exists()

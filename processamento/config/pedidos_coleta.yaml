@@ -1,0 +1,73 @@
+# Pedidos à coleta. Só o painel lê este arquivo (processamento/painel/pedidos.py).
+# checagem = nome em pedidos.CHECAGENS; vazia = sem checagem automática.
+# Datas entre aspas. Um pedido só vira "entregue" quando o diagnóstico confirma.
+
+pedidos:
+  - id: "google_news_2025"
+    texto: "Google News de jan a jul/2025"
+    detalhe: "Recarga de 2023 a 2025 aprovada; aguardando terminar"
+    prioridade: "critico"
+    checagem: "meses_sem_poucas_noticias"
+    parametros: {de: "2025-01", ate: "2025-07"}
+
+  - id: "finbert_juiza_cvm"
+    texto: "FinBERT e juíza nos documentos novos da CVM"
+    detalhe: "Notícias ainda sem probabilidade do FinBERT ou sem papel da juíza"
+    prioridade: "normal"
+    checagem: "finbert_e_juiza_completos"
+    parametros: {max_aguardando: 0}
+
+  - id: "acoes_sem_evento"
+    texto: "Quantidades de ações sem evento correspondente"
+    detalhe: "AZUL3 e CNPJ 76483817000120 (2020)"
+    prioridade: "normal"
+    checagem: "acoes_coerentes_com_eventos"
+
+  - id: "linha_sem_pregao"
+    texto: "Linha em 20/11/2020 (sem pregão)"
+    detalhe: "JBSS32 e NATU3"
+    prioridade: "normal"
+    checagem: "sem_linha_fora_do_calendario"
+    parametros: {tickers: ["JBSS32", "NATU3"]}
+
+  - id: "qtd_base_preco"
+    texto: "Quantidade de ações na base do preço"
+    detalhe: "Colunas qtd_*_base_atual e tabela de eventos"
+    prioridade: "normal"
+    checagem: "colunas_existem"
+    parametros: {tabela: "v1-acoes_emitidas", colunas: ["qtd_on_base_atual", "qtd_pn_base_atual"], tabelas: ["v1-eventos_acoes"]}
+
+  - id: "cvm_2023_2025"
+    texto: "CVM de 2023 e jan a jul/2025"
+    detalhe: "Documentos da CVM nesses anos (o diagnóstico mostra por ano, não por mês)"
+    prioridade: "normal"
+    checagem: "origem_nos_anos"
+    parametros: {origem: "cvm_ipe", anos: [2023, 2025]}
+
+  - id: "emissores_jbs_natura"
+    texto: "JBS e Natura com histórico completo"
+    detalhe: "Tabela de emissores por período"
+    prioridade: "normal"
+    checagem: "emissores_por_periodo"
+    parametros: {tickers: ["JBSS32", "NATU3"]}
+
+  - id: "hapvida_ifrs17"
+    texto: "Receita da Hapvida (IFRS 17)"
+    detalhe: "situacao = ajuste_ifrs17"
+    prioridade: "normal"
+    checagem: "valor_distinto"
+    parametros: {tabela: "v1-balancos", coluna: "situacao", valor: "ajuste_ifrs17"}
+
+  - id: "juiza_historico"
+    texto: "Juíza em todo o histórico"
+    detalhe: "Papel da juíza preenchido nas notícias antigas"
+    prioridade: "normal"
+    checagem: "coluna_preenchida"
+    parametros: {tabela: "v1-noticias", coluna: "papel", max_pct_nulo: 5}
+
+  - id: "indices_completos"
+    texto: "IDIV, IFIX e SMLL completos"
+    detalhe: "Desde 30/12/2019"
+    prioridade: "normal"
+    checagem: "indices_desde"
+    parametros: {indices: ["IDIV", "IFIX", "SMLL"], inicio_ate: "2019-12-30"}

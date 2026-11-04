@@ -15,7 +15,9 @@ IDS = {"hoje", "fluxo", "progresso", "coleta", "processamento", "interface", "pa
        "saude_cobertura", "experimento", "teste_funcionamento", "cadeado", "modelo", "top5_retido",
        "chance", "modelo_sombra", "grafico", "faixa_acaso", "historico", "testes", "acao_rotina",
        "acao_carga", "acao_diagnostico", "acao_testes", "api", "banco_api", "tempo_api", "o_que_mudou",
-       "dia_atipico", "mercado", "etapas_coleta", "saude_coerencia_mercado", "acao_dia"}
+       "dia_atipico", "mercado", "etapas_coleta", "saude_coerencia_mercado", "acao_dia",
+       "saude_indicadores_indisponiveis", "coleta_indicadores", "pedidos_coleta", "noticias_ano_origem",
+       "noticias_mes", "diagnostico_divergencias", "diagnostico_relatorio"}
 CHAVES_FAZER = {"saude_contrato", "saude_quantidade_acoes", "saude_retornos", "saude_lacunas",
                 "saude_horario_noticias", "saude_cobertura", "saude_sem_dados", "saude_sem_diagnostico",
                 "coleta_warn", "coleta_bad", "rotina_falhou", "rotina_parcial", "rotina_interrompida",
@@ -54,6 +56,11 @@ def test_campos_dos_textos_estao_em_CAMPOS():
     assert usados == CAMPOS
     for texto in O_QUE_FAZER.values():
         assert campos_do_texto(texto) == set(), texto
+
+
+def test_nenhum_cartao_nos_textos():
+    for t in _todos():
+        assert "cartão" not in t and "cartões" not in t, t
 
 
 def test_nenhum_numero_escrito_a_mao():

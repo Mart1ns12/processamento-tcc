@@ -12,7 +12,7 @@ dia_atipico_min_acoes: 5         # dia atípico: pelo menos N ações com |retor
 dia_atipico_ibov_amplo: 0.05     # |variação do Ibovespa| acima disto = movimento amplo (provável evento real)
 coerencia_ivvb11_min_abs: 0.03   # dólar × IVVB11 em sentidos opostos e |IVVB11| acima disto = suspeito
 coerencia_ibov_mediana_dif: 0.02 # Ibovespa × mediana das ações em sentidos opostos e diferença acima disto = suspeito
-afetadas_max: 5                  # itens mostrados por cartão antes de "e mais N"
+afetadas_max: 5                  # afetadas listadas em cada item antes de "e mais N"
 dia_media_execucoes: 3           # tempo estimado do dia completo: média das últimas N execuções concluídas (logs/painel/dia-*.log; no máximo 20)
 diagnosticos_manter: 10          # resumos guardados em logs/painel/diagnosticos/ ("O que mudou desde ontem")
 mercado_pregoes_linha: 7         # pregões na minilinha do Ibovespa (pastas saida/AAAA-MM-DD)

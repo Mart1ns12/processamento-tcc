@@ -340,11 +340,16 @@ def etapas_coleta(item: object) -> dict:
     """Etapas do daily da coleta, com a situação de cada uma na consulta da rotina (foto do execucao.json)."""
     coleta = _dic(_dic(item).get("coleta"))
     consulta_hhmm, daily = coleta.get("consulta_hhmm"), coleta.get("daily")
+    status_execucao = coleta.get("status_execucao")
+    cabecalho = {"data": _dic(item).get("data_referencia"), "iniciada_hhmm": coleta.get("iniciada_hhmm"),
+                 "status_execucao": status_execucao,
+                 "status_execucao_texto": (TEXTO_ETAPA.get(status_execucao, status_execucao)
+                                           if isinstance(status_execucao, str) else None)}
     etapas = coleta.get("etapas")
     if not (isinstance(etapas, dict) and etapas):
         motivo = coleta.get("nota") or coleta.get("motivo_texto") or "Coleta não consultada."
         return {"disponivel": False, "motivo": motivo, "consulta_hhmm": consulta_hhmm, "daily": daily,
-                "etapas": [], "nao_concluidas": [], "resumo": None}
+                "etapas": [], "nao_concluidas": [], "resumo": None, **cabecalho}
     lista = []
     for id_, valor in etapas.items():
         status = valor.get("status") if isinstance(valor, dict) else valor
@@ -359,7 +364,7 @@ def etapas_coleta(item: object) -> dict:
     if nao:
         frase += " · não concluíram: " + ", ".join(nao)
     return {"disponivel": True, "motivo": None, "consulta_hhmm": consulta_hhmm, "daily": daily,
-            "etapas": lista, "nao_concluidas": nao, "resumo": frase}
+            "etapas": lista, "nao_concluidas": nao, "resumo": frase, **cabecalho}
 
 
 def _banco_fora(consulta: dict) -> bool:
@@ -545,6 +550,8 @@ def pontos_de_atencao(hoje: object, trava: object, fluxo_dia: object, linha_temp
         pontos.append(_ponto("warn", "Saúde dos dados: sem diagnóstico", "saude", "saude_sem_diagnostico"))
     for c in saude_visao.get("cartoes") or []:
         c = _dic(c)
+        if c.get("informativo") is True:
+            continue
         farol, id_ = c.get("farol"), c.get("id")
         if not isinstance(id_, str):
             continue

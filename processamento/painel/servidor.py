@@ -19,7 +19,8 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 from processamento.calendario import SP
-from processamento.painel import acoes, ajuda, api, dia, leitores, marcos, mercado, novidades, relatorios, saude, visao
+from processamento.painel import (acoes, ajuda, aba_coleta, aba_diagnostico, api, dia, leitores, marcos, mercado,
+                                  novidades, pedidos, relatorios, saude, visao)
 
 PORTA_PADRAO = 8765
 LIMITE_CORPO = 1024
@@ -166,17 +167,24 @@ def _progresso_dia(completo: dict, todas: list[str], marcos_lista: list[dict], p
         return None
 
 
-def _juntar_saude(saude_base: dict, coer: dict, afet: dict, afetadas_max: int | None) -> dict:
-    """Saúde da tela: cartões do diagnóstico + "Coerência do mercado" (mesmo sem diagnóstico) e linhas afetadas."""
+def _juntar_saude(saude_base: dict, coer: dict, afet: dict, afetadas_max: int | None,
+                  indisp: dict | None = None) -> dict:
+    """Saúde da tela: cartões do diagnóstico + "Coerência do mercado" e "Indicadores indisponíveis" (mesmo sem
+    diagnóstico) e linhas afetadas."""
     saude_v = dict(saude_base)
     cartoes = list(saude_v.get("cartoes") or [])
     cartao = coer.get("cartao")
     if isinstance(cartao, dict):
         cartoes.append(cartao)
+    indisp = indisp if isinstance(indisp, dict) else {}
+    if isinstance(indisp.get("cartao"), dict):
+        cartoes.append(indisp["cartao"])
     saude_v["cartoes"] = cartoes
     afetadas = dict(afet) if isinstance(afet, dict) and "disponivel" not in afet else {}
     if coer.get("afetadas"):
         afetadas["coerencia_mercado"] = coer["afetadas"]
+    if indisp.get("afetadas"):
+        afetadas["indicadores_indisponiveis"] = indisp["afetadas"]
     saude_v["afetadas"] = afetadas
     saude_v["afetadas_max"] = afetadas_max
     return saude_v
@@ -227,7 +235,9 @@ def montar_painel(raiz: Path, executor: acoes.Executor, agora: datetime, caminho
     testes = _seguro(relatorios.ler_ultimo_pytest, pasta_painel)
     fluxo_v = _seguro(visao.fluxo, agora_item, completa_item)
     linha_v = _seguro(visao.linha_do_tempo, agora_item, leitores.ler_prazo_rotina(raiz), caminho_calendario)
-    saude_v = _juntar_saude(_seguro(saude.cartoes_saude, docs_md), coer, afet, painel_p.get("afetadas_max"))
+    saude_base = _seguro(saude.cartoes_saude, docs_md)
+    indisp = _seguro(mercado.cartao_indisponiveis, dados_dia)
+    saude_v = _juntar_saude(saude_base, coer, afet, painel_p.get("afetadas_max"), indisp)
     duracoes = _seguro(relatorios.duracoes_painel, pasta_painel, list(acoes.ACOES))
     valores_ajuda = {**_seguro(leitores.ler_valores_ajuda, raiz), "abertura": visao.hora_marco(linha_v, "abertura")}
     hoje_iso = agora.astimezone(SP).date().isoformat()
@@ -269,6 +279,14 @@ def montar_painel(raiz: Path, executor: acoes.Executor, agora: datetime, caminho
             "dia_atipico": atipico_v,
             "mercado": _seguro(mercado.bloco_mercado, dados_dia, serie),
             "fluxo_nos": _seguro(visao.fluxo_nos, fluxo_v, banco_v, api_v),
+            "coleta_indicadores": _seguro(aba_coleta.indicadores_coleta, docs_md),
+            "noticias_ano_origem": _seguro(aba_coleta.noticias_ano_origem, docs_md),
+            "noticias_mes": _seguro(aba_coleta.noticias_mes, docs_md),
+            "coleta_falhas": _seguro(aba_coleta.falhas_etapas, docs_md),
+            "pedidos": _seguro(pedidos.avaliar_pedidos,
+                               raiz / "processamento" / "config" / "pedidos_coleta.yaml", docs_md),
+            "diagnostico": _seguro(aba_diagnostico.diagnostico_aba, docs_md, pasta_painel,
+                                   saude_base.get("cartoes") or []),
         },
     }
 
@@ -357,6 +375,13 @@ class _Handler(BaseHTTPRequestHandler):
             arquivo = relatorios.caminho_ultimo_relatorio(srv.raiz)
             if arquivo is None or not arquivo.is_file():
                 self._json(404, {"erro": "sem relatório"})
+                return
+            texto = arquivo.read_text(encoding="utf-8", errors="replace")
+            self._enviar(200, "text/plain; charset=utf-8", texto.encode("utf-8"))
+        elif caminho == "/api/diagnostico-md":
+            arquivo = srv.raiz / "docs" / "diagnostico_banco.md"
+            if not arquivo.is_file():
+                self._json(404, {"erro": "sem diagnóstico"})
                 return
             texto = arquivo.read_text(encoding="utf-8", errors="replace")
             self._enviar(200, "text/plain; charset=utf-8", texto.encode("utf-8"))

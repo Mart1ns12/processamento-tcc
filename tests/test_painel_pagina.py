@@ -134,7 +134,7 @@ def test_textos_da_fase_f():
         "Saúde dos dados",
         "Experimento: top 5 com maior chance de superar o Ibovespa",
         "Rodadas registradas no log da rotina",
-        "Diagnóstico completo",
+        "Diagnóstico do banco",
         "Gerar",
         "Rodar",
     ]:
@@ -239,7 +239,7 @@ def test_seis_abas_com_ancoras_na_ordem():
 
 def test_blocos_na_ordem_das_abas():
     texto = _pagina()
-    ordem = ['id="aba-hoje"', 'id="hoje-situacao"', 'id="hoje-fluxo"', 'id="agora"', 'id="novidades"', 'id="saude"', 'id="mercado"', 'id="dia-atipico"', 'id="aba-coleta"', 'id="coleta-etapas"', 'id="aba-diagnostico"', 'id="saude-completa"', 'id="aba-execucoes"', 'id="historico"', 'id="linha-tempo"', 'id="comandos"', 'id="run"', 'id="testes"', 'id="aba-api"', 'id="api-cartao"', 'id="aba-experimento"', 'id="experimento"']
+    ordem = ['id="aba-hoje"', 'id="hoje-situacao"', 'id="hoje-fluxo"', 'id="agora"', 'id="novidades"', 'id="saude"', 'id="mercado"', 'id="dia-atipico"', 'id="aba-coleta"', 'id="coleta-kpis"', 'id="pedidos-card"', 'id="coleta-etapas"', 'id="noticias-ano-card"', 'id="noticias-mes-card"', 'id="aba-diagnostico"', 'id="saude-completa"', 'id="aba-execucoes"', 'id="historico"', 'id="linha-tempo"', 'id="comandos"', 'id="run"', 'id="testes"', 'id="aba-api"', 'id="api-cartao"', 'id="aba-experimento"', 'id="experimento"']
     posicoes = [texto.index(trecho) for trecho in ordem]
     assert posicoes == sorted(posicoes)
 
@@ -279,9 +279,9 @@ def test_ids_de_ajuda_batem_com_o_dicionario():
     texto = _pagina()
     estaticos = set(re.findall(r'data-ajuda="([a-z0-9_]+)"', texto))
     literais = set(re.findall(r'botaoAjuda\("([a-z0-9_]+)"\)', texto))
-    dinamicos = {"saude_" + c[0] for c in _CARTOES} | {"saude_coerencia_mercado"} | {"acao_" + a for a in ACOES}
+    dinamicos = {"saude_" + c[0] for c in _CARTOES} | {"saude_coerencia_mercado", "saude_indicadores_indisponiveis"} | {"acao_" + a for a in ACOES}
     assert estaticos | literais | dinamicos == set(AJUDA)
-    assert len(estaticos) == 17
+    assert len(estaticos) == 23
     assert 'botaoAjuda("saude_" + id)' in texto
     assert 'botaoAjuda("acao_" + id)' in texto
 
@@ -289,7 +289,7 @@ def test_ids_de_ajuda_batem_com_o_dicionario():
 def test_botoes_de_ajuda_estaticos_acessiveis():
     texto = _pagina()
     tags = re.findall(r'<button class="ajuda-btn"[^>]*>', texto)
-    assert len(tags) == 17
+    assert len(tags) == 23
     for tag in tags:
         for trecho in ['type="button"', 'aria-label="Ajuda"', 'aria-expanded="false"', 'aria-controls="ajuda-caixa"', " hidden"]:
             assert trecho in tag, (trecho, tag)
@@ -456,3 +456,83 @@ def test_hoje_situacao_fluxo_progresso_e_grade_presentes():
 
 def test_hoje_sem_numero_do_prototipo_escrito_a_mao():
     assert "167.922" not in _pagina()
+
+
+# ---------------------------------------------------------------- Fase F1 (Parte B): aba Coleta
+
+
+def test_aba_coleta_ids_e_textos():
+    texto = _pagina()
+    for trecho in [
+        'id="coleta-kpis"',
+        'id="coleta-gerado"',
+        'id="pedidos-card"',
+        'id="pedidos-lista"',
+        'id="pedidos-f-pend"',
+        'id="pedidos-f-entr"',
+        'id="pedidos-fonte"',
+        'id="coleta-daily-sub"',
+        'id="coleta-falhas"',
+        'id="noticias-ano"',
+        'id="noticias-ano-sub"',
+        'id="noticias-mes"',
+        'id="noticias-mes-sub"',
+        'id="noticias-mes-falta"',
+        "Pedidos à coleta",
+        "Daily da coleta",
+        "Notícias por ano e origem",
+        "Notícias por mês",
+        "Ficam verdes sozinhos quando o diagnóstico confirma a entrega",
+        "Sem checagem automática",
+        "aria-pressed",
+        "color-mix",
+        "coleta_indicadores",
+        "noticias_ano_origem",
+        "noticias_mes",
+        "pedidos_coleta",
+        "pedidos",
+        "coleta_falhas",
+        "Falhas no histórico: ",
+        "Diagnóstico de ",
+    ]:
+        assert trecho in texto, trecho
+
+
+def test_aba_coleta_consome_chaves_do_contrato():
+    texto = _pagina()
+    for trecho in ["v.coleta_indicadores", "v.noticias_ano_origem", "v.noticias_mes", "v.coleta_falhas", "v.pedidos"]:
+        assert trecho in texto, trecho
+
+
+def test_aba_coleta_sem_numero_do_prototipo_e_sem_etapas_antigas():
+    texto = _pagina()
+    assert "409.968" not in texto
+    assert "122.505" not in texto
+    assert "Etapas da coleta" not in texto
+
+
+def test_aba_diagnostico_ids_e_textos():
+    texto = _pagina()
+    for trecho in [
+        'id="diag-cabecalho"',
+        'id="link-diagnostico-md"',
+        'href="/api/diagnostico-md"',
+        "Abrir o .md",
+        'id="diag-div-atual"',
+        'id="diag-div-resolvidas"',
+        'id="diag-div-novas"',
+        'id="diag-divergencias-card"',
+        'id="diag-divergencias"',
+        'data-ajuda="diagnostico_divergencias"',
+        'data-ajuda="diagnostico_relatorio"',
+        "Divergências × especificação",
+        "Relatório completo",
+        "Clique numa seção para abrir o detalhe.",
+        "Nenhuma divergência.",
+        'id="saude-completa"',
+        "secao-diag",
+        "desde_texto",
+        "informativo",
+        "diagnostico",
+    ]:
+        assert trecho in texto, trecho

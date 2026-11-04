@@ -10,6 +10,7 @@ from pathlib import Path
 from processamento.painel import visao
 from processamento.painel.acoes import ACOES
 from processamento.painel.ajuda import O_QUE_FAZER
+from processamento.painel.leitores import resumir_execucao
 from processamento.painel.saude import cartoes_saude
 from processamento.painel.visao import (bloco_api, bloco_banco, calendario_meses, dia_curto, etapas_coleta, fluxo,
                                         frase_dia, hora_marco, linha_do_tempo, quando, resumo, tempo_curto,
@@ -668,3 +669,93 @@ def test_fluxo_nos_sem_fluxo_fica_sem_dados_e_banco_api_vem_dos_blocos():
     assert r["nos"][2]["quando"] == "23/10"
     assert r["nos"][3]["quando"] == "10:15"
     assert r["nos"][0]["estado"] == "idle"
+
+
+# ---------- Etapas da coleta (item 4: coleta.etapas × coleta_status) e cartão informativo no resumo ----------
+
+# Regressão do item 4: registros[0] real de saida/2026-11-03/execucao.json (sem pacotes e avisos, que não
+# entram na situação das etapas). Por isso o leitor vê o bloco coleta_status com as etapas do daily.
+EXECUCAO_20261103 = {
+    "versao_contrato": "1.0",
+    "gerado_em": "2026-11-03T11:20:09-03:00",
+    "dados_ate": "2026-11-03T08:00:00-03:00",
+    "data_referencia": "2026-11-03",
+    "rodada": 1,
+    "inicio": "2026-11-03T11:20:09-03:00",
+    "fim": "2026-11-03T11:25:25-03:00",
+    "status": "ok",
+    "coleta_status": {
+        "consultado": True,
+        "nota": "Daily da agenda (origem cron). Consulta única (--sem-esperar).",
+        "motivo": "entrega_concluida",
+        "execucao_id": "2026-11-03-daily-080001",
+        "origem": "cron",
+        "status_execucao": "concluida",
+        "iniciada_em": "2026-11-03T08:00:01-03:00",
+        "finalizada_em": "2026-11-03T08:23:07-03:00",
+        "entrega_concluida_em": "2026-11-03T08:23:07-03:00",
+        "etapas": {
+            "precos": "concluida", "macro": "concluida", "noticias": "concluida", "ipe": "concluida",
+            "enriquecimento": "concluida", "juiza": "concluida", "cadastro": "concluida", "entrega": "concluida",
+            "analise": "pulada",
+        },
+        "consultas": 1,
+        "espera_segundos": 0,
+        "primeira_consulta_em": "2026-11-03T11:20:09-03:00",
+        "ultima_consulta_em": "2026-11-03T11:20:09-03:00",
+        "prazo": "2026-11-03T09:45:00-03:00",
+        "t_esperado": "2026-10-30",
+        "ultimo_pregao_lido": "2026-10-30",
+    },
+}
+
+
+def test_etapas_coleta_regressao_item_4_com_registro_real():
+    item = resumir_execucao({"registros": [EXECUCAO_20261103]}, "2026-11-03", "execucao",
+                            "saida/2026-11-03/execucao.json")
+    r = etapas_coleta(item)
+    assert r["disponivel"] is True
+    assert r["resumo"] == "8 de 9 etapas concluídas · não concluíram: análise (pulada)"
+    assert r["daily"] == "2026-11-03-daily-080001"
+    assert r["consulta_hhmm"] == "11:20"
+    assert r["iniciada_hhmm"] == "08:00"
+    assert r["status_execucao"] == "concluida"
+    assert r["status_execucao_texto"] == "concluída"
+    assert r["data"] == "2026-11-03"
+
+
+def test_etapas_coleta_formato_agendada_sem_etapas_concluidas():
+    nomes = ["precos", "macro", "noticias", "ipe", "enriquecimento", "juiza", "cadastro", "entrega", "analise"]
+    item = {"data_referencia": "2026-11-04", "coleta": {"etapas": {n: None for n in nomes},
+                                                        "status_execucao": "agendada", "iniciada_hhmm": None,
+                                                        "daily": "2026-11-04-daily-080001"}}
+    r = etapas_coleta(item)
+    assert r["resumo"].startswith("0 de 9 etapas concluídas")
+    assert r["data"] == "2026-11-04"
+    assert r["iniciada_hhmm"] is None
+    assert r["status_execucao"] == "agendada"
+    assert r["status_execucao_texto"] == "agendada"
+
+
+def test_etapas_coleta_sem_etapas_mantem_as_chaves_novas():
+    item = {"data_referencia": "2026-11-03",
+            "coleta": {"nota": "Coleta não consultada hoje.", "status_execucao": "concluida", "iniciada_hhmm": "08:00"}}
+    r = etapas_coleta(item)
+    assert r["disponivel"] is False
+    assert r["motivo"] == "Coleta não consultada hoje."
+    assert r["resumo"] is None
+    assert r["data"] == "2026-11-03"
+    assert r["iniciada_hhmm"] == "08:00"
+    assert r["status_execucao"] == "concluida"
+    assert r["status_execucao_texto"] == "concluída"
+
+
+def test_resumo_ignora_cartao_informativo_em_warn():
+    cartao = {"id": "indicadores_indisponiveis", "titulo": "Indicadores indisponíveis", "farol": "warn",
+              "numero": "2 de 3 empresas", "texto": "x", "fonte": None, "informativo": True}
+    saude = {"disponivel": True, "cartoes": [cartao]}
+    r = resumo(HOJE_OK, TRAVA_VAZIA, fluxo(ITEM), LT, saude, TESTES_OK)
+    assert [p for p in r["pontos"] if p["alvo"] == "saude-c-indicadores_indisponiveis"] == []
+    sem_flag = {"disponivel": True, "cartoes": [{**cartao, "informativo": False}]}
+    r = resumo(HOJE_OK, TRAVA_VAZIA, fluxo(ITEM), LT, sem_flag, TESTES_OK)
+    assert [p["alvo"] for p in r["pontos"]] == ["saude-c-indicadores_indisponiveis"]

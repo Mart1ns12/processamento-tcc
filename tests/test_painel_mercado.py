@@ -18,8 +18,8 @@ from pathlib import Path
 import pytest
 
 from fabrica_painel import montar_raiz
-from processamento.painel.mercado import (bloco_mercado, cartao_coerencia, dia_atipico, ler_dia, pct0, pct2,
-                                          serie_ibov)
+from processamento.painel.mercado import (bloco_mercado, cartao_coerencia, cartao_indisponiveis, dia_atipico, ler_dia,
+                                          pct0, pct2, serie_ibov)
 
 DADOS = Path(__file__).parent / "dados" / "painel"
 
@@ -264,3 +264,101 @@ def test_bloco_mercado_indisponivel():
     assert b["ibov_nivel_texto"] == "sem dados"
     assert b["ibov_var"] is None
     assert b["ibov_var_texto"] == "sem dados"
+
+
+def _grava_empresas(raiz, pasta, referencia, registros):
+    """saida/<pasta>/ com mercado_dia.json (só a data) e resumo_acao.json com os registros dados."""
+    destino = raiz / "saida" / pasta
+    destino.mkdir(parents=True, exist_ok=True)
+    mercado = {"pacote": "mercado_dia", "registros": [{"data_referencia": referencia}]}
+    (destino / "mercado_dia.json").write_text(json.dumps(mercado), encoding="utf-8")
+    (destino / "resumo_acao.json").write_text(json.dumps({"pacote": "resumo_acao", "registros": registros}),
+                                              encoding="utf-8")
+
+
+EMPRESAS_30 = [
+    {"ticker": "AAAA3", "pl": {"valor": None, "status": "lucro_negativo"},
+     "roe": {"valor": 0.10, "status": "ok"}, "balanco_referencia": {"status": "indisponivel"}},
+    {"ticker": "BBBB3", "pvp": {"valor": None, "status": "indisponivel"},
+     "payout_por_ano": [{"ano": 2025, "valor": None, "status": "indisponivel"}],
+     "margem_bruta": {"valor": None, "status": "nao_se_aplica"}},
+    {"ticker": "CCCC3", "roe": {"valor": 0.20, "status": "ok"},
+     "balanco_referencia": {"status": "indisponivel"}},
+]
+
+
+def test_ler_dia_conta_empresas_e_status_fora_de_ok(tmp_path):
+    _grava_empresas(tmp_path, "2026-10-30", "2026-10-30", EMPRESAS_30)
+    dia = ler_dia(tmp_path, "saida", "2026-10-30")
+    assert dia["n_empresas"] == 3
+    assert dia["status_empresas"] == [["AAAA3", ["lucro_negativo"]], ["BBBB3", ["indisponivel", "nao_se_aplica"]]]
+
+
+def test_cartao_indisponiveis_com_empresas_fora_de_ok(tmp_path):
+    _grava_empresas(tmp_path, "2026-10-30", "2026-10-30", EMPRESAS_30)
+    c = cartao_indisponiveis(ler_dia(tmp_path, "saida", "2026-10-30"))
+    assert c["cartao"] == {
+        "id": "indicadores_indisponiveis",
+        "titulo": "Indicadores indisponíveis",
+        "farol": "warn",
+        "numero": "2 de 3 empresas",
+        "texto": ("Empresas com algum indicador fora de ok no pregão de 30/10/2026: indisponível 1, "
+                  "lucro negativo 1, não se aplica 1 (uma empresa pode aparecer em mais de um)."),
+        "fonte": "saida/2026-10-30/mercado_dia.json e resumo_acao.json · pregão de 30/10/2026",
+        "informativo": True,
+    }
+    assert c["afetadas"] == {
+        "titulo": "Empresas afetadas",
+        "itens": [{"rotulo": "AAAA3", "detalhe": "lucro negativo"},
+                  {"rotulo": "BBBB3", "detalhe": "indisponível, não se aplica"}],
+        "total": 2,
+    }
+
+
+def test_cartao_indisponiveis_sem_pregao_usa_o_ultimo_processado(tmp_path):
+    _grava_empresas(tmp_path, "2026-10-30", None, EMPRESAS_30[:1])
+    c = cartao_indisponiveis(ler_dia(tmp_path, "saida", "2026-10-30"))
+    assert c["cartao"]["texto"] == (
+        "Empresas com algum indicador fora de ok no último pregão processado: lucro negativo 1 "
+        "(uma empresa pode aparecer em mais de um).")
+    assert c["cartao"]["fonte"] == "saida/2026-10-30/mercado_dia.json e resumo_acao.json"
+
+
+def test_cartao_indisponiveis_sem_nenhum_status_fora_de_ok_fica_ok(tmp_path):
+    _grava_empresas(tmp_path, "2026-10-30", "2026-10-30", [EMPRESAS_30[2]])
+    c = cartao_indisponiveis(ler_dia(tmp_path, "saida", "2026-10-30"))
+    assert c["cartao"]["farol"] == "ok"
+    assert c["cartao"]["numero"] == "0 de 1 empresas"
+    assert c["cartao"]["texto"] == "Todos os indicadores das 1 empresas estão em ok no pregão de 30/10/2026."
+    assert c["cartao"]["informativo"] is True
+    assert c["afetadas"] is None
+
+
+def test_cartao_indisponiveis_pregao_23_fixture_raiz(tmp_path):
+    raiz = montar_raiz(tmp_path)
+    c = cartao_indisponiveis(ler_dia(raiz, "saida", "2026-10-23"))
+    assert c["cartao"]["farol"] == "ok"
+    assert c["cartao"]["numero"] == "0 de 3 empresas"
+    assert c["afetadas"] is None
+
+
+def test_cartao_indisponiveis_sem_resumo_acao_vira_sem_dados(pregao):
+    (pregao / "saida" / "2026-10-27" / "resumo_acao.json").unlink()
+    dia = ler_dia(pregao, "saida", "2026-10-27")
+    assert dia["n_empresas"] is None
+    assert dia["status_empresas"] == []
+    c = cartao_indisponiveis(dia)
+    assert c["cartao"]["farol"] == "idle"
+    assert c["cartao"]["numero"] == "sem dados"
+    assert c["cartao"]["texto"] == "resumo_acao.json ausente ou ilegível"
+    assert c["cartao"]["informativo"] is True
+    assert c["afetadas"] is None
+
+
+def test_cartao_indisponiveis_sem_dia_de_referencia_vira_sem_dados(tmp_path):
+    dia = ler_dia(tmp_path, "saida", None)
+    assert dia["n_empresas"] is None
+    assert dia["status_empresas"] == []
+    c = cartao_indisponiveis(dia)
+    assert c["cartao"]["farol"] == "idle"
+    assert c["cartao"]["texto"] == dia["motivo"]

@@ -19,7 +19,7 @@ import pytest
 
 from fabrica_painel import montar_raiz
 from processamento.calendario import SP
-from processamento.painel import acoes, ajuda, api, leitores, servidor
+from processamento.painel import acoes, ajuda, api, leitores, novidades, servidor
 from processamento.painel.servidor import (
     CSP_PAGINA,
     criar_servidor,
@@ -200,7 +200,8 @@ def test_api_painel_visao_com_as_fixtures(srv):
     dados = _json(corpo)
     assert set(dados["visao"]) == {"fluxo", "linha_tempo", "saude", "calendario", "resumo", "tempos", "ajuda",
                                    "dia", "glossario", "api", "banco", "coleta_etapas", "novidades", "dia_atipico",
-                                   "mercado", "fluxo_nos"}
+                                   "mercado", "fluxo_nos", "coleta_indicadores", "noticias_ano_origem",
+                                   "noticias_mes", "coleta_falhas", "pedidos", "diagnostico"}
     fluxo = dados["visao"]["fluxo"]
     assert fluxo["coleta"]["estado"] == "ok"
     assert fluxo["coleta"]["etapas_concluidas"] == 9
@@ -222,7 +223,11 @@ def test_api_painel_visao_com_as_fixtures(srv):
     cartoes = dados["visao"]["saude"]["cartoes"]
     assert cartoes[0]["numero"] == "2 divergências"
     # O 7º cartão é a "Coerência do mercado" (pregão de 22/10 da fixture: sem sinal suspeito).
-    assert [c["farol"] for c in cartoes] == ["bad", "idle", "idle", "idle", "idle", "idle", "ok"]
+    # O 8º é "Indicadores indisponíveis" (informativo; pregão de 23/10 da fixture: nenhuma empresa fora de ok).
+    assert [c["farol"] for c in cartoes] == ["bad", "idle", "idle", "idle", "idle", "idle", "ok", "ok"]
+    assert cartoes[7]["id"] == "indicadores_indisponiveis"
+    assert cartoes[7]["numero"] == "0 de 3 empresas"
+    assert cartoes[7]["informativo"] is True
     meses = dados["visao"]["calendario"]
     assert meses[0]["titulo"] == "outubro de 2026"
     dia_23 = next(d for d in meses[0]["dias"] if d["data"] == "2026-10-23")
@@ -299,6 +304,81 @@ def test_api_painel_mercado_e_fluxo_nos(srv):
     assert fluxo["rodape"] == "última carga completa: 24/10 23:00 · 2 pacotes"
 
 
+# ---------------------------------------------------------------- coleta, pedidos e diagnóstico (visão)
+
+def test_api_painel_coleta_sem_secoes_do_diagnostico(srv):
+    # A fixture raiz tem um diagnóstico com 3 seções: sem as tabelas, os números ficam "sem dados", nunca 0.
+    _, _, corpo = pedir(srv, "GET", "/api/painel")
+    visao_v = _json(corpo)["visao"]
+    indicadores = visao_v["coleta_indicadores"]
+    assert [i["valor_texto"] for i in indicadores["itens"]] == ["sem dados"] * 3
+    assert all(i["fonte"] is None for i in indicadores["itens"])
+    for chave in ["noticias_ano_origem", "noticias_mes", "coleta_falhas"]:
+        assert visao_v[chave]["disponivel"] is False, chave
+        assert visao_v[chave]["motivo"] == "Seção não encontrada no diagnóstico.", chave
+
+
+def test_api_painel_pedidos_sem_yaml_fica_indisponivel(srv):
+    _, _, corpo = pedir(srv, "GET", "/api/painel")
+    pedidos = _json(corpo)["visao"]["pedidos"]
+    assert pedidos["disponivel"] is False
+    assert pedidos["motivo"] == "processamento/config/pedidos_coleta.yaml não encontrado"
+
+
+def test_api_painel_pedidos_com_o_yaml_do_projeto(srv):
+    destino = srv.raiz / "processamento" / "config" / "pedidos_coleta.yaml"
+    shutil.copy(REPO / "processamento" / "config" / "pedidos_coleta.yaml", destino)
+    _, _, corpo = pedir(srv, "GET", "/api/painel")
+    pedidos = _json(corpo)["visao"]["pedidos"]
+    assert pedidos["disponivel"] is True
+    assert len(pedidos["itens"]) == 10
+    assert pedidos["contagem"] == {"entregue": 0, "pendente": 0, "sem_dados": 10, "sem_checagem": 0, "erro": 0}
+
+
+def test_api_painel_diagnostico_da_fixture(srv):
+    _, _, corpo = pedir(srv, "GET", "/api/painel")
+    diagnostico = _json(corpo)["visao"]["diagnostico"]
+    assert diagnostico["disponivel"] is True
+    assert diagnostico["n_secoes"] == 3
+    assert diagnostico["gerado_em_texto"] == "24/10/2026 21:08"
+    divergencias = diagnostico["divergencias"]
+    assert divergencias["atual"] == 2
+    assert divergencias["motivo_comparacao"] == novidades.MOTIVO_SEM_ANTERIOR
+    assert [d["desde_texto"] for d in divergencias["lista"]] == ["sem dados", "sem dados"]
+
+
+def test_resumo_do_diagnostico_guarda_a_lista_de_divergencias(srv):
+    _, _, corpo = pedir(srv, "GET", "/api/painel")
+    assert _json(corpo)["visao"]["diagnostico"]["divergencias"]["atual"] == 2
+    arquivos = list((srv.raiz / "logs" / "painel" / "diagnosticos").glob("*.json"))
+    assert len(arquivos) == 1
+    resumo = json.loads(arquivos[0].read_text(encoding="utf-8"))
+    assert len(resumo["divergencias_lista"]) == 2
+
+
+def test_diagnostico_md_rota_fixa(srv):
+    esperado = (srv.raiz / "docs" / "diagnostico_banco.md").read_text(encoding="utf-8")
+    status, cab, corpo = pedir(srv, "GET", "/api/diagnostico-md")
+    assert status == 200
+    assert cab["content-type"] == "text/plain; charset=utf-8"
+    assert corpo.decode("utf-8") == esperado
+    # A query é ignorada: não existe leitura de caminho vindo do usuário.
+    status, _, corpo = pedir(srv, "GET", "/api/diagnostico-md?arquivo=../.env")
+    assert status == 200
+    assert corpo.decode("utf-8") == esperado
+    assert b"segredo123" not in corpo
+    for caminho in ["/api/diagnostico-md/../.env", "/api/diagnostico-md/.env"]:
+        status, _, _ = pedir(srv, "GET", caminho)
+        assert status == 404, caminho
+
+
+def test_diagnostico_md_sem_arquivo_e_404(srv):
+    (srv.raiz / "docs" / "diagnostico_banco.md").unlink()
+    status, _, corpo = pedir(srv, "GET", "/api/diagnostico-md")
+    assert status == 404
+    assert _json(corpo) == {"erro": "sem diagnóstico"}
+
+
 # ---------------------------------------------------------------- arquivos sensíveis
 
 def test_env_e_arquivos_fora_das_rotas_nao_sao_servidos(srv):
@@ -309,7 +389,7 @@ def test_env_e_arquivos_fora_das_rotas_nao_sao_servidos(srv):
 
 
 def test_segredos_do_env_nao_aparecem_nas_respostas(srv):
-    for caminho in ["/", "/api/painel", "/api/acao?desde=0", "/api/relatorio"]:
+    for caminho in ["/", "/api/painel", "/api/acao?desde=0", "/api/relatorio", "/api/diagnostico-md"]:
         _, _, corpo = pedir(srv, "GET", caminho)
         assert b"segredo123" not in corpo, caminho
         assert b"usuario_teste" not in corpo, caminho

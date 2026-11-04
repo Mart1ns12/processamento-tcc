@@ -294,6 +294,34 @@ ul{margin:4px 0;padding-left:20px}
 .corpo-saude p{font-size:.84rem}
 .corpo-saude .so{font-size:.8rem;color:var(--muted)}
 
+/* aba Diagnóstico: link "Abrir o .md", seções do relatório (recolhíveis, com ponto e resumo) */
+.botao{display:inline-flex;align-items:center;justify-self:start;min-height:44px;font-size:.9rem;font-weight:600;padding:9px 12px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--accent);text-decoration:none}
+.botao:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.secao-diag{border:1px solid var(--line);border-left:4px solid var(--idle);border-radius:10px;padding:10px 12px;display:grid;gap:6px}
+.secao-diag.ok{border-left-color:var(--ok)} .secao-diag.warn{border-left-color:var(--warn)}
+.secao-diag > summary{display:flex;flex-wrap:wrap;align-items:center;gap:8px;min-height:44px;font-size:.9rem;color:var(--ink)}
+.secao-diag .dot{background:var(--idle)}
+.secao-diag .dot.ok{background:var(--ok)} .secao-diag .dot.warn{background:var(--warn)}
+.secao-diag .note{width:100%}
+.secao-diag ul{font-size:.84rem;margin:4px 0 0;padding-left:18px;display:grid;gap:4px}
+
+/* aba Coleta: indicadores com barra, pedidos (filtro e selos), daily, notícias por ano/origem (mapa de calor) e por mês */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.kpi{border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:grid;gap:6px;align-content:start;min-width:0;background:var(--surface)}
+.kpi-valor{font-family:var(--f-mono);font-size:1.4rem;font-weight:500}
+.grade-coleta{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(340px,100%),1fr));gap:24px;align-items:start}
+.filtros{display:flex;flex-wrap:wrap;gap:8px}
+.filtro{font:inherit;font-size:.86rem;font-weight:600;min-height:44px;padding:8px 14px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
+.filtro[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.filtro:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.pedidos{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.pedido{border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:grid;gap:4px;align-content:start;font-size:.88rem}
+.selo{display:inline-flex;align-items:center;justify-self:start;font-size:.78rem;font-weight:600;padding:3px 10px;border-radius:999px;white-space:nowrap}
+.selo.ok{background:var(--okf);color:var(--ok)} .selo.warn{background:var(--atf);color:var(--at)}
+.selo.bad{background:var(--falhaf);color:var(--falha)} .selo.idle{background:var(--trilho);color:var(--sub)}
+#noticias-ano{overflow-x:auto}
+.mapa-calor td.vazia{border:1px dashed var(--falha);color:var(--falha)}
+
 /* impressão (E3): sem botões, "?" nem log; uma coluna; blocos recolhidos abertos */
 @media print{
   .ajuda-btn,.toggle,.abas,#comandos .actions,#run,#erro-rede,#ajuda-caixa{display:none!important}
@@ -417,18 +445,65 @@ ul{margin:4px 0;padding-left:20px}
   </section>
 
   <section data-aba="coleta" id="aba-coleta" hidden>
-    <section class="card" id="coleta-etapas-card" aria-labelledby="h-coleta-etapas">
-      <h2 id="h-coleta-etapas">Etapas da coleta</h2>
-      <div id="coleta-etapas"></div>
-      <p class="note" id="coleta-situacao"></p>
+    <div class="tit-linha"><h2>Coleta</h2><button class="ajuda-btn" type="button" data-ajuda="coleta_indicadores" aria-label="Ajuda" aria-expanded="false" aria-controls="ajuda-caixa" hidden>?</button></div>
+    <p class="note" id="coleta-gerado"></p>
+    <div class="kpis" id="coleta-kpis"></div>
+
+    <div class="grade-coleta">
+      <section class="card" id="pedidos-card" aria-labelledby="h-pedidos">
+        <div class="tit-linha"><h2 id="h-pedidos">Pedidos à coleta</h2><button class="ajuda-btn" type="button" data-ajuda="pedidos_coleta" aria-label="Ajuda" aria-expanded="false" aria-controls="ajuda-caixa" hidden>?</button></div>
+        <p class="note">Ficam verdes sozinhos quando o diagnóstico confirma a entrega</p>
+        <div class="filtros" role="group" aria-label="Filtro dos pedidos">
+          <button type="button" class="filtro" id="pedidos-f-pend" aria-pressed="true">Pendentes</button>
+          <button type="button" class="filtro" id="pedidos-f-entr" aria-pressed="false">Entregues</button>
+        </div>
+        <ul class="pedidos" id="pedidos-lista"></ul>
+        <p class="note" id="pedidos-fonte"></p>
+      </section>
+
+      <section class="card" id="coleta-etapas-card" aria-labelledby="h-coleta-etapas">
+        <h2 id="h-coleta-etapas">Daily da coleta</h2>
+        <p class="note" id="coleta-daily-sub"></p>
+        <div id="coleta-etapas"></div>
+        <p class="note" id="coleta-situacao"></p>
+        <p class="note" id="coleta-falhas"></p>
+      </section>
+    </div>
+
+    <section class="card" id="noticias-ano-card" aria-labelledby="h-noticias-ano">
+      <div class="tit-linha"><h2 id="h-noticias-ano">Notícias por ano e origem</h2><button class="ajuda-btn" type="button" data-ajuda="noticias_ano_origem" aria-label="Ajuda" aria-expanded="false" aria-controls="ajuda-caixa" hidden>?</button></div>
+      <p class="note" id="noticias-ano-sub"></p>
+      <div id="noticias-ano"></div>
+    </section>
+
+    <section class="card" id="noticias-mes-card" aria-labelledby="h-noticias-mes">
+      <div class="tit-linha"><h2 id="h-noticias-mes">Notícias por mês (todas as origens)</h2><button class="ajuda-btn" type="button" data-ajuda="noticias_mes" aria-label="Ajuda" aria-expanded="false" aria-controls="ajuda-caixa" hidden>?</button></div>
+      <p class="note" id="noticias-mes-sub"></p>
+      <div id="noticias-mes"></div>
+      <p class="note" id="noticias-mes-falta"></p>
     </section>
   </section>
 
   <section data-aba="diagnostico" id="aba-diagnostico" hidden>
     <section class="card" id="diagnostico-card" aria-labelledby="h-diagnostico">
-      <h2 id="h-diagnostico">Diagnóstico completo</h2>
+      <h2 id="h-diagnostico">Diagnóstico do banco</h2>
+      <p class="note" id="diag-cabecalho"></p>
       <div class="actions" id="botoes-diagnostico"></div>
-      <div id="saude-completa"></div>
+      <div class="linha"><a class="botao" id="link-diagnostico-md" href="/api/diagnostico-md" target="_blank" rel="noopener">Abrir o .md</a></div>
+      <div class="kpis" id="diag-numeros">
+        <div class="kpi"><span class="lbl">Divergências</span><strong class="kpi-valor" id="diag-div-atual"></strong><p class="note" id="diag-div-atual-nota"></p></div>
+        <div class="kpi"><span class="lbl">Resolvidas desde o anterior</span><strong class="kpi-valor" id="diag-div-resolvidas"></strong><p class="note" id="diag-div-resolvidas-nota"></p></div>
+        <div class="kpi"><span class="lbl">Novas desde o anterior</span><strong class="kpi-valor" id="diag-div-novas"></strong><p class="note" id="diag-div-novas-nota"></p></div>
+      </div>
+      <section id="diag-divergencias-card">
+        <div class="tit-linha"><h3>Divergências × especificação</h3><button class="ajuda-btn" type="button" data-ajuda="diagnostico_divergencias" aria-label="Ajuda" aria-expanded="false" aria-controls="ajuda-caixa" hidden>?</button></div>
+        <div id="diag-divergencias"></div>
+      </section>
+      <section id="diag-relatorio-card">
+        <div class="tit-linha"><h3>Relatório completo</h3><button class="ajuda-btn" type="button" data-ajuda="diagnostico_relatorio" aria-label="Ajuda" aria-expanded="false" aria-controls="ajuda-caixa" hidden>?</button></div>
+        <p class="note">Clique numa seção para abrir o detalhe.</p>
+        <div id="saude-completa"></div>
+      </section>
     </section>
   </section>
 
@@ -583,6 +658,8 @@ const ESTADO = {
   ajuda: null,
   timerAjuda: null,
   pontos: new Map(),
+  pedidos: null,
+  filtroPedidos: "pend",
 };
 
 const DESCRICAO = new Map([
@@ -1138,12 +1215,192 @@ function renderFluxo(d) {
   fluxo.replaceChildren(coleta, seta(), processamento, seta(), banco, seta(), apiNo, seta(), interfaceNo);
 }
 
-// Aba Coleta: etapas do daily (foto do execucao.json) e a situação na consulta.
+// Aba Coleta: indicadores, pedidos, daily (foto do execucao.json), falhas e notícias por ano/origem e por mês.
 function renderColeta(d) {
-  const ce = (d.visao || {}).coleta_etapas || {};
+  const v = d.visao || {};
+  const ce = v.coleta_etapas || {};
   const situacao = typeof ce.consulta_hhmm === "string" ? "Situação na consulta das " + ce.consulta_hhmm : "Situação na consulta: " + SEM;
   $("coleta-etapas").replaceChildren(etapasColetaNode(ce));
   $("coleta-situacao").replaceChildren(metaComAjuda(situacao, botaoAjuda("etapas_coleta")));
+  $("coleta-daily-sub").textContent = textoDailySub(ce);
+  renderIndicadoresColeta(v.coleta_indicadores || {});
+  $("coleta-falhas").textContent = textoFalhas(v.coleta_falhas || {});
+  ESTADO.pedidos = v.pedidos || null;
+  renderPedidos();
+  renderNoticiasAno(v.noticias_ano_origem || {});
+  renderNoticiasMes(v.noticias_mes || {});
+}
+
+// Fração 0..1 -> largura 0..100; ausente ou inválida = 0.
+function larguraFracao(f) {
+  return typeof f === "number" && Number.isFinite(f) ? Math.min(100, Math.max(0, f * 100)) : 0;
+}
+
+// Subtítulo do daily: data, início e status da execução, só os que existem.
+function textoDailySub(ce) {
+  const partes = [];
+  if (typeof ce.data === "string") partes.push(dataBr(ce.data));
+  if (typeof ce.iniciada_hhmm === "string") partes.push("início " + ce.iniciada_hhmm);
+  if (typeof ce.status_execucao_texto === "string") partes.push(ce.status_execucao_texto);
+  return partes.length ? partes.join(" · ") : SEM;
+}
+
+function textoFalhas(cf) {
+  if (indisponivel(cf)) return txt(cf.motivo);
+  const falhas = listaSegura(cf.itens).filter((it) => it && typeof it === "object" && typeof it.falhou === "number" && it.falhou > 0);
+  if (falhas.length === 0) return "Falhas no histórico: " + (cf.disponivel === true ? "nenhuma" : SEM);
+  return "Falhas no histórico: " + falhas.map((it) => txt(it.rotulo || it.id) + " " + it.falhou).join(", ");
+}
+
+function renderIndicadoresColeta(ci) {
+  $("coleta-gerado").textContent = indisponivel(ci) ? txt(ci.motivo) : "Diagnóstico de " + dataBr(ci.gerado_em);
+  const itens = listaSegura(ci.itens).filter((it) => it && typeof it === "object");
+  $("coleta-kpis").replaceChildren(...(itens.length ? itens.map(kpiColeta) : [motivo(indisponivel(ci) ? ci.motivo : SEM)]));
+}
+
+// Cartão de indicador: valor, barra (Notícias cheia quando há valor; FinBERT e juíza pela fração) e nota.
+function kpiColeta(it) {
+  const cartao = criar("div", null, "kpi");
+  cartao.appendChild(criar("span", txt(it.nome), "lbl"));
+  cartao.appendChild(criar("strong", txt(it.valor_texto), "kpi-valor"));
+  let largura = 0;
+  let classe = "";
+  if (it.id === "noticias") {
+    if (typeof it.valor === "number") { largura = 100; classe = "run"; }
+  } else if (typeof it.fracao === "number") {
+    largura = larguraFracao(it.fracao);
+    classe = it.fracao >= 0.99 ? "ok" : "warn";
+  }
+  const barra = criar("span", null, "preench" + (classe ? " " + classe : ""));
+  barra.style.width = largura + "%";
+  const trilho = criar("div", null, "trilho");
+  trilho.appendChild(barra);
+  cartao.appendChild(trilho);
+  cartao.appendChild(criar("p", txt(it.nota), "note"));
+  return cartao;
+}
+
+// Pedidos: "Pendentes" = tudo que não é entregue; o filtro fica em ESTADO.filtroPedidos.
+function trocarFiltroPedidos(f) {
+  ESTADO.filtroPedidos = f;
+  $("pedidos-f-pend").setAttribute("aria-pressed", String(f === "pend"));
+  $("pedidos-f-entr").setAttribute("aria-pressed", String(f === "entr"));
+  renderPedidos();
+}
+
+function seloPedido(it) {
+  if (it.estado === "entregue") return ["ok", "Entregue"];
+  if (it.estado === "pendente") return it.prioridade === "critico" ? ["bad", "Crítico"] : ["warn", "Pendente"];
+  if (it.estado === "sem_dados") return ["idle", "Sem dados"];
+  if (it.estado === "sem_checagem") return ["idle", "Sem checagem automática"];
+  if (it.estado === "erro") return ["bad", "Erro"];
+  return ["idle", SEM];
+}
+
+function pedidoNode(it) {
+  const li = criar("li", null, "pedido");
+  const [classe, rotulo] = seloPedido(it);
+  li.appendChild(criar("span", rotulo, "selo " + classe));
+  li.appendChild(criar("strong", txt(it.texto)));
+  if (typeof it.detalhe === "string") li.appendChild(criar("p", it.detalhe, "note"));
+  if (typeof it.evidencia === "string") li.appendChild(criar("p", it.evidencia, "note"));
+  return li;
+}
+
+function renderPedidos() {
+  const p = ESTADO.pedidos || {};
+  const itens = listaSegura(p.itens).filter((it) => it && typeof it === "object");
+  const entregues = itens.filter((it) => it.estado === "entregue").length;
+  const contagem = (n) => (indisponivel(p) || itens.length === 0 ? SEM : String(n));
+  $("pedidos-f-pend").textContent = "Pendentes · " + contagem(itens.length - entregues);
+  $("pedidos-f-entr").textContent = "Entregues · " + contagem(entregues);
+  const visiveis = ESTADO.filtroPedidos === "entr"
+    ? itens.filter((it) => it.estado === "entregue")
+    : itens.filter((it) => it.estado !== "entregue");
+  const lista = $("pedidos-lista");
+  if (itens.length === 0) lista.replaceChildren(criar("li", txt(indisponivel(p) ? p.motivo : SEM), "motivo"));
+  else if (visiveis.length === 0) lista.replaceChildren(criar("li", "Nenhum pedido neste filtro.", "motivo"));
+  else lista.replaceChildren(...visiveis.map(pedidoNode));
+  $("pedidos-fonte").textContent = txt(indisponivel(p) ? p.motivo : p.fonte);
+}
+
+function celulaComEscopo(tag, texto, escopo) {
+  const c = criar(tag, texto);
+  c.setAttribute("scope", escopo);
+  return c;
+}
+
+// Célula do mapa: ausente e zero ficam tracejados; o fundo cresce em escala logarítmica até o máximo.
+function celulaCalor(n, maximo) {
+  const td = criar("td");
+  if (typeof n !== "number") { td.textContent = SEM; td.className = "vazia"; return td; }
+  if (n <= 0) { td.textContent = "0"; td.className = "vazia"; return td; }
+  td.textContent = n.toLocaleString("pt-BR");
+  const escala = Math.log10(maximo);
+  const p = escala > 0 ? Math.min(55, Math.round((55 * Math.log10(n)) / escala)) : 55;
+  td.style.background = "color-mix(in srgb, var(--acento) " + p + "%, var(--sup2))";
+  return td;
+}
+
+function mapaCalor(anos, linhas, maximo) {
+  const tab = criar("table", null, "mapa-calor");
+  const thead = criar("thead");
+  const cabeca = criar("tr");
+  cabeca.appendChild(celulaComEscopo("th", "Origem", "col"));
+  anos.forEach((a) => cabeca.appendChild(celulaComEscopo("th", a, "col")));
+  thead.appendChild(cabeca);
+  tab.appendChild(thead);
+  const corpo = criar("tbody");
+  linhas.forEach((l) => {
+    const tr = criar("tr");
+    tr.appendChild(celulaComEscopo("th", txt(l.rotulo || l.origem), "row"));
+    const valores = listaSegura(l.valores);
+    anos.forEach((_, i) => tr.appendChild(celulaCalor(valores[i], maximo)));
+    corpo.appendChild(tr);
+  });
+  tab.appendChild(corpo);
+  return tab;
+}
+
+// Notícias por ano e origem: mapa de calor; o máximo vem do servidor (ou do maior valor recebido).
+function renderNoticiasAno(na) {
+  const anos = listaSegura(na.anos).map((a) => txt(a));
+  const linhas = listaSegura(na.linhas).filter((l) => l && typeof l === "object");
+  $("noticias-ano-sub").textContent = txt(indisponivel(na) ? na.motivo : na.fonte);
+  if (anos.length === 0 || linhas.length === 0) {
+    $("noticias-ano").replaceChildren(motivo(indisponivel(na) ? na.motivo : SEM));
+    return;
+  }
+  const valores = linhas.flatMap((l) => listaSegura(l.valores)).filter((x) => typeof x === "number");
+  const maximo = typeof na.maximo === "number" && na.maximo > 0 ? na.maximo : Math.max(0, ...valores);
+  $("noticias-ano").replaceChildren(mapaCalor(anos, linhas, maximo));
+}
+
+// Uma barra por mês (fração da mediana): conhecido em amarelo; rever ou outro em vermelho.
+function barraMes(m) {
+  const linha = criar("div", null, "barra-linha");
+  linha.appendChild(criar("span", txt(m.mes_texto || m.mes)));
+  const barra = criar("span", null, "preench " + (m.estado === "conhecido" ? "warn" : "bad"));
+  barra.style.width = Math.round(larguraFracao(m.fracao)) + "%";
+  const trilho = criar("div", null, "trilho");
+  trilho.appendChild(barra);
+  linha.appendChild(trilho);
+  const artigos = typeof m.artigos === "number" ? m.artigos.toLocaleString("pt-BR") + " artigos" : SEM;
+  const fracao = typeof m.fracao === "number" ? Math.round(m.fracao * 100) + "% da mediana" : SEM;
+  linha.appendChild(criar("span", artigos + " · " + fracao, "barra-info"));
+  return linha;
+}
+
+function renderNoticiasMes(nm) {
+  const meses = listaSegura(nm.meses).filter((m) => m && typeof m === "object");
+  const partes = [nm.nota, nm.fonte].filter((t) => typeof t === "string");
+  $("noticias-mes-sub").textContent = indisponivel(nm) ? txt(nm.motivo) : (partes.length ? partes.join(" · ") : SEM);
+  $("noticias-mes-falta").textContent = typeof nm.falta === "string" ? nm.falta : "";
+  if (meses.length === 0) {
+    $("noticias-mes").replaceChildren(motivo(indisponivel(nm) ? nm.motivo : txt(nm.nota)));
+    return;
+  }
+  $("noticias-mes").replaceChildren(...meses.map(barraMes));
 }
 
 // Aba API: estado, linhas e o tempo da última consulta.
@@ -1594,7 +1851,11 @@ function renderSaudeCartoes(d) {
   $("saude-gerado").textContent = geradoEm ? "Diagnóstico de " + dataBr(geradoEm) : "Diagnóstico: " + SEM;
   const cont = $("saude-cartoes");
   if (sv.disponivel !== true) {
-    cont.replaceChildren(motivo(sv.disponivel === false ? sv.motivo : SEM));
+    // Sem a saúde completa, ainda aparecem os cartões informativos (ex.: Indicadores indisponíveis).
+    const avisos = [motivo(sv.disponivel === false ? sv.motivo : SEM)];
+    listaSegura(sv.cartoes).filter((c) => c && typeof c === "object" && c.informativo === true)
+      .forEach((c) => avisos.push(cartaoSaude(c, sv)));
+    cont.replaceChildren(...avisos);
     return;
   }
   // A coerência do mercado é desenhada no cartão Mercado (renderMercado), não aqui.
@@ -1688,29 +1949,84 @@ function renderMercado(d) {
   $("mercado-coerencia").replaceChildren(coerencia);
 }
 
-// Diagnóstico completo (dentro do bloco recolhível de Saúde).
+// ---- diagnóstico do banco (aba Diagnóstico): números da comparação, divergências e relatório por seção ----
+
+// "Desde": "nova" ganha selo de aviso; o resto vem como o servidor mandou (ou "sem dados").
+function desdeNode(x) {
+  return x.desde_texto === "nova" ? criar("span", "nova", "pill warn") : txt(x.desde_texto);
+}
+
+// Contagem da lista e, na nota, os primeiros três "tema (tabela)". Sem lista, "sem dados" com o motivo da comparação.
+function resumoDivergencias(lista, motivoComparacao) {
+  if (!Array.isArray(lista)) return { valor: SEM, nota: txt(motivoComparacao) };
+  const itens = lista.filter((x) => x && typeof x === "object");
+  const nomes = itens.slice(0, 3).map((x) => txt(x.tema) + " (" + txt(x.tabela) + ")");
+  const resto = itens.length - nomes.length;
+  const nota = nomes.length ? nomes.join(", ") + (resto > 0 ? " e mais " + resto : "") : "nenhuma";
+  return { valor: String(itens.length), nota: nota };
+}
+
+// Seção do relatório: recolhida, com ponto (ok, at = atenção, o resto = cinza), título, primeira nota; as notas abrem.
+function secaoDiag(sec) {
+  const chave = "saude-" + txt(sec.numero);
+  const classe = sec.ponto === "ok" ? "ok" : sec.ponto === "at" ? "warn" : "idle";
+  const det = criar("details", null, "secao-diag " + classe);
+  if (typeof sec.numero === "number") det.id = chave;
+  det.open = ESTADO.abertos.has(chave);
+  det.addEventListener("toggle", () => {
+    if (det.open) ESTADO.abertos.add(chave);
+    else ESTADO.abertos.delete(chave);
+  });
+  const resumo = criar("summary");
+  resumo.appendChild(criar("span", null, "dot " + classe));
+  resumo.appendChild(criar("span", txt(sec.numero) + ". " + txt(sec.titulo), "saude-tit"));
+  resumo.appendChild(criar("span", txt(sec.resumo), "note"));
+  det.appendChild(resumo);
+  const notas = listaSegura(sec.notas);
+  det.appendChild(notas.length ? ul(notas) : motivo("Sem notas."));
+  return det;
+}
+
+// Lê v.diagnostico (contrato "diagnostico"); sem ele, o motivo vem de d.saude. Nada disso é 0: ausência = "sem dados".
 function renderSaude(d) {
+  const dg = (d.visao || {}).diagnostico || {};
   const s = d.saude || {};
-  const nos = [];
-  if (vazio(s)) {
-    nos.push(motivo(SEM));
-  } else if (indisponivel(s)) {
-    nos.push(motivo(s.motivo));
-  } else {
-    nos.push(campo("Gerado em", dataBr(s.gerado_em)));
-    if (s.sem_divergencias) {
-      nos.push(criar("p", "Nenhuma divergência.", "ok-texto"));
-    } else {
-      nos.push(tabela(["Tema", "Tabela", "Detalhe"], listaSegura(s.divergencias).map((x) => [x.tema, x.tabela, x.detalhe])));
-    }
-    listaSegura(s.secoes).forEach((sec) => {
-      const det = detalhes("saude-" + txt(sec.numero), txt(sec.numero) + ". " + txt(sec.titulo));
-      const notas = listaSegura(sec.notas);
-      det.appendChild(notas.length ? ul(notas) : motivo("Sem notas."));
-      nos.push(det);
-    });
+  const disponivel = dg.disponivel === true;
+  const motivoDg = dg.disponivel === false ? txt(dg.motivo) : indisponivel(s) ? txt(s.motivo) : SEM;
+  $("diag-cabecalho").textContent = disponivel
+    ? "Gerado em " + txt(dg.gerado_em_texto) + " · só leitura · " + (typeof dg.n_secoes === "number" ? dg.n_secoes : SEM) + " seções"
+    : motivoDg;
+
+  const div = disponivel && dg.divergencias && typeof dg.divergencias === "object" ? dg.divergencias : {};
+  $("diag-div-atual").textContent = typeof div.atual === "number" ? String(div.atual) : SEM;
+  $("diag-div-atual-nota").textContent = disponivel
+    ? (typeof div.anterior === "number" ? "eram " + div.anterior + " no diagnóstico anterior" : "sem diagnóstico anterior guardado")
+    : "";
+  const resolvidas = resumoDivergencias(div.resolvidas, div.motivo_comparacao);
+  $("diag-div-resolvidas").textContent = resolvidas.valor;
+  $("diag-div-resolvidas-nota").textContent = resolvidas.nota;
+  const novas = resumoDivergencias(div.novas, div.motivo_comparacao);
+  $("diag-div-novas").textContent = novas.valor;
+  $("diag-div-novas-nota").textContent = novas.nota;
+
+  let tabelaDiv;
+  if (!disponivel) tabelaDiv = motivo(motivoDg);
+  else if (!Array.isArray(div.lista)) tabelaDiv = motivo(SEM);
+  else {
+    const lista = div.lista.filter((x) => x && typeof x === "object");
+    tabelaDiv = lista.length === 0
+      ? criar("p", "Nenhuma divergência.", "ok-texto")
+      : tabela(["Tema", "Tabela", "Detalhe", "Desde"], lista.map((x) => [x.tema, x.tabela, x.detalhe, desdeNode(x)]));
   }
-  $("saude-completa").replaceChildren(...nos);
+  $("diag-divergencias").replaceChildren(tabelaDiv);
+
+  let relatorio;
+  if (!disponivel) relatorio = [motivo(motivoDg)];
+  else {
+    const secoes = listaSegura(dg.secoes).filter((sec) => sec && typeof sec === "object");
+    relatorio = secoes.length ? secoes.map(secaoDiag) : [motivo(SEM)];
+  }
+  $("saude-completa").replaceChildren(...relatorio);
 }
 
 // ---- experimento ----
@@ -2124,6 +2440,8 @@ $("mes-prox").addEventListener("click", () => {
 });
 $("btn-atualizar").addEventListener("click", () => carregarPainel());
 $("btn-parar").addEventListener("click", () => pararAcao());
+$("pedidos-f-pend").addEventListener("click", () => trocarFiltroPedidos("pend"));
+$("pedidos-f-entr").addEventListener("click", () => trocarFiltroPedidos("entr"));
 
 // "?": clique ou toque abre e prende; passar o mouse abre sem prender; Esc fecha e devolve o foco.
 document.addEventListener("click", (ev) => {
