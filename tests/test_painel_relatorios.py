@@ -6,9 +6,11 @@ Nenhum teste usa banco ou rede, nem grava em tests/dados/.
 
 import json
 import shutil
+from datetime import datetime, timedelta
 
 from fabrica_painel import montar_raiz
 
+from processamento.calendario import SP
 from processamento.painel import relatorios
 from processamento.painel.relatorios import (
     analisar_log_rotina,
@@ -420,3 +422,101 @@ def test_experimento_com_familia_logistica_le_as_metas_da_logistica(tmp_path):
     assert com_logistica["modelo_em_uso"]["arquivo"] == "logistica-2026-06.meta.json"
     assert com_logistica["modelo_sombra"]["arquivo"] == "logistica-m1-2026-06.meta.json"
     assert ler_experimento(raiz, PARAMS)["modelo_em_uso"]["arquivo"] == "xgb-2026-06.meta.json"
+
+
+# ---------------------------------------------------------------- tempos e médias das etapas do dia
+
+def _log_dia(pasta, nome, linhas_etapas, codigo=0, rodape=True):
+    """Log do dia completo: cabeçalho, linhas de etapa do `dia.py` e rodapé opcional."""
+    linhas = ["# painel: acao=dia inicio=2026-11-01T08:00:00-03:00 comando=python -m processamento.painel.dia --data D"]
+    linhas += linhas_etapas
+    if rodape:
+        linhas.append(f"# painel: fim=2026-11-01T09:00:00-03:00 codigo={codigo}")
+    (pasta / nome).write_text("\n".join(linhas) + "\n", encoding="utf-8")
+
+
+def _etapas(inicio, dur_rotina, dur_carga, dur_pub, codigo_carga=0, pulada_pub=False):
+    """Linhas `# dia:` com início às 08:00:00 (do dia de `inicio`) e durações em segundos."""
+    base = datetime.fromisoformat(inicio + "T08:00:00").replace(tzinfo=SP)
+    def hora(s):
+        return (base + timedelta(seconds=s)).isoformat(timespec="seconds")
+    r_ini, r_fim = base, base + timedelta(seconds=dur_rotina)
+    c_ini = r_fim + timedelta(seconds=10)
+    c_fim = c_ini + timedelta(seconds=dur_carga)
+    p_ini = c_fim + timedelta(seconds=5)
+    p_fim = p_ini + timedelta(seconds=dur_pub)
+    linhas = [
+        f"# dia: etapa=rotina inicio={r_ini.isoformat(timespec='seconds')}",
+        f"# dia: etapa=rotina fim codigo=0 em={r_fim.isoformat(timespec='seconds')} detalhe=status ok",
+        f"# dia: etapa=carga inicio={c_ini.isoformat(timespec='seconds')}",
+        f"# dia: etapa=carga fim codigo={codigo_carga} em={c_fim.isoformat(timespec='seconds')} detalhe=status ok",
+    ]
+    if pulada_pub:
+        linhas.append("# dia: etapa=publicador pulada motivo=a carga completa falhou")
+    else:
+        linhas.append(f"# dia: etapa=publicador inicio={p_ini.isoformat(timespec='seconds')}")
+        linhas.append(f"# dia: etapa=publicador fim codigo=0 em={p_fim.isoformat(timespec='seconds')} detalhe=ok")
+    return linhas
+
+
+def _pasta_dia(tmp_path):
+    pasta = tmp_path / "logs" / "painel"
+    pasta.mkdir(parents=True)
+    # 11-01 e 11-02 completos; 11-03 com carga falhando e publicador pulado; 10-30 formato antigo (sem em=);
+    # 11-04 sem rodapé (execução em andamento) — esses dois ficam fora.
+    _log_dia(pasta, "dia-2026-11-01_080000.log", _etapas("2026-11-01", 300, 300, 10))
+    _log_dia(pasta, "dia-2026-11-02_080000.log", _etapas("2026-11-02", 360, 240, 20))
+    _log_dia(pasta, "dia-2026-11-03_080000.log", _etapas("2026-11-03", 330, 0, 0, codigo_carga=4, pulada_pub=True),
+             codigo=4)
+    _log_dia(pasta, "dia-2026-10-30_080000.log", [
+        "# dia: etapa=rotina inicio=10:00:00",
+        "# dia: etapa=rotina fim codigo=0 detalhe=status ok",
+        "# dia: etapa=carga inicio=10:01:00",
+        "# dia: etapa=carga fim codigo=0 detalhe=status ok",
+    ])
+    _log_dia(pasta, "dia-2026-11-04_080000.log", ["# dia: etapa=rotina inicio=2026-11-04T08:00:00-03:00",
+                                                  "# dia: etapa=rotina fim codigo=0 em=2026-11-04T08:16:39-03:00 detalhe=x"],
+             rodape=False)
+    return pasta
+
+
+def test_medias_etapas_dia_pelas_ultimas_n_execucoes(tmp_path):
+    pasta = _pasta_dia(tmp_path)
+    m = relatorios.medias_etapas_dia(pasta, 3)
+    assert m == {
+        "medias": {"rotina": 330, "carga": 270, "publicador": 15},
+        "amostras": {"rotina": 3, "carga": 2, "publicador": 2},
+    }
+    m = relatorios.medias_etapas_dia(pasta, 2)
+    assert m["medias"] == {"rotina": 345, "carga": 270, "publicador": 15}
+    assert m["amostras"] == {"rotina": 2, "carga": 2, "publicador": 2}
+
+
+def test_medias_etapas_dia_sem_n_valido_ou_sem_pasta(tmp_path):
+    pasta = _pasta_dia(tmp_path)
+    for n in (None, 0, -1, "3"):
+        m = relatorios.medias_etapas_dia(pasta, n)
+        assert m == {"medias": {"rotina": None, "carga": None, "publicador": None},
+                     "amostras": {"rotina": 0, "carga": 0, "publicador": 0}}
+    m = relatorios.medias_etapas_dia(tmp_path / "nao_existe", 3)
+    assert m == {"medias": {"rotina": None, "carga": None, "publicador": None},
+                 "amostras": {"rotina": 0, "carga": 0, "publicador": 0}}
+
+
+def test_tempos_etapas_dia_formato_novo_e_antigo():
+    novo = relatorios.tempos_etapas_dia([
+        "# dia: etapa=rotina inicio=2026-10-26T10:00:00-03:00",
+        "# dia: etapa=rotina fim codigo=0 em=2026-10-26T10:05:00-03:00 detalhe=status ok",
+        "# dia: etapa=carga inicio=2026-10-26T10:05:10-03:00",
+        "# dia: etapa=carga pulada motivo=a rotina falhou",
+    ])
+    assert novo == {
+        "rotina": {"inicio": "2026-10-26T10:00:00-03:00", "fim": "2026-10-26T10:05:00-03:00", "codigo": 0},
+        "carga": {"inicio": "2026-10-26T10:05:10-03:00", "fim": None, "codigo": None},
+        "publicador": {"inicio": None, "fim": None, "codigo": None},
+    }
+    antigo = relatorios.tempos_etapas_dia([
+        "# dia: etapa=rotina inicio=10:00:00",
+        "# dia: etapa=rotina fim codigo=4 detalhe=status falhou",
+    ])
+    assert antigo["rotina"] == {"inicio": None, "fim": None, "codigo": 4}

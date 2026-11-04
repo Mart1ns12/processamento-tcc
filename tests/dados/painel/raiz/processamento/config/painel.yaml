@@ -8,3 +8,6 @@ dia_atipico_ibov_amplo: 0.05
 coerencia_ivvb11_min_abs: 0.03
 coerencia_ibov_mediana_dif: 0.02
 afetadas_max: 5
+dia_media_execucoes: 3           # tempo estimado do dia completo: média das últimas N execuções concluídas (logs/painel/dia-*.log; no máximo 20)
+diagnosticos_manter: 10          # resumos guardados em logs/painel/diagnosticos/ ("O que mudou desde ontem")
+mercado_pregoes_linha: 7         # pregões na minilinha do Ibovespa (pastas saida/AAAA-MM-DD)

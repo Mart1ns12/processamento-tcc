@@ -327,6 +327,9 @@ def test_ler_parametros_painel_da_fixture(tmp_path):
     assert p["api_tempo_limite_s"] == 2.0
     assert p["retorno_dia_abs"] == 0.30
     assert p["afetadas_max"] == 5
+    assert p["dia_media_execucoes"] == 3
+    assert p["diagnosticos_manter"] == 10
+    assert p["mercado_pregoes_linha"] == 7
 
 
 def test_ler_parametros_painel_real_so_leitura():

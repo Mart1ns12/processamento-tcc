@@ -121,8 +121,6 @@ def estado_botoes(params: dict, trava: dict, hoje: dict, rotina_data: dict, d_ca
                          "não mexe no envio diário nem nos registros.")
         elif acao_id == "diagnostico":
             aviso = "Só lê o banco; reescreve docs/diagnostico_banco.md."
-        elif acao_id == "wordpress":
-            aviso = "Só lê o banco; reescreve docs/validacao_wordpress.md."
         elif acao_id == "testes":
             aviso = "Não usa o banco; leva alguns minutos."
         argv = acoes.montar_comando(acao_id, d_rotina=d_rotina, d_carga=d_carga)
@@ -137,8 +135,10 @@ def estado_botoes(params: dict, trava: dict, hoje: dict, rotina_data: dict, d_ca
     return botoes
 
 
-def estado_com_marcos(executor: acoes.Executor, desde: int | None) -> dict:
-    """Estado do Executor com as linhas a partir de `desde` e as etapas calculadas sobre todo o buffer."""
+def estado_com_marcos(executor: acoes.Executor, desde: int | None, *, pasta_logs_painel: Path | None = None,
+                      n_media: int | None = None, agora: datetime | None = None) -> dict:
+    """Estado do Executor com as linhas a partir de `desde`, as etapas calculadas sobre todo o buffer e,
+    no dia completo, o progresso (tempo estimado pelas médias dos logs do painel)."""
     completo = executor.estado(0)
     todas = completo["linhas"]
     if desde is None:
@@ -146,9 +146,24 @@ def estado_com_marcos(executor: acoes.Executor, desde: int | None) -> dict:
     else:
         primeiro = completo["total_linhas"] - len(todas)
         linhas = todas[max(desde, primeiro) - primeiro:]
-    return {**completo, "linhas": linhas,
-            "marcos": marcos.marcos_acao(completo["id"], todas, rodando=completo["rodando"],
-                                         codigo=completo["codigo"], significado=completo["significado"])}
+    marcos_lista = marcos.marcos_acao(completo["id"], todas, rodando=completo["rodando"],
+                                      codigo=completo["codigo"], significado=completo["significado"])
+    return {**completo, "linhas": linhas, "marcos": marcos_lista,
+            "progresso": _progresso_dia(completo, todas, marcos_lista, pasta_logs_painel, n_media, agora)}
+
+
+def _progresso_dia(completo: dict, todas: list[str], marcos_lista: list[dict], pasta_logs_painel: Path | None,
+                   n_media: int | None, agora: datetime | None) -> dict | None:
+    """Progresso só do dia completo (None nas outras ações). Erro na conta vira None, nunca derruba a tela."""
+    if completo["id"] != "dia":
+        return None
+    try:
+        med = (relatorios.medias_etapas_dia(pasta_logs_painel, n_media) if pasta_logs_painel is not None
+               else {"medias": {}, "amostras": {}})
+        return marcos.progresso_dia(todas, marcos_lista, med["medias"], med["amostras"],
+                                    agora or datetime.now(SP), completo["rodando"])
+    except Exception:
+        return None
 
 
 def _juntar_saude(saude_base: dict, coer: dict, afet: dict, afetadas_max: int | None) -> dict:
@@ -193,6 +208,8 @@ def montar_painel(raiz: Path, executor: acoes.Executor, agora: datetime, caminho
     valida = leitores.ultima_execucao_valida(itens_diarias)
     d_valida = valida.get("data_referencia") if valida else None
     dados_dia = _seguro(mercado.ler_dia, raiz, params["pasta_saida"], d_valida)
+    serie = _seguro(mercado.serie_ibov, raiz, params["pasta_saida"], d_valida, painel_p.get("mercado_pregoes_linha"))
+    serie = serie if isinstance(serie, list) else []
     api_sit = (_seguro(monitor.situacao, painel_p, agora) if monitor is not None
                else {"configurada": False, "erro_config": "Monitor da API ausente."})
     api_v = _seguro(visao.bloco_api, api_sit, painel_p.get("api_tempo_limite_s"))
@@ -203,7 +220,7 @@ def montar_painel(raiz: Path, executor: acoes.Executor, agora: datetime, caminho
     coer = _seguro(mercado.cartao_coerencia, dados_dia, {
         "ivvb11_min": painel_p.get("coerencia_ivvb11_min_abs"), "dif_min": painel_p.get("coerencia_ibov_mediana_dif")})
     docs_md = raiz / "docs" / "diagnostico_banco.md"
-    novid = _seguro(novidades.novidades, docs_md, pasta_painel)
+    novid = _seguro(novidades.novidades, docs_md, pasta_painel, painel_p.get("diagnosticos_manter"))
     afet = _seguro(saude.afetadas_saude, docs_md)
     pub = _seguro(dia.verificar_publicador, raiz, painel_p)
     motivo_pub = pub.get("motivo") if isinstance(pub, dict) else "erro ao conferir o projeto da API"
@@ -229,7 +246,9 @@ def montar_painel(raiz: Path, executor: acoes.Executor, agora: datetime, caminho
         "saude": _seguro(relatorios.ler_diagnostico, docs_md),
         "experimento": _seguro(relatorios.ler_experimento, raiz, params),
         "testes": testes,
-        "acao": _seguro(estado_com_marcos, executor, None),
+        "acao": _seguro(functools.partial(estado_com_marcos, pasta_logs_painel=pasta_painel,
+                                         n_media=painel_p.get("dia_media_execucoes"), agora=agora),
+                        executor, None),
         "botoes": botoes_v,
         "data_rotina": rotina_data,
         "visao": {
@@ -248,6 +267,8 @@ def montar_painel(raiz: Path, executor: acoes.Executor, agora: datetime, caminho
             "coleta_etapas": _seguro(visao.etapas_coleta, agora_item),
             "novidades": novid,
             "dia_atipico": atipico_v,
+            "mercado": _seguro(mercado.bloco_mercado, dados_dia, serie),
+            "fluxo_nos": _seguro(visao.fluxo_nos, fluxo_v, banco_v, api_v),
         },
     }
 
@@ -280,6 +301,7 @@ class _Servidor(ThreadingHTTPServer):
     caminho_calendario: str | None
     executor: acoes.Executor
     monitor: api.MonitorApi
+    pasta_painel: Path
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -328,18 +350,13 @@ class _Handler(BaseHTTPRequestHandler):
             dados = montar_painel(srv.raiz, srv.executor, srv.relogio(), srv.caminho_calendario, srv.monitor)
             self._json(200, dados)
         elif caminho == "/api/acao":
-            self._json(200, estado_com_marcos(srv.executor, _desde(partes.query)))
+            self._json(200, estado_com_marcos(
+                srv.executor, _desde(partes.query), pasta_logs_painel=srv.pasta_painel,
+                n_media=leitores.ler_parametros_painel(srv.raiz).get("dia_media_execucoes"), agora=srv.relogio()))
         elif caminho == "/api/relatorio":
             arquivo = relatorios.caminho_ultimo_relatorio(srv.raiz)
             if arquivo is None or not arquivo.is_file():
                 self._json(404, {"erro": "sem relatório"})
-                return
-            texto = arquivo.read_text(encoding="utf-8", errors="replace")
-            self._enviar(200, "text/plain; charset=utf-8", texto.encode("utf-8"))
-        elif caminho == "/api/validacao-wordpress":
-            arquivo = srv.raiz / "docs" / "validacao_wordpress.md"
-            if not arquivo.is_file():
-                self._json(404, {"erro": "docs/validacao_wordpress.md não encontrado (rode a validação)"})
                 return
             texto = arquivo.read_text(encoding="utf-8", errors="replace")
             self._enviar(200, "text/plain; charset=utf-8", texto.encode("utf-8"))
@@ -431,6 +448,7 @@ def criar_servidor(raiz: Path = leitores.RAIZ_PADRAO, porta: int = PORTA_PADRAO,
         executor = acoes.Executor(raiz, raiz / pasta_logs / "painel", relogio=relogio)
     srv = _Servidor(("127.0.0.1", porta), _Handler)
     srv.raiz = raiz
+    srv.pasta_painel = raiz / pasta_logs / "painel"
     srv.porta = srv.server_address[1]
     srv.token = secrets.token_urlsafe(24)
     srv.pagina = pagina

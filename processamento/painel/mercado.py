@@ -59,15 +59,24 @@ def _valor_ok(bloco: object) -> float | None:
     return float(v) if _numero(v) else None
 
 
-def ler_dia(raiz: Path, pasta_saida: str, d: str | None) -> dict:
-    """{"disponivel","motivo","d","data_pregao","ibov","usd","ivvb11","smll","retornos":[[ticker, valor]],"fonte"}.
+def _registro_mercado(pasta: Path) -> tuple[dict | None, str | None]:
+    """(registros[0] do mercado_dia.json, erro); registro None quando o arquivo é ilegível ou não tem registro."""
+    mercado, erro = ler_json(pasta / "mercado_dia.json")
+    registros = mercado.get("registros") if isinstance(mercado, dict) else None
+    reg = registros[0] if isinstance(registros, list) and registros and isinstance(registros[0], dict) else None
+    return reg, erro
 
-    mercado_dia registros[0]: IBOV.variacao_dia, USDBRL.variacao_dia, indices.IVVB11.d1, indices.SMLL.d1.
+
+def ler_dia(raiz: Path, pasta_saida: str, d: str | None) -> dict:
+    """{"disponivel","motivo","d","data_pregao","ibov","ibov_nivel","usd","ivvb11","smll","retornos","fonte"}.
+
+    retornos: [[ticker, valor]]. mercado_dia registros[0]: IBOV.variacao_dia, IBOV.fechamento (nível),
+    USDBRL.variacao_dia, indices.IVVB11.d1, indices.SMLL.d1.
     resumo_acao: (ticker, rentabilidade.d1.valor) só com status "ok".
     disponivel só é True quando o mercado_dia tem um registro. Pasta ou arquivo ausente/quebrado vira motivo.
     """
-    vazio = {"disponivel": False, "motivo": None, "d": d, "data_pregao": None, "ibov": None, "usd": None,
-             "ivvb11": None, "smll": None, "retornos": [], "fonte": None}
+    vazio = {"disponivel": False, "motivo": None, "d": d, "data_pregao": None, "ibov": None, "ibov_nivel": None,
+             "usd": None, "ivvb11": None, "smll": None, "retornos": [], "fonte": None}
     if not isinstance(d, str) or not d:
         return {**vazio, "motivo": "sem dia de referência"}
     pasta = Path(raiz) / pasta_saida / d
@@ -75,9 +84,7 @@ def ler_dia(raiz: Path, pasta_saida: str, d: str | None) -> dict:
     if not pasta.is_dir():
         return {**vazio, "motivo": "pasta de saída não encontrada", "fonte": fonte}
 
-    mercado, erro = ler_json(pasta / "mercado_dia.json")
-    registros = mercado.get("registros") if isinstance(mercado, dict) else None
-    reg = registros[0] if isinstance(registros, list) and registros and isinstance(registros[0], dict) else None
+    reg, erro = _registro_mercado(pasta)
     if reg is None:
         motivo = f"mercado_dia.json: {erro}" if erro else "mercado_dia.json sem registros"
         return {**vazio, "motivo": motivo, "fonte": fonte}
@@ -98,11 +105,63 @@ def ler_dia(raiz: Path, pasta_saida: str, d: str | None) -> dict:
         "d": d,
         "data_pregao": data if _data_br(data) else None,
         "ibov": _valor_ok(_sub(reg, "IBOV", "variacao_dia")),
+        "ibov_nivel": _valor_ok(_sub(reg, "IBOV", "fechamento")),
         "usd": _valor_ok(_sub(reg, "USDBRL", "variacao_dia")),
         "ivvb11": _valor_ok(_sub(reg, "indices", "IVVB11", "d1")),
         "smll": _valor_ok(_sub(reg, "indices", "SMLL", "d1")),
         "retornos": retornos,
         "fonte": fonte,
+    }
+
+
+def serie_ibov(raiz: Path, pasta_saida: str, ate: str | None, n: int | None) -> list[dict]:
+    """Até n fechamentos do IBOV, em ordem crescente de data, das pastas AAAA-MM-DD de saida/ até `ate` (inclusive).
+
+    Ponto = data_referencia válida com fechamento "ok". Pastas são lidas da mais nova para a mais antiga; uma
+    data_referencia já vista numa pasta mais nova é ignorada. Só mercado_dia.json é lido (resumo_acao fica de fora).
+    ate ou n inválidos, ou pasta inexistente, devolvem [].
+    """
+    if not isinstance(ate, str) or _data_br(ate) is None or not isinstance(n, int) or isinstance(n, bool) or n < 1:
+        return []
+    base = Path(raiz) / pasta_saida
+    if not base.is_dir():
+        return []
+    pastas = sorted((p for p in base.iterdir() if p.is_dir() and RE_DATA_ISO.match(p.name) and p.name <= ate),
+                    key=lambda p: p.name, reverse=True)
+    pontos, vistos = [], set()
+    for pasta in pastas:
+        if len(pontos) >= n:
+            break
+        reg, _ = _registro_mercado(pasta)
+        referencia = reg.get("data_referencia") if reg is not None else None
+        if _data_br(referencia) is None or referencia in vistos:
+            continue
+        vistos.add(referencia)
+        nivel = _valor_ok(_sub(reg, "IBOV", "fechamento"))
+        if nivel is not None:
+            pontos.append({"data": referencia, "nivel": nivel})
+    return list(reversed(pontos))
+
+
+def bloco_mercado(dados: dict, serie: list[dict]) -> dict:
+    """Bloco "Mercado" do painel: nível e variação do Ibovespa do último pregão, mais a série de fechamentos.
+
+    dados: saída de ler_dia. Ausência vira "sem dados" e None, nunca 0.
+    """
+    disponivel = dados.get("disponivel") is True
+    ibov = dados.get("ibov") if disponivel else None
+    nivel = dados.get("ibov_nivel") if disponivel else None
+    nivel_ok = _numero(nivel)
+    return {
+        "disponivel": disponivel,
+        "motivo": dados.get("motivo"),
+        "data_pregao": dados.get("data_pregao") if disponivel else None,
+        "ibov_nivel": float(nivel) if nivel_ok else None,
+        "ibov_nivel_texto": f"{nivel:,.0f}".replace(",", ".") if nivel_ok else "sem dados",
+        "ibov_var": ibov,
+        "ibov_var_texto": pct2(ibov) if ibov is not None else "sem dados",
+        "serie": list(serie) if serie else [],
+        "fonte": dados.get("fonte"),
     }
 
 

@@ -8,44 +8,36 @@
 /* Layout: cabeçalho com o estado geral; fluxo Coleta → Processamento → Interface; linha do tempo da manhã;
    ações com etapas que acendem; saúde dos dados em cartões; experimento com cadeado; histórico e testes. */
 :root{
-  --bg:#f3f5f7; --surface:#ffffff; --ink:#15202b; --muted:#5b6876; --line:#dde3e9;
-  --accent:#1f5fd1; --accent-soft:#e3ecfb;
-  --ok:#14804a; --ok-soft:#dff3e8; --warn:#a36a00; --warn-soft:#fcf1d9; --bad:#c03a2b; --bad-soft:#fbe4e1;
-  --idle:#8a96a3; --track:#e9edf1;
-  --f-sans:"Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
-  --f-mono:ui-monospace, "Cascadia Mono", Consolas, "Courier New", monospace;
+  --bg:#F5F6F8; --sup:#FFFFFF; --sup2:#F0F2F5; --borda:#DCE0E6; --txt:#15181E; --sub:#545D6B;
+  --acento:#1F5FD6; --ok:#1A7F37; --okf:#E3F4E7; --at:#8A5A00; --atf:#FCF0D9; --falha:#C62828; --falhaf:#FBE4E4;
+  --trilho:#E6E9EE; --log:#F0F2F5;
+  --surface:var(--sup); --ink:var(--txt); --muted:var(--sub); --line:var(--borda); --accent:var(--acento); --accent-soft:var(--sup2);
+  --ok-soft:var(--okf); --warn:var(--at); --warn-soft:var(--atf); --bad:var(--falha); --bad-soft:var(--falhaf); --idle:var(--sub); --track:var(--trilho);
+  --f-sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --f-mono:ui-monospace,"Cascadia Mono",Consolas,"Courier New",monospace;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
-  --bg:#0f141a; --surface:#171e26; --ink:#e6ebf0; --muted:#97a3b0; --line:#28323d;
-  --accent:#6c9cf0; --accent-soft:#1c2a44;
-  --ok:#4cc58a; --ok-soft:#173528; --warn:#e2b04a; --warn-soft:#382d15; --bad:#ef7b6d; --bad-soft:#3b1f1c;
-  --idle:#6b7785; --track:#222b35; color-scheme:dark}}
+  --bg:#0F1115; --sup:#171A21; --sup2:#1E222B; --borda:#2A2F3A; --txt:#E8EAED; --sub:#A3ABB9;
+  --acento:#6EA8FF; --ok:#3FB950; --okf:#12301B; --at:#E3A33B; --atf:#3A2A0E; --falha:#FF6B6B; --falhaf:#3D1416;
+  --trilho:#262B35; --log:#0B0D11; color-scheme:dark}}
 :root[data-theme="dark"]{
-  --bg:#0f141a; --surface:#171e26; --ink:#e6ebf0; --muted:#97a3b0; --line:#28323d;
-  --accent:#6c9cf0; --accent-soft:#1c2a44;
-  --ok:#4cc58a; --ok-soft:#173528; --warn:#e2b04a; --warn-soft:#382d15; --bad:#ef7b6d; --bad-soft:#3b1f1c;
-  --idle:#6b7785; --track:#222b35; color-scheme:dark}
+  --bg:#0F1115; --sup:#171A21; --sup2:#1E222B; --borda:#2A2F3A; --txt:#E8EAED; --sub:#A3ABB9;
+  --acento:#6EA8FF; --ok:#3FB950; --okf:#12301B; --at:#E3A33B; --atf:#3A2A0E; --falha:#FF6B6B; --falhaf:#3D1416;
+  --trilho:#262B35; --log:#0B0D11; color-scheme:dark}
 *{box-sizing:border-box}
+button,.toggle,.aba{min-height:44px}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-sans);font-size:15px;line-height:1.5}
 [hidden]{display:none!important}
-.wrap{margin:0;padding-block:18px 48px;padding-left:max(clamp(16px,2.2vw,40px), env(safe-area-inset-left, 0px));padding-right:max(clamp(16px,2.2vw,40px), env(safe-area-inset-right, 0px));display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:22px 20px;align-items:start}
-.wrap > *{grid-column:1 / -1;min-width:0}
+.wrap{max-width:1240px;margin:0 auto;padding:24px 24px 48px;display:flex;flex-direction:column;gap:24px}
+.wrap > *{min-width:0}
 .secao{display:grid;gap:10px;align-content:start;min-width:0}
+[data-aba]{display:grid;gap:24px;align-content:start;min-width:0}
+[data-aba][hidden]{display:none}
 .secao-tit{font-size:1.15rem;font-weight:700;display:flex;align-items:center;gap:10px}
-.secao-tit .num{display:inline-grid;place-items:center;width:28px;height:28px;border-radius:50%;background:var(--accent);color:#fff;font-size:.9rem;font-family:var(--f-mono)}
 .card-tit{font-size:1.02rem;font-weight:600}
 .tit-linha{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:0}
-.faixa{display:grid;gap:18px;grid-template-columns:minmax(0,1fr);align-items:stretch}
 .card{container-type:inline-size}
 [tabindex="-1"]:focus{outline:2px solid var(--accent);outline-offset:3px}
-@media (min-width:1280px){
-  .wrap > #sec-experimento{grid-column:span 7}
-  .wrap > #sec-historico{grid-column:span 5}
-  .faixa-fluxo{grid-template-columns:minmax(0,1fr)}
-  .faixa-manha{grid-template-columns:minmax(0,7fr) minmax(0,5fr)}
-  .faixa-manha.uma{grid-template-columns:minmax(0,1fr)}
-  .faixa-acoes{grid-template-columns:minmax(0,8fr) minmax(0,4fr)}
-}
 @media (max-width:599px){.tl{margin:6px 24px 0}.card{padding:14px}}
 h1,h2,h3{margin:0;line-height:1.2;text-wrap:balance}
 h1{font-size:1.55rem;font-weight:700}
@@ -76,8 +68,13 @@ p{margin:0}
 .toggle{font:inherit;font-size:.82rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:8px;padding:6px 10px;cursor:pointer}
 .toggle:disabled{opacity:.45;cursor:not-allowed}
 .toggle.perigo{color:var(--bad);border-color:var(--bad)}
-.toggle:focus-visible,summary:focus-visible,.cal .d:focus-visible,tbody tr:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.toggle:focus-visible,summary:focus-visible,.cal .d:focus-visible,tbody tr:focus-visible,.aba:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .erro-rede{background:var(--bad-soft);color:var(--bad);font-weight:600;padding:10px 14px;border-radius:8px}
+
+/* abas: o hash da URL (#hoje, #coleta, ...) escolhe a seção visível */
+.abas{display:flex;gap:4px;overflow-x:auto;flex-wrap:nowrap}
+.aba{display:inline-flex;align-items:center;padding:0 14px;border-radius:8px;color:var(--sub);text-decoration:none;white-space:nowrap}
+.aba[aria-current="page"]{background:var(--sup2);color:var(--txt);box-shadow:inset 0 -2px 0 var(--acento)}
 
 /* fluxo */
 .flow{display:grid;grid-template-columns:1fr auto 1fr auto 1fr auto 1fr auto 1fr;gap:10px;align-items:stretch}
@@ -144,17 +141,10 @@ p{margin:0}
 details{border-top:1px solid var(--line);padding-top:8px}
 summary{cursor:pointer;font-size:.84rem;color:var(--muted)}
 pre{margin:8px 0 0;background:var(--track);border-radius:8px;padding:10px;font-family:var(--f-mono);font-size:.76rem;white-space:pre-wrap;word-break:break-word;max-height:220px;overflow:auto}
+#log{background:var(--log)}
 
 /* saúde */
-.health{display:grid;grid-template-columns:minmax(0,1fr);gap:10px}
-@media (min-width:600px){.health{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media (min-width:900px){.health{grid-template-columns:repeat(3,minmax(0,1fr))}}
-@media (min-width:1700px){.health{grid-template-columns:repeat(7,minmax(0,1fr))}}
-.hc{border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:grid;gap:6px;align-content:start;border-left-width:4px}
-.hc.ok{border-left-color:var(--ok)} .hc.warn{border-left-color:var(--warn)} .hc.bad{border-left-color:var(--bad)} .hc.idle{border-left-color:var(--idle)}
-.hc .n{font-family:var(--f-mono);font-size:1.3rem;font-weight:500}
-.hc p{font-size:.84rem}
-.hc .so{font-size:.8rem;color:var(--muted)}
+.lista-saude{display:grid;gap:8px}
 .ok-texto{color:var(--ok);font-weight:600}
 .alerta{color:var(--bad);font-weight:600}
 
@@ -232,10 +222,11 @@ ul{margin:4px 0;padding-left:20px}
 .ajuda-btn{font:inherit;font-size:.7rem;font-weight:700;line-height:1;width:20px;height:20px;padding:0;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--muted);cursor:pointer;display:inline-grid;place-items:center;flex:none;vertical-align:middle}
 .ajuda-btn:hover,.ajuda-btn[aria-expanded="true"]{color:var(--accent);border-color:var(--accent)}
 .ajuda-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.ajuda-btn{min-height:0;position:relative}
+.ajuda-btn::before{content:"";position:absolute;inset:-12px}
 @media (pointer:coarse){.ajuda-btn{width:28px;height:28px}}
 .ajuda-caixa{position:absolute;z-index:50;max-width:min(360px, calc(100vw - 24px));background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:12px 14px;box-shadow:0 8px 24px rgba(0,0,0,.18);font-size:.85rem;line-height:1.45;display:grid;gap:6px}
 .ajuda-tit{font-weight:600}
-.hc .tit-linha{justify-content:space-between;flex-wrap:nowrap}
 .resumo{border-left:6px solid var(--idle)}
 .resumo.ok{border-left-color:var(--ok)} .resumo.warn{border-left-color:var(--warn)} .resumo.bad{border-left-color:var(--bad)}
 .resumo-frase{font:inherit;font-size:1.3rem;font-weight:700;text-align:left;background:none;border:0;padding:0;color:var(--ink);cursor:pointer;justify-self:start}
@@ -250,13 +241,66 @@ ul{margin:4px 0;padding-left:20px}
 .fazer strong,.fazer-curto strong{color:var(--ink)}
 .tempo{font-size:.8rem}
 
+/* Situação de hoje (cartão do topo), fluxo em cinco nós, progresso do dia completo, grade de cartões */
+.hero{grid-template-columns:auto minmax(0,1fr);gap:16px;align-items:start}
+.hero-corpo{display:grid;gap:10px;align-content:start;min-width:0}
+.hero-ic{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;background:var(--track);color:var(--idle)}
+.hero-ic svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.hero-ic.ok{background:var(--okf);color:var(--ok)}
+.hero-ic.warn{background:var(--atf);color:var(--warn)}
+.hero-ic.bad{background:var(--falhaf);color:var(--bad)}
+.hero-ic.run{background:var(--sup2);color:var(--accent)}
+.botao-pri{font:inherit;font-weight:600;font-size:.95rem;border:0;border-radius:8px;padding:10px 16px;background:var(--accent);color:#fff;cursor:pointer;justify-self:start}
+.botao-pri:disabled{opacity:.45;cursor:not-allowed}
+.botao-pri:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.nos{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.no{font:inherit;font-size:.86rem;text-align:left;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--idle);border-radius:10px;padding:10px 12px;display:grid;gap:4px;align-content:start;cursor:pointer}
+.no.ok{border-left-color:var(--ok)} .no.warn{border-left-color:var(--warn)} .no.bad{border-left-color:var(--bad)}
+.no:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.no-topo{display:flex;align-items:center;gap:8px;font-weight:600}
+.no .dot{background:var(--idle)}
+.no.ok .dot{background:var(--ok)} .no.warn .dot{background:var(--warn)} .no.bad .dot{background:var(--bad)}
+.no-quando{font-family:var(--f-mono);font-size:.8rem;color:var(--muted)}
+.progresso{display:grid;gap:8px;border-top:1px dashed var(--line);padding-top:12px}
+.progresso > a{justify-self:start}
+.barra-linha{display:grid;grid-template-columns:minmax(0,8rem) minmax(0,1fr) minmax(0,9rem);gap:10px;align-items:center;font-size:.86rem}
+.barra-info{font-size:.8rem;color:var(--muted)}
+.trilho{height:10px;border-radius:6px;background:var(--track);overflow:hidden}
+.trilho .preench{display:block;height:100%;border-radius:6px;background:var(--idle)}
+.trilho .preench.ok{background:var(--ok)} .trilho .preench.warn{background:var(--warn)} .trilho .preench.bad{background:var(--bad)} .trilho .preench.run{background:var(--accent)}
+.trilho .preench.indeterminado{width:30%!important;animation:vai-e-volta 1.4s ease-in-out infinite}
+@keyframes vai-e-volta{from{margin-left:-30%}to{margin-left:100%}}
+@media (prefers-reduced-motion:reduce){.trilho .preench.indeterminado{animation:none;margin-left:0}}
+.grade-hoje{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(340px,100%),1fr));gap:24px;align-items:start}
+.aviso{border:1px solid var(--line);border-left:4px solid var(--warn);border-radius:10px;padding:12px 14px;display:grid;gap:6px;align-content:start}
+.mercado-numeros{display:flex;flex-wrap:wrap;gap:16px 28px}
+.mercado-numeros .lbl{display:block}
+.mercado-num{display:block;font-family:var(--f-mono);font-size:1.5rem;font-weight:500}
+.mercado-num.ok{color:var(--ok)} .mercado-num.bad{color:var(--bad)}
+.mini svg{display:block;width:100%;height:auto}
+.mini .tendencia{fill:none;stroke:var(--acento);stroke-width:2;stroke-linejoin:round}
+.mini .marca{fill:var(--acento)}
+.novid-lista{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.novid{display:flex;gap:8px;align-items:flex-start;font-size:.9rem}
+.novid .dot{background:var(--at);flex:none;margin-top:.45em}
+.novid.crescimento .dot{background:var(--acento)}
+.linha-saude{border:1px solid var(--line);border-left:4px solid var(--idle);border-radius:10px;padding:10px 12px}
+.linha-saude.ok{border-left-color:var(--ok)} .linha-saude.warn{border-left-color:var(--warn)} .linha-saude.bad{border-left-color:var(--bad)}
+.linha-saude > summary{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:.9rem;color:var(--ink)}
+.linha-saude .dot{background:var(--idle)}
+.linha-saude.ok .dot{background:var(--ok)} .linha-saude.warn .dot{background:var(--warn)} .linha-saude.bad .dot{background:var(--bad)}
+.linha-saude .n{font-family:var(--f-mono);margin-left:auto}
+.corpo-saude{display:grid;gap:6px;padding-top:8px}
+.corpo-saude p{font-size:.84rem}
+.corpo-saude .so{font-size:.8rem;color:var(--muted)}
+
 /* impressão (E3): sem botões, "?" nem log; uma coluna; blocos recolhidos abertos */
 @media print{
-  .ajuda-btn,.toggle,#comandos .actions,#run,#erro-rede,#ajuda-caixa{display:none!important}
-  .faixa,.faixa-fluxo,.faixa-manha,.faixa-acoes,.exp,.health{grid-template-columns:minmax(0,1fr)}
+  .ajuda-btn,.toggle,.abas,#comandos .actions,#run,#erro-rede,#ajuda-caixa{display:none!important}
+  .exp,.nos,.grade-hoje{grid-template-columns:minmax(0,1fr)}
   .flow{grid-template-columns:minmax(0,1fr)}
   .arrow{transform:rotate(90deg);justify-self:center}
-  .wrap > #sec-experimento,.wrap > #sec-historico{grid-column:1 / -1}
+  [data-aba][hidden]{display:block!important}
   .card{break-inside:avoid}
 }
 </style>
@@ -276,35 +320,60 @@ ul{margin:4px 0;padding-left:20px}
         <span class="logo-txt">Painel do Processamento</span>
       </div>
       <div class="state">
-        <span class="pill idle" id="pill-geral">carregando…</span>
-        <span class="pill idle" id="pill-hoje">carregando…</span>
         <button class="toggle" id="tema" type="button">Tema</button>
         <button class="toggle" id="btn-atualizar" type="button">Atualizar</button>
       </div>
     </div>
+    <nav class="abas" aria-label="Seções do painel">
+      <a class="aba" href="#hoje" data-aba-link="hoje">Hoje</a>
+      <a class="aba" href="#coleta" data-aba-link="coleta">Coleta</a>
+      <a class="aba" href="#diagnostico" data-aba-link="diagnostico">Diagnóstico</a>
+      <a class="aba" href="#execucoes" data-aba-link="execucoes">Execuções</a>
+      <a class="aba" href="#api" data-aba-link="api">API</a>
+      <a class="aba" href="#experimento" data-aba-link="experimento">Experimento</a>
+    </nav>
     <div class="cabeca">
       <h1>Sala de Operação</h1>
-      <p class="dia" id="frase-dia" hidden></p>
       <p class="sub">Acompanha o que o processamento faz todo dia: espera a coleta, calcula os indicadores, monta os pacotes para a interface e confere a qualidade dos dados.</p>
       <p class="note" id="atualizado"></p>
     </div>
   </header>
   <div id="erro-rede" class="erro-rede" hidden>Painel sem resposta</div>
 
-  <section class="secao" id="sec-resumo" aria-labelledby="h-sec-resumo">
-    <div class="tit-linha"><h2 class="secao-tit" id="h-sec-resumo"><span class="num">1</span> Resumo</h2><button class="ajuda-btn" type="button" data-ajuda="resumo" aria-label="Ajuda" aria-expanded="false" aria-controls="ajuda-caixa" hidden>?</button></div>
-    <div class="card resumo idle" id="resumo">
-      <button type="button" class="resumo-frase" id="resumo-frase" disabled>carregando…</button>
-      <ul class="resumo-lista" id="resumo-lista"></ul>
+  <section data-aba="hoje" id="aba-hoje">
+  <section class="card hero" id="hoje-situacao" aria-labelledby="h-hoje">
+    <div class="hero-ic idle" id="hero-icone"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path id="hero-path" d="M12 3a9 9 0 1 0 9 9"/></svg></div>
+    <div class="hero-corpo">
+      <div class="tit-linha"><h2 id="h-hoje">Situação de hoje</h2><button class="ajuda-btn" type="button" data-ajuda="hoje" aria-label="Ajuda" aria-expanded="false" aria-controls="ajuda-caixa" hidden>?</button></div>
+      <div class="state"><span class="pill idle" id="pill-geral">carregando…</span><span class="pill idle" id="pill-hoje">carregando…</span></div>
+      <p class="dia" id="frase-dia" hidden></p>
+      <div class="resumo idle" id="resumo">
+        <button type="button" class="resumo-frase" id="resumo-frase" disabled>carregando…</button>
+        <ul class="resumo-lista" id="resumo-lista"></ul>
+      </div>
+      <p class="note" id="hero-sub" hidden></p>
+      <div id="hero-botao"></div>
+      <p class="note" id="hero-proxima"></p>
     </div>
   </section>
 
-  <section class="secao" id="sec-fluxo" aria-labelledby="h-sec-fluxo">
-    <h2 class="secao-tit" id="h-sec-fluxo"><span class="num">2</span> Fluxo do dia</h2>
-    <div class="faixa faixa-fluxo">
-      <section class="card" id="agora" aria-labelledby="h-fluxo">
+  <section class="card" id="hoje-fluxo" aria-labelledby="h-fluxo">
+    <div class="cardhead">
+      <div class="tit-linha"><h2 id="h-fluxo">Fluxo do dia</h2><button class="ajuda-btn" type="button" data-ajuda="fluxo" aria-label="Ajuda" aria-expanded="false" aria-controls="ajuda-caixa" hidden>?</button></div>
+      <div class="tit-linha"><span class="note" id="fluxo-pregao"></span><span class="note" id="fluxo-rodape"></span></div>
+    </div>
+    <div class="nos" id="fluxo-nos"></div>
+    <div class="progresso" id="progresso-dia" hidden>
+      <div class="tit-linha"><h3 class="card-tit" id="progresso-tit"></h3><button class="ajuda-btn" type="button" data-ajuda="progresso" aria-label="Ajuda" aria-expanded="false" aria-controls="ajuda-caixa" hidden>?</button></div>
+      <p class="note" id="progresso-restante"></p>
+      <div id="progresso-barras"></div>
+      <a href="#execucoes" id="progresso-log">Ver etapas e log</a>
+    </div>
+    <details id="fluxo-detalhe">
+      <summary>Ver detalhes do fluxo</summary>
+      <section class="card" id="agora" aria-labelledby="h-agora">
         <div class="cardhead">
-          <div class="tit-linha"><h3 class="card-tit" id="h-fluxo">Última atualização</h3><button class="ajuda-btn" type="button" data-ajuda="fluxo" aria-label="Ajuda" aria-expanded="false" aria-controls="ajuda-caixa" hidden>?</button></div>
+          <h3 class="card-tit" id="h-agora">Última atualização</h3>
           <span class="pill idle" id="pill-fluxo">carregando…</span>
         </div>
         <div class="flow" id="fluxo"></div>
@@ -312,83 +381,58 @@ ul{margin:4px 0;padding-left:20px}
         <p class="linha-ajuda"><span id="carga-linha">última carga completa: sem dados</span><button class="ajuda-btn" type="button" data-ajuda="carga_vs_rotina" aria-label="Ajuda" aria-expanded="false" aria-controls="ajuda-caixa" hidden>?</button></p>
         <p class="fazer" data-fazer="agora" hidden></p>
       </section>
-    </div>
-    <div class="faixa faixa-manha" id="faixa-manha">
-      <section class="card" id="linha-tempo" aria-labelledby="h-tl">
-        <div class="cardhead"><div class="tit-linha"><h3 class="card-tit" id="h-tl">A manhã do pregão</h3><button class="ajuda-btn" type="button" data-ajuda="linha_tempo" aria-label="Ajuda" aria-expanded="false" aria-controls="ajuda-caixa" hidden>?</button></div></div>
-        <div class="tit-linha"><p class="why" id="tl-why"></p><button class="ajuda-btn" type="button" data-ajuda="prazo" aria-label="Ajuda" aria-expanded="false" aria-controls="ajuda-caixa" hidden>?</button></div>
-        <div class="tl" id="tl" aria-label="Linha do tempo da manhã do pregão"></div>
-        <div class="legend">
-          <span><i class="lg-accent"></i>Coleta trabalhando</span>
-          <span><i class="lg-ok"></i>Processamento</span>
-          <span><i class="lg-folga"></i>Folga até o prazo <button class="ajuda-btn" type="button" data-ajuda="folga" aria-label="Ajuda" aria-expanded="false" aria-controls="ajuda-caixa" hidden>?</button></span>
-        </div>
-        <p class="note" id="tl-avisos" hidden></p>
-        <p class="fazer" data-fazer="linha-tempo" hidden></p>
-      </section>
-      <section class="card" id="dia-atipico" aria-labelledby="h-atip" hidden><div class="cardhead"><div class="tit-linha" id="atip-tit"><h3 class="card-tit" id="h-atip">Dia atípico</h3></div><span class="pill warn" id="pill-atip"></span></div><p id="atip-texto"></p><p class="note" id="atip-indices"></p><p class="why" id="atip-frase"></p><div id="atip-acoes"></div><p class="note" id="atip-fonte"></p><p class="fazer" data-fazer="dia-atipico" hidden></p></section>
-    </div>
+    </details>
   </section>
 
-  <section class="secao" id="sec-saude" aria-labelledby="h-saude">
-    <div class="tit-linha"><h2 class="secao-tit" id="h-saude"><span class="num">3</span> Saúde dos dados</h2><button class="ajuda-btn" type="button" data-ajuda="saude" aria-label="Ajuda" aria-expanded="false" aria-controls="ajuda-caixa" hidden>?</button></div>
+  <div class="grade-hoje">
+    <section class="card" id="novidades" aria-labelledby="h-novid">
+      <div class="tit-linha"><h2 id="h-novid">O que mudou desde ontem</h2><button class="ajuda-btn" type="button" data-ajuda="o_que_mudou" aria-label="Ajuda" aria-expanded="false" aria-controls="ajuda-caixa" hidden>?</button></div>
+      <p class="note"><a href="#diagnostico">Ver diagnóstico</a></p>
+      <p class="note" id="novid-quando"></p>
+      <ul class="novid-lista" id="novid-lista"></ul>
+      <p id="novid-frase"></p>
+    </section>
+
     <section class="card" id="saude" aria-labelledby="h-saude">
+      <div class="tit-linha"><h2 id="h-saude">Saúde dos dados</h2><button class="ajuda-btn" type="button" data-ajuda="saude" aria-label="Ajuda" aria-expanded="false" aria-controls="ajuda-caixa" hidden>?</button><a href="#diagnostico">Detalhes</a></div>
       <p class="why">O processamento confere os dados da coleta antes de usar. Quando algo vem errado, ele marca "indisponível" em vez de mostrar um número falso.</p>
-      <div class="novidades" id="novidades"><div class="tit-linha" id="novid-tit"><h3 class="card-tit">Novidades da coleta</h3></div><p id="novid-frase"></p><p class="note" id="novid-quando"></p><details id="novid-det"><summary>ver tudo</summary><ul id="novid-lista"></ul></details></div>
       <p class="note" id="saude-gerado"></p>
-      <div class="health" id="saude-cartoes"></div>
+      <div class="lista-saude" id="saude-cartoes"></div>
       <p class="fazer" data-fazer="saude" hidden></p>
-      <details><summary>Ver o diagnóstico completo</summary><div id="saude-completa"></div></details>
+    </section>
+
+    <section class="card" id="mercado" aria-labelledby="h-mercado">
+      <div class="tit-linha"><h2 id="h-mercado">Mercado no último pregão</h2><button class="ajuda-btn" type="button" data-ajuda="mercado" aria-label="Ajuda" aria-expanded="false" aria-controls="ajuda-caixa" hidden>?</button></div>
+      <p class="note" id="mercado-pregao"></p>
+      <div class="mercado-numeros">
+        <div><span class="lbl">Ibovespa, em pontos</span><strong class="mercado-num" id="mercado-nivel"></strong></div>
+        <div><span class="lbl">Variação no pregão</span><strong class="mercado-num" id="mercado-var"></strong></div>
+      </div>
+      <div class="mini" id="mercado-linha"></div>
+      <p class="note">Fechamento nos últimos pregões que têm pacote em saida/.</p>
+      <div class="aviso" id="dia-atipico" hidden><div class="cardhead"><div class="tit-linha" id="atip-tit"><h3 class="card-tit" id="h-atip">Dia atípico</h3></div><span class="pill warn" id="pill-atip"></span></div><p id="atip-texto"></p><p class="note" id="atip-indices"></p><p class="why" id="atip-frase"></p><div id="atip-acoes"></div><p class="note" id="atip-fonte"></p><p class="fazer" data-fazer="dia-atipico" hidden></p></div>
+      <div id="mercado-coerencia"></div>
+    </section>
+  </div>
+  </section>
+
+  <section data-aba="coleta" id="aba-coleta" hidden>
+    <section class="card" id="coleta-etapas-card" aria-labelledby="h-coleta-etapas">
+      <h2 id="h-coleta-etapas">Etapas da coleta</h2>
+      <div id="coleta-etapas"></div>
+      <p class="note" id="coleta-situacao"></p>
     </section>
   </section>
 
-  <section class="secao" id="sec-experimento" aria-labelledby="h-sec-experimento">
-    <h2 class="secao-tit" id="h-sec-experimento"><span class="num">4</span> Experimento</h2>
-    <section class="card" id="experimento" aria-labelledby="h-exp">
-      <div class="cardhead">
-        <div class="tit-linha"><h3 class="card-tit" id="h-exp">Experimento: top 5 com maior chance de superar o Ibovespa</h3><button class="ajuda-btn" type="button" data-ajuda="experimento" aria-label="Ajuda" aria-expanded="false" aria-controls="ajuda-caixa" hidden>?</button></div>
-        <div class="tit-linha"><span class="banner" id="faixa-teste">TESTE DE FUNCIONAMENTO, NÃO É RESULTADO</span><button class="ajuda-btn" type="button" data-ajuda="teste_funcionamento" aria-label="Ajuda" aria-expanded="false" aria-controls="ajuda-caixa" hidden>?</button></div>
-      </div>
-      <p class="why">Modelo que estima quais 5 ações têm maior chance de superar o Ibovespa no próximo pregão. Com o histórico atual, serve só para testar o funcionamento.</p>
-      <div class="exp">
-        <div class="coluna">
-          <div class="lock">
-            <svg id="cadeado-fechado" class="cadeado" viewBox="0 0 40 40" aria-hidden="true" hidden>
-              <rect class="corpo" x="7" y="17" width="26" height="19" rx="4"/>
-              <path class="corpo" d="M13 17v-5a7 7 0 0 1 14 0v5"/>
-              <circle class="furo" cx="20" cy="26" r="2.6"/>
-            </svg>
-            <svg id="cadeado-aberto" class="cadeado" viewBox="0 0 40 40" aria-hidden="true" hidden>
-              <rect class="corpo" x="7" y="17" width="26" height="19" rx="4"/>
-              <path class="corpo" d="M13 17v-8a7 7 0 0 1 14 0"/>
-              <circle class="furo" cx="20" cy="26" r="2.6"/>
-            </svg>
-            <div><div class="tit-linha"><h3 id="lock-t">Teste final</h3><button class="ajuda-btn" type="button" data-ajuda="cadeado" aria-label="Ajuda" aria-expanded="false" aria-controls="ajuda-caixa" hidden>?</button></div><p class="note" id="lock-p"></p></div>
-          </div>
-          <dl class="kv" id="exp-kv"></dl>
-        </div>
-        <div class="coluna">
-          <div class="tit-linha"><h3>Acerto do top 5 no desenvolvimento</h3><button class="ajuda-btn" type="button" data-ajuda="grafico" aria-label="Ajuda" aria-expanded="false" aria-controls="ajuda-caixa" hidden>?</button></div>
-          <p class="note">Em quantos % dos pregões a ação escolhida superou o Ibovespa no pregão seguinte. A faixa cinza é o que se consegue escolhendo ao acaso; o traço é o intervalo de confiança.</p>
-          <div class="cabeca-grafico">
-            <p class="grafico-tit" id="grafico-tit"></p>
-            <span class="pill idle">em avaliação</span>
-          </div>
-          <div class="chart" id="grafico"></div>
-          <div class="legend">
-            <span><i class="lg-track"></i>faixa cinza = acaso (95% dos sorteios) <button class="ajuda-btn" type="button" data-ajuda="faixa_acaso" aria-label="Ajuda" aria-expanded="false" aria-controls="ajuda-caixa" hidden>?</button></span>
-            <span><i class="lg-ok"></i>acima do acaso</span>
-          </div>
-          <p class="note" id="exp-veredito"></p>
-          <a id="link-relatorio" href="/api/relatorio" target="_blank" rel="noopener" hidden>Ver relatório completo</a>
-          <p class="note">Não constitui recomendação de investimento.</p>
-        </div>
-      </div>
+  <section data-aba="diagnostico" id="aba-diagnostico" hidden>
+    <section class="card" id="diagnostico-card" aria-labelledby="h-diagnostico">
+      <h2 id="h-diagnostico">Diagnóstico completo</h2>
+      <div class="actions" id="botoes-diagnostico"></div>
+      <div id="saude-completa"></div>
     </section>
   </section>
 
-  <section class="secao" id="sec-historico" aria-labelledby="h-sec-historico">
-    <h2 class="secao-tit" id="h-sec-historico"><span class="num">5</span> Histórico</h2>
+  <section data-aba="execucoes" id="aba-execucoes" hidden>
     <section class="card" id="historico" aria-labelledby="h-hist">
       <div class="cardhead">
         <div class="tit-linha"><h3 class="card-tit" id="h-hist">Histórico de execuções</h3><button class="ajuda-btn" type="button" data-ajuda="historico" aria-label="Ajuda" aria-expanded="false" aria-controls="ajuda-caixa" hidden>?</button></div>
@@ -414,30 +458,93 @@ ul{margin:4px 0;padding-left:20px}
       <p class="fazer" data-fazer="historico" hidden></p>
       <details id="etapas"><summary>Rodadas registradas no log da rotina</summary><div id="etapas-corpo"></div></details>
     </section>
+    <section class="card" id="linha-tempo" aria-labelledby="h-tl">
+      <div class="cardhead"><div class="tit-linha"><h3 class="card-tit" id="h-tl">A manhã do pregão</h3><button class="ajuda-btn" type="button" data-ajuda="linha_tempo" aria-label="Ajuda" aria-expanded="false" aria-controls="ajuda-caixa" hidden>?</button></div></div>
+      <div class="tit-linha"><p class="why" id="tl-why"></p><button class="ajuda-btn" type="button" data-ajuda="prazo" aria-label="Ajuda" aria-expanded="false" aria-controls="ajuda-caixa" hidden>?</button></div>
+      <div class="tl" id="tl" aria-label="Linha do tempo da manhã do pregão"></div>
+      <div class="legend">
+        <span><i class="lg-accent"></i>Coleta trabalhando</span>
+        <span><i class="lg-ok"></i>Processamento</span>
+        <span><i class="lg-folga"></i>Folga até o prazo <button class="ajuda-btn" type="button" data-ajuda="folga" aria-label="Ajuda" aria-expanded="false" aria-controls="ajuda-caixa" hidden>?</button></span>
+      </div>
+      <p class="note" id="tl-avisos" hidden></p>
+      <p class="fazer" data-fazer="linha-tempo" hidden></p>
+    </section>
+
+    <section class="card" id="comandos" aria-labelledby="h-outras">
+      <h2 id="h-outras">Outras ações</h2>
+      <p class="why">Cada botão chama um comando do projeto. Nenhum escreve no banco da coleta.</p>
+      <p class="fazer" data-fazer="comandos" hidden></p>
+      <div class="actions" id="botoes-outras"></div>
+      <div class="run" id="run" hidden>
+        <div class="cardhead"><h3 id="run-t"></h3><span class="pill idle" id="run-p"></span></div>
+        <p class="note" id="log-status" aria-live="polite"></p>
+        <ol class="steps" id="steps"></ol>
+        <div class="linha"><button class="toggle perigo" id="btn-parar" type="button" hidden>Parar</button></div>
+        <details><summary>Ver o log completo</summary><pre id="log"></pre></details>
+      </div>
+    </section>
+    <section class="card" id="testes" aria-labelledby="h-test">
+      <div class="cardhead"><div class="tit-linha"><h3 class="card-tit" id="h-test">Testes automáticos</h3><button class="ajuda-btn" type="button" data-ajuda="testes" aria-label="Ajuda" aria-expanded="false" aria-controls="ajuda-caixa" hidden>?</button></div><span class="pill idle" id="pill-testes">carregando…</span></div>
+      <div class="actions" id="botoes-testes"></div>
+      <div class="tests" id="testes-corpo"></div>
+      <p class="fazer" data-fazer="testes" hidden></p>
+    </section>
   </section>
 
-  <section class="secao" id="sec-acoes" aria-labelledby="h-sec-acoes">
-    <h2 class="secao-tit" id="h-sec-acoes"><span class="num">6</span> Ações</h2>
-    <div class="faixa faixa-acoes">
-      <section class="card" id="comandos" aria-labelledby="h-sec-acoes">
-        <p class="why">Cada botão chama um comando do projeto. Nenhum escreve no banco da coleta.</p>
-        <p class="fazer" data-fazer="comandos" hidden></p>
-        <div class="actions" id="botoes"></div>
-        <p class="note"><a id="link-validacao" href="/api/validacao-wordpress" target="_blank" rel="noopener">Ver a validação</a></p>
-        <div class="run" id="run" hidden>
-          <div class="cardhead"><h3 id="run-t"></h3><span class="pill idle" id="run-p"></span></div>
-          <p class="note" id="log-status" aria-live="polite"></p>
-          <ol class="steps" id="steps"></ol>
-          <div class="linha"><button class="toggle perigo" id="btn-parar" type="button" hidden>Parar</button></div>
-          <details><summary>Ver o log completo</summary><pre id="log"></pre></details>
+  <section data-aba="api" id="aba-api" hidden>
+    <section class="card" id="api-cartao" aria-labelledby="h-api">
+      <div class="tit-linha" id="api-tit"><h2 id="h-api">API</h2></div>
+      <span class="pill idle" id="pill-api">carregando…</span>
+      <div id="api-linhas"></div>
+    </section>
+  </section>
+
+  <section data-aba="experimento" id="aba-experimento" hidden>
+    <section class="secao" id="sec-experimento" aria-labelledby="h-sec-experimento">
+      <h2 class="secao-tit" id="h-sec-experimento">Experimento</h2>
+      <section class="card" id="experimento" aria-labelledby="h-exp">
+        <div class="cardhead">
+          <div class="tit-linha"><h3 class="card-tit" id="h-exp">Experimento: top 5 com maior chance de superar o Ibovespa</h3><button class="ajuda-btn" type="button" data-ajuda="experimento" aria-label="Ajuda" aria-expanded="false" aria-controls="ajuda-caixa" hidden>?</button></div>
+          <div class="tit-linha"><span class="banner" id="faixa-teste">TESTE DE FUNCIONAMENTO, NÃO É RESULTADO</span><button class="ajuda-btn" type="button" data-ajuda="teste_funcionamento" aria-label="Ajuda" aria-expanded="false" aria-controls="ajuda-caixa" hidden>?</button></div>
+        </div>
+        <p class="why">Modelo que estima quais 5 ações têm maior chance de superar o Ibovespa no próximo pregão. Com o histórico atual, serve só para testar o funcionamento.</p>
+        <div class="exp">
+          <div class="coluna">
+            <div class="lock">
+              <svg id="cadeado-fechado" class="cadeado" viewBox="0 0 40 40" aria-hidden="true" hidden>
+                <rect class="corpo" x="7" y="17" width="26" height="19" rx="4"/>
+                <path class="corpo" d="M13 17v-5a7 7 0 0 1 14 0v5"/>
+                <circle class="furo" cx="20" cy="26" r="2.6"/>
+              </svg>
+              <svg id="cadeado-aberto" class="cadeado" viewBox="0 0 40 40" aria-hidden="true" hidden>
+                <rect class="corpo" x="7" y="17" width="26" height="19" rx="4"/>
+                <path class="corpo" d="M13 17v-8a7 7 0 0 1 14 0"/>
+                <circle class="furo" cx="20" cy="26" r="2.6"/>
+              </svg>
+              <div><div class="tit-linha"><h3 id="lock-t">Teste final</h3><button class="ajuda-btn" type="button" data-ajuda="cadeado" aria-label="Ajuda" aria-expanded="false" aria-controls="ajuda-caixa" hidden>?</button></div><p class="note" id="lock-p"></p></div>
+            </div>
+            <dl class="kv" id="exp-kv"></dl>
+          </div>
+          <div class="coluna">
+            <div class="tit-linha"><h3>Acerto do top 5 no desenvolvimento</h3><button class="ajuda-btn" type="button" data-ajuda="grafico" aria-label="Ajuda" aria-expanded="false" aria-controls="ajuda-caixa" hidden>?</button></div>
+            <p class="note">Em quantos % dos pregões a ação escolhida superou o Ibovespa no pregão seguinte. A faixa cinza é o que se consegue escolhendo ao acaso; o traço é o intervalo de confiança.</p>
+            <div class="cabeca-grafico">
+              <p class="grafico-tit" id="grafico-tit"></p>
+              <span class="pill idle">em avaliação</span>
+            </div>
+            <div class="chart" id="grafico"></div>
+            <div class="legend">
+              <span><i class="lg-track"></i>faixa cinza = acaso (95% dos sorteios) <button class="ajuda-btn" type="button" data-ajuda="faixa_acaso" aria-label="Ajuda" aria-expanded="false" aria-controls="ajuda-caixa" hidden>?</button></span>
+              <span><i class="lg-ok"></i>acima do acaso</span>
+            </div>
+            <p class="note" id="exp-veredito"></p>
+            <a id="link-relatorio" href="/api/relatorio" target="_blank" rel="noopener" hidden>Ver relatório completo</a>
+            <p class="note">Não constitui recomendação de investimento.</p>
+          </div>
         </div>
       </section>
-      <section class="card" id="testes" aria-labelledby="h-test">
-        <div class="cardhead"><div class="tit-linha"><h3 class="card-tit" id="h-test">Testes automáticos</h3><button class="ajuda-btn" type="button" data-ajuda="testes" aria-label="Ajuda" aria-expanded="false" aria-controls="ajuda-caixa" hidden>?</button></div><span class="pill idle" id="pill-testes">carregando…</span></div>
-        <div class="tests" id="testes-corpo"></div>
-        <p class="fazer" data-fazer="testes" hidden></p>
-      </section>
-    </div>
+    </section>
   </section>
 </div>
 
@@ -482,7 +589,6 @@ const DESCRICAO = new Map([
   ["rotina", "Espera a coleta do dia (aqui com --sem-esperar), calcula os indicadores e grava os pacotes desse pregão."],
   ["carga", "Gera todos os pacotes inteiros, para a interface começar do zero."],
   ["diagnostico", "Confere o banco da coleta contra a especificação e reescreve o relatório."],
-  ["wordpress", "Confere no banco os dados da origem wordpress e reescreve o relatório docs/validacao_wordpress.md."],
   ["testes", "Roda os testes automáticos, sem o banco. Pode ser interrompido."],
   ["dia", "Roda a rotina, a carga completa e o publicador da API, em sequência, e leva os dados do dia até o banco da API."],
 ]);
@@ -674,10 +780,31 @@ function reancorarAjuda() {
   abrirAjuda(botao, atual.fixa);
 }
 
+// ---- abas (o hash da URL diz qual aba está aberta) ----
+const ABAS = ["hoje", "coleta", "diagnostico", "execucoes", "api", "experimento"];
+function abaDoHash() {
+  const h = location.hash.slice(1);
+  return ABAS.includes(h) ? h : "hoje";
+}
+function mostrarAba(nome) {
+  document.querySelectorAll("[data-aba]").forEach((s) => { s.hidden = s.getAttribute("data-aba") !== nome; });
+  document.querySelectorAll("[data-aba-link]").forEach((a) => {
+    if (a.getAttribute("data-aba-link") === nome) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
+  });
+  fecharAjuda(false);
+}
+window.addEventListener("hashchange", () => { if (ABAS.includes(location.hash.slice(1))) mostrarAba(abaDoHash()); });
+
 // ---- resumo e "O que fazer" ----
 function irPara(alvo) {
   const el = $(alvo);
   if (!el) return;
+  const aba = el.closest("[data-aba]");
+  if (aba && aba.hidden) {
+    history.replaceState(null, "", "#" + aba.getAttribute("data-aba"));
+    mostrarAba(aba.getAttribute("data-aba"));
+  }
+  for (let p = el; p; p = p.parentElement) if (p.tagName === "DETAILS") p.open = true;
   if (!el.hasAttribute("tabindex")) el.setAttribute("tabindex", "-1");
   const reduzir = matchMedia("(prefers-reduced-motion: reduce)").matches;
   el.scrollIntoView({ behavior: reduzir ? "auto" : "smooth", block: "center" });
@@ -710,7 +837,7 @@ function renderResumo(d) {
   const r = (d.visao || {}).resumo || {};
   const pontos = listaSegura(r.pontos).filter((p) => p && typeof p.alvo === "string");
   ESTADO.pontos = new Map(pontos.map((p) => [p.alvo, p]));
-  $("resumo").className = "card resumo " + farol(r.nivel);
+  $("resumo").className = "resumo " + farol(r.nivel);
   const frase = $("resumo-frase");
   frase.textContent = txt(r.frase);
   frase.disabled = pontos.length === 0;
@@ -957,7 +1084,7 @@ function renderFluxo(d) {
   const fx = v.fluxo || {};
   const lt = v.linha_tempo || {};
   const pregao = lt.dia_rotulo || (fx.data ? dataBr(fx.data) : SEM);
-  $("h-fluxo").textContent = "Última atualização · pregão de " + pregao;
+  $("fluxo-pregao").textContent = "pregão de " + pregao;
   $("carga-linha").textContent = fx.carga && fx.carga.rotulo ? fx.carga.rotulo : "última carga completa: " + SEM;
   const fluxo = $("fluxo");
   const aviso = $("fluxo-vazio");
@@ -983,9 +1110,8 @@ function renderFluxo(d) {
     ? c.etapas_concluidas + " de " + c.etapas_total + " etapas concluídas"
     : txt(c.nota);
   const ce = v.coleta_etapas || {};
-  const situacao = typeof ce.consulta_hhmm === "string" ? "Situação na consulta das " + ce.consulta_hhmm : "Situação na consulta: " + SEM;
   const coleta = estagio(c, "1 · Coleta (outro módulo)",
-    [txt(c.resumo), ce.resumo || etapas, etapasColetaNode(ce), metaComAjuda(situacao, botaoAjuda("etapas_coleta"))],
+    [txt(c.resumo), ce.resumo || etapas],
     "fluxo-coleta", botaoAjuda("coleta"));
 
   const duracao = "Duração " + txt(p.duracao_texto) + (typeof p.n_acoes === "number" ? " · " + p.n_acoes + " ações" : "");
@@ -1010,6 +1136,28 @@ function renderFluxo(d) {
     "fluxo-interface", botaoAjuda("interface"), botaoAjuda("pacotes"));
 
   fluxo.replaceChildren(coleta, seta(), processamento, seta(), banco, seta(), apiNo, seta(), interfaceNo);
+}
+
+// Aba Coleta: etapas do daily (foto do execucao.json) e a situação na consulta.
+function renderColeta(d) {
+  const ce = (d.visao || {}).coleta_etapas || {};
+  const situacao = typeof ce.consulta_hhmm === "string" ? "Situação na consulta das " + ce.consulta_hhmm : "Situação na consulta: " + SEM;
+  $("coleta-etapas").replaceChildren(etapasColetaNode(ce));
+  $("coleta-situacao").replaceChildren(metaComAjuda(situacao, botaoAjuda("etapas_coleta")));
+}
+
+// Aba API: estado, linhas e o tempo da última consulta.
+function renderApiAba(d) {
+  const a = (d.visao || {}).api || {};
+  pilula($("pill-api"), farol(a.estado), a.titulo);
+  const tempo = a.tempo && typeof a.tempo.texto === "string" ? a.tempo.texto : null;
+  $("api-linhas").replaceChildren(...listaSegura(a.linhas).map((l) => {
+    const p = criar("p", null, "meta");
+    p.appendChild(document.createTextNode(txt(l)));
+    if (l === tempo) p.appendChild(botaoAjuda("tempo_api"));
+    return p;
+  }));
+  if (!$("api-tit").querySelector(".ajuda-btn")) $("api-tit").appendChild(botaoAjuda("api"));
 }
 
 // ---- linha do tempo da manhã ----
@@ -1092,12 +1240,104 @@ function cartaoBotao(id, b, d) {
   return cartao;
 }
 
+// Em qual aba cada botão aparece; o que não estiver aqui vai para "Outras ações".
+const LUGAR_BOTAO = new Map([["dia", "botoes-hoje"], ["rotina", "botoes-outras"], ["carga", "botoes-outras"], ["diagnostico", "botoes-diagnostico"], ["testes", "botoes-testes"]]);
+
+// "Rodar o dia completo" não entra aqui: fica na Situação de hoje (renderBotaoDia).
 function renderBotoes(d) {
   const botoes = d.botoes || {};
-  // "Rodar o dia completo" vem primeiro: é o caminho normal da manhã.
-  const ids = Object.keys(botoes);
-  const ordem = ids.includes("dia") ? ["dia", ...ids.filter((id) => id !== "dia")] : ids;
-  $("botoes").replaceChildren(...ordem.map((id) => cartaoBotao(id, botoes[id] || {}, d)));
+  ["botoes-outras", "botoes-diagnostico", "botoes-testes"].forEach((lugar) => {
+    const doLugar = Object.keys(botoes).filter((id) => (LUGAR_BOTAO.get(id) || "botoes-outras") === lugar);
+    $(lugar).replaceChildren(...doLugar.map((id) => cartaoBotao(id, botoes[id] || {}, d)));
+  });
+}
+
+// Situação de hoje: o botão do dia completo, o que ele leva (tempo, data usada) e o motivo quando não pode rodar.
+function renderBotaoDia(d) {
+  const b = (d.botoes || {}).dia || {};
+  const a = d.acao || {};
+  const rodando = a.rodando === true && a.id === "dia";
+  const bt = criar("button", rodando ? "Rodando…" : "Rodar o dia completo", "botao-pri");
+  bt.type = "button";
+  bt.disabled = b.habilitado !== true;
+  bt.addEventListener("click", () => pedirAcao("dia", b));
+  const linha = criar("div", null, "linha");
+  linha.appendChild(bt);
+  linha.appendChild(botaoAjuda("acao_dia"));
+  if (b.habilitado !== true && b.motivo) linha.appendChild(criar("span", b.motivo, "motivo"));
+  $("hero-botao").replaceChildren(
+    linha,
+    linhaTempoAcao("dia", d),
+    criar("p", "Data usada: " + dataBr(b.data) + origemData("dia", d), "note"),
+  );
+}
+
+// Situação de hoje: ícone e cor pelo nível do resumo (ou corrida quando o dia completo roda), frase de próxima execução.
+const ICONES = {
+  ok: "M5 12.5l4.5 4.5L19 7.5",
+  warn: "M12 7v6M12 16.5v.5",
+  bad: "M7 7l10 10M17 7 7 17",
+  idle: "M12 3a9 9 0 1 0 9 9",
+  run: "M12 3a9 9 0 1 0 9 9",
+};
+
+function renderHero(d) {
+  const r = (d.visao || {}).resumo || {};
+  const a = d.acao || {};
+  const rodando = a.rodando === true;
+  const chave = rodando ? "run" : farol(r.nivel);
+  $("hero-icone").className = "hero-ic " + chave;
+  $("hero-path").setAttribute("d", ICONES[chave]);
+  const sub = $("hero-sub");
+  sub.hidden = !rodando;
+  sub.textContent = rodando ? "Rodando: " + txt(a.titulo) : "";
+  const proxima = (d.visao || {}).proxima_execucao;
+  $("hero-proxima").textContent = "Próxima execução automática: " + (typeof proxima === "string" ? proxima : SEM);
+}
+
+const CLASSE_PROGRESSO = new Map([["concluida", "ok"], ["erro", "bad"], ["pulada", "warn"], ["agora", "run"], ["espera", "idle"]]);
+
+// Cinco passos do dia (visao.fluxo_nos); cada passo leva ao estágio dentro de "Ver detalhes do fluxo".
+function renderFluxoNos(d) {
+  const fn = (d.visao || {}).fluxo_nos || {};
+  $("fluxo-rodape").textContent = typeof fn.rodape === "string" ? fn.rodape : "última carga completa: " + SEM;
+  $("fluxo-nos").replaceChildren(...listaSegura(fn.nos).filter((n) => n && typeof n === "object").map((n) => {
+    const no = criar("button", null, "no " + farol(n.estado));
+    no.type = "button";
+    if (typeof n.id === "string") no.id = "no-" + n.id;
+    const topo = criar("span", null, "no-topo");
+    topo.appendChild(criar("span", null, "dot"));
+    topo.appendChild(criar("span", txt(n.nome)));
+    no.appendChild(topo);
+    no.appendChild(criar("span", txt(n.texto)));
+    const quando = n.quando === null || n.quando === undefined || n.quando === "" ? "—" : String(n.quando);
+    no.appendChild(criar("span", quando, "no-quando"));
+    if (typeof n.alvo === "string") no.addEventListener("click", () => irPara(n.alvo));
+    return no;
+  }));
+}
+
+// Progresso do dia completo (acao.progresso, calculado no servidor): uma barra por etapa e o restante.
+function renderProgresso(a) {
+  const p = a.id === "dia" && a.progresso && typeof a.progresso === "object" ? a.progresso : null;
+  $("progresso-dia").hidden = p === null;
+  if (p === null) return;
+  $("progresso-tit").textContent = a.rodando === true ? "Dia completo em andamento" : "Último dia completo";
+  $("progresso-restante").textContent = typeof p.restante_texto === "string"
+    ? p.restante_texto
+    : (a.significado || (a.codigo === 0 ? "concluído" : "terminou com erro"));
+  $("progresso-barras").replaceChildren(...listaSegura(p.etapas).filter((e) => e && typeof e === "object").map((e) => {
+    const linha = criar("div", null, "barra-linha");
+    linha.appendChild(criar("span", txt(e.rotulo), "barra-rotulo"));
+    const trilho = criar("div", null, "trilho");
+    const indeterminado = e.estado === "agora" && typeof e.percentual !== "number";
+    const preench = criar("i", null, "preench " + (CLASSE_PROGRESSO.get(e.estado) || "idle") + (indeterminado ? " indeterminado" : ""));
+    preench.style.width = (typeof e.percentual === "number" ? e.percentual : 0) + "%";
+    trilho.appendChild(preench);
+    linha.appendChild(trilho);
+    linha.appendChild(criar("span", txt(e.info), "barra-info"));
+    return linha;
+  }));
 }
 
 // Etapas do Executor vêm prontas em `marcos` (servidor); aqui só se desenha.
@@ -1115,6 +1355,7 @@ function renderMarcos(acao) {
 
 function renderRun(acao) {
   const a = acao || {};
+  renderProgresso(a);
   $("run").hidden = !a.id;
   $("btn-parar").hidden = !(a.rodando === true && a.pode_parar === true);
   mostrarStatusLog(a);
@@ -1318,30 +1559,33 @@ function renderEtapas(d) {
 
 // ---- saúde dos dados ----
 
+// Um item de Saúde dos dados: recolhido (summary com ponto, título e número); o corpo traz o texto, o ? e as afetadas.
 function cartaoSaude(c, sv) {
-  const cartao = criar("div", null, "hc " + farol(c.farol));
   const id = typeof c.id === "string" ? c.id : "";
-  const cab = criar("div", null, "tit-linha");
-  cab.appendChild(criar("span", txt(c.titulo), "lbl"));
-  if (id) {
-    cartao.id = "saude-c-" + id;
-    cab.appendChild(botaoAjuda("saude_" + id));
-  }
-  cartao.appendChild(cab);
-  cartao.appendChild(criar("span", txt(c.numero), "n"));
-  cartao.appendChild(criar("p", txt(c.texto)));
+  const linha = criar("details", null, "linha-saude " + farol(c.farol));
+  if (id) linha.id = "saude-c-" + id;
+  const resumo = criar("summary");
+  resumo.appendChild(criar("span", null, "dot"));
+  resumo.appendChild(criar("span", txt(c.titulo), "saude-tit"));
+  resumo.appendChild(criar("span", txt(c.numero), "n"));
+  linha.appendChild(resumo);
+  const corpo = criar("div", null, "corpo-saude");
+  const texto = criar("p", txt(c.texto));
+  if (id) texto.appendChild(botaoAjuda("saude_" + id));
+  corpo.appendChild(texto);
   const af = sv && sv.afetadas && id ? sv.afetadas[id] : null;
   const itensAf = af ? listaSegura(af.itens).filter((i) => i && typeof i === "object") : [];
   if (itensAf.length) {
     const p = criar("p");
     p.appendChild(criar("strong", txt(af.titulo) + ": "));
     p.appendChild(listaComMais(itensAf.map((i) => txt(i.rotulo) + (i.detalhe ? " (" + i.detalhe + ")" : "")), sv.afetadas_max));
-    cartao.appendChild(p);
+    corpo.appendChild(p);
   }
-  if (c.fonte) cartao.appendChild(criar("span", c.fonte, "so"));
+  if (c.fonte) corpo.appendChild(criar("span", c.fonte, "so"));
   const fazer = id ? linhaFazer("saude-c-" + id) : null;
-  if (fazer) cartao.appendChild(fazer);
-  return cartao;
+  if (fazer) corpo.appendChild(fazer);
+  linha.appendChild(corpo);
+  return linha;
 }
 
 function renderSaudeCartoes(d) {
@@ -1353,35 +1597,41 @@ function renderSaudeCartoes(d) {
     cont.replaceChildren(motivo(sv.disponivel === false ? sv.motivo : SEM));
     return;
   }
-  cont.replaceChildren(...listaSegura(sv.cartoes).map((c) => cartaoSaude(c, sv)));
+  // A coerência do mercado é desenhada no cartão Mercado (renderMercado), não aqui.
+  cont.replaceChildren(...listaSegura(sv.cartoes)
+    .filter((c) => c && c.id !== "coerencia_mercado")
+    .map((c) => cartaoSaude(c, sv)));
 }
 
-// Novidades da coleta (topo da Saúde): frase, quando foi comparado e a lista recolhida.
+// O que mudou desde ontem: itens com ponto (mudança em --at, crescimento em --acento); a frase só aparece sem itens.
 function renderNovidades(d) {
   const nv = (d.visao || {}).novidades || {};
-  const tit = $("novid-tit");
-  if (!tit.querySelector(".ajuda-btn")) tit.appendChild(botaoAjuda("novidades"));
+  const frase = $("novid-frase");
   const lista = $("novid-lista");
   if (nv.disponivel !== true) {
-    $("novid-frase").textContent = txt(nv.motivo);
+    frase.textContent = txt(nv.motivo);
+    frase.hidden = false;
     $("novid-quando").textContent = "";
-    $("novid-det").hidden = true;
     lista.replaceChildren();
     return;
   }
-  $("novid-frase").textContent = txt(nv.frase);
-  $("novid-quando").textContent = "Diagnóstico de " + dataBr(nv.atual_em) + " comparado com o de " + dataBr(nv.anterior_em);
-  $("novid-det").hidden = false;
-  lista.replaceChildren(...listaSegura(nv.itens).filter((it) => it && typeof it === "object")
-    .map((it) => criar("li", txt(it.texto))));
+  const itens = listaSegura(nv.itens).filter((it) => it && typeof it === "object");
+  $("novid-quando").textContent = "Comparação entre o diagnóstico de " + dataBr(nv.anterior_em) + " e o de " + dataBr(nv.atual_em);
+  frase.textContent = txt(nv.frase);
+  frase.hidden = itens.length > 0;
+  lista.replaceChildren(...itens.map((it) => {
+    const li = criar("li", null, "novid " + (it.tipo === "crescimento" ? "crescimento" : "mudanca"));
+    li.appendChild(criar("span", null, "dot"));
+    li.appendChild(document.createTextNode(txt(it.texto)));
+    return li;
+  }));
 }
 
-// Dia atípico: o cartão só aparece quando há dia atípico ativo; sem ele, a manhã ocupa a faixa toda.
+// Dia atípico: o cartão só aparece quando há dia atípico ativo.
 function renderDiaAtipico(d) {
   const da = (d.visao || {}).dia_atipico || {};
   const card = $("dia-atipico");
   card.hidden = da.ativo !== true;
-  $("faixa-manha").classList.toggle("uma", card.hidden);
   if (card.hidden) return;
   if (!$("atip-tit").querySelector(".ajuda-btn")) $("atip-tit").appendChild(botaoAjuda("dia_atipico"));
   $("atip-texto").textContent = txt(da.texto);
@@ -1391,6 +1641,51 @@ function renderDiaAtipico(d) {
   const acoes = listaSegura(da.acoes).filter((a) => a && typeof a === "object");
   $("atip-acoes").replaceChildren(listaComMais(acoes.map((a) => txt(a.ticker) + " " + txt(a.texto)), da.max));
   pilula($("pill-atip"), "warn", da.amplo === true ? "amplo" : "isolado");
+}
+
+// Minilinha do Ibovespa: pontos normalizados entre o menor e o maior nível da série (ordem crescente de data).
+function minilinha(serie) {
+  const pontos = serie.filter((p) => p && typeof p.nivel === "number");
+  if (pontos.length < 2) return motivo("Poucos pregões para desenhar a linha");
+  const niveis = pontos.map((p) => p.nivel);
+  const mn = Math.min(...niveis);
+  const mx = Math.max(...niveis);
+  const n = pontos.length;
+  const coords = pontos.map((p, i) => [i * 300 / (n - 1), mx === mn ? 35 : 6 + (1 - (p.nivel - mn) / (mx - mn)) * 58]);
+  const svg = svgEl("svg", {
+    viewBox: "0 0 300 70",
+    width: "100%",
+    height: "70",
+    role: "img",
+    "aria-label": "Ibovespa nos últimos " + n + " pregões",
+  });
+  svg.appendChild(svgEl("polyline", { points: coords.map((c) => c[0] + "," + c[1]).join(" ") }, "tendencia"));
+  const ultimo = coords[n - 1];
+  svg.appendChild(svgEl("circle", { cx: ultimo[0], cy: ultimo[1], r: 3 }, "marca"));
+  const cont = criar("div", null, "mini");
+  cont.appendChild(svg);
+  return cont;
+}
+
+// Mercado no último pregão: Ibovespa, minilinha e a coerência do mercado (cartão de Saúde que sai da lista).
+function renderMercado(d) {
+  const v = d.visao || {};
+  const m = v.mercado || {};
+  $("mercado-pregao").textContent = typeof m.data_pregao === "string" ? "Pregão de " + dataBr(m.data_pregao) : "Pregão: " + SEM;
+  $("mercado-nivel").textContent = txt(m.ibov_nivel_texto);
+  const variacao = typeof m.ibov_var === "number" ? m.ibov_var : null;
+  $("mercado-var").className = "mercado-num " + (variacao === null || variacao === 0 ? "idle" : variacao > 0 ? "ok" : "bad");
+  $("mercado-var").textContent = txt(m.ibov_var_texto);
+  $("mercado-linha").replaceChildren(m.disponivel === true ? minilinha(listaSegura(m.serie)) : motivo(m.motivo));
+
+  const sv = v.saude || {};
+  let coerencia;
+  if (sv.disponivel !== true) coerencia = motivo(sv.disponivel === false ? sv.motivo : SEM);
+  else {
+    const cartao = listaSegura(sv.cartoes).find((c) => c && c.id === "coerencia_mercado");
+    coerencia = cartao ? cartaoSaude(cartao, sv) : motivo(SEM);
+  }
+  $("mercado-coerencia").replaceChildren(coerencia);
 }
 
 // Diagnóstico completo (dentro do bloco recolhível de Saúde).
@@ -1626,11 +1921,17 @@ function renderizarPainel(d) {
   renderResumo(d);
   pillGeral(d);
   pillHoje(d);
+  renderHero(d);
+  renderBotaoDia(d);
   renderFluxo(d);
+  renderFluxoNos(d);
+  renderColeta(d);
+  renderApiAba(d);
   renderLinhaTempo(d);
-  renderDiaAtipico(d);
   renderSaudeCartoes(d);
   renderNovidades(d);
+  renderMercado(d);
+  renderDiaAtipico(d);
   renderSaude(d);
   renderExperimento(d);
   renderHistorico(d);
@@ -1876,6 +2177,7 @@ window.addEventListener("afterprint", () => {
 });
 
 instalarFavicon();
+mostrarAba(abaDoHash());
 carregarPainel();
 </script>
 </body>

@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Painel — Diagnóstico</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.t-escuro{--bg:#0F1115;--sup:#171A21;--sup2:#1E222B;--borda:#2A2F3A;--txt:#E8EAED;--sub:#A3ABB9;--acento:#6EA8FF;--ok:#3FB950;--okf:#12301B;--at:#E3A33B;--atf:#3A2A0E;--falha:#FF6B6B;--falhaf:#3D1416;--trilho:#262B35}
+.t-claro{--bg:#F5F6F8;--sup:#FFFFFF;--sup2:#F0F2F5;--borda:#DCE0E6;--txt:#15181E;--sub:#545D6B;--acento:#1F5FD6;--ok:#1A7F37;--okf:#E3F4E7;--at:#8A5A00;--atf:#FCF0D9;--falha:#C62828;--falhaf:#FBE4E4;--trilho:#E6E9EE}
+a{color:var(--acento)}a:hover{color:var(--txt)}
+.aba{display:inline-flex;align-items:center;min-height:44px;padding:0 14px;border-radius:8px;text-decoration:none;color:var(--sub);font-weight:500;font-size:14px}
+.aba:hover{background:var(--sup2);color:var(--txt)}
+.aba-ativa{background:var(--sup2);color:var(--txt);box-shadow:inset 0 -2px 0 var(--acento)}
+.num{font-family:'IBM Plex Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.botao{min-height:44px;padding:0 18px;border-radius:8px;border:1px solid var(--borda);background:var(--sup2);color:var(--txt);font:600 14px 'IBM Plex Sans',system-ui,sans-serif;cursor:pointer}
+.botao:hover{border-color:var(--acento)}
+.botao-pri{background:var(--acento);border-color:var(--acento);color:#0B0D11}
+.t-claro .botao-pri{color:#FFFFFF}
+.sec{width:100%;min-height:52px;display:flex;align-items:center;gap:12px;padding:0 16px;border:0;background:transparent;color:var(--txt);font:500 15px 'IBM Plex Sans',system-ui,sans-serif;text-align:left;cursor:pointer}
+.sec:hover{background:var(--sup2)}
+</style>
+</helmet>
+<div class="t-{{tema}}" style="min-height: 100vh; background: var(--bg); color: var(--txt); font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 15px; line-height: 1.5">
+
+<header style="border-bottom: 1px solid var(--borda); background: var(--sup)">
+<div style="max-width: 1240px; margin: 0 auto; padding: 12px 24px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px">
+<div style="display: flex; align-items: center; gap: 10px">
+<svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true"><rect x="1" y="1" width="26" height="26" rx="7" stroke="var(--acento)" stroke-width="2"></rect><path d="M7 18l4-5 4 3 6-8" stroke="var(--acento)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+<div>
+<div style="font-weight: 700; font-size: 16px">Painel do Processamento</div>
+<div style="font-size: 12px; color: var(--sub)">TCC · Análise de sentimento e ativos</div>
+</div>
+</div>
+<nav aria-label="Seções" style="display: flex; flex-wrap: wrap; gap: 4px; flex: 1 1 auto">
+<a class="aba" href="Main.dc.html">Hoje</a>
+<a class="aba" href="Coleta.dc.html">Coleta</a>
+<a class="aba aba-ativa" href="Diagnostico.dc.html" aria-current="page">Diagnóstico</a>
+<a class="aba" href="Execucoes.dc.html">Execuções</a>
+<a class="aba" href="API.dc.html">API</a>
+<a class="aba" href="Experimento.dc.html">Experimento</a>
+</nav>
+<div class="num" style="font-size: 13px; color: var(--sub)">ter, 03/11/2026 · 19:42</div>
+</div>
+</header>
+
+<main style="max-width: 1240px; margin: 0 auto; padding: 28px 24px 48px; display: flex; flex-direction: column; gap: 24px">
+
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 16px">
+<div>
+<h1 style="margin: 0; font-size: 26px">Diagnóstico do banco</h1>
+<p style="margin: 4px 0 0; color: var(--sub)">Gerado em <span class="num">03/11 · 11:35</span> · só leitura · 16 seções</p>
+</div>
+<div style="display: flex; gap: 10px; flex-wrap: wrap">
+<button class="botao" type="button">Abrir o .md</button>
+<button class="botao botao-pri" type="button">Rodar o diagnóstico</button>
+</div>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px">
+<div style="background: var(--sup); border: 1px solid var(--borda); border-radius: 14px; padding: 18px">
+<div style="font-size: 13px; color: var(--sub)">Divergências</div>
+<div class="num" style="font-size: 30px; font-weight: 500; color: var(--at)">2</div>
+<div style="font-size: 13px; color: var(--sub)">eram 7 no diagnóstico anterior</div>
+</div>
+<div style="background: var(--sup); border: 1px solid var(--borda); border-radius: 14px; padding: 18px">
+<div style="font-size: 13px; color: var(--sub)">Resolvidas desde o anterior</div>
+<div class="num" style="font-size: 30px; font-weight: 500; color: var(--ok)">7</div>
+<div style="font-size: 13px; color: var(--sub)">colunas novas e preços em 20/11/2020</div>
+</div>
+<div style="background: var(--sup); border: 1px solid var(--borda); border-radius: 14px; padding: 18px">
+<div style="font-size: 13px; color: var(--sub)">Novas desde o anterior</div>
+<div class="num" style="font-size: 30px; font-weight: 500; color: var(--at)">2</div>
+<div style="font-size: 13px; color: var(--sub)">notícias sem hora e sem marca "só data"</div>
+</div>
+</div>
+
+<section aria-labelledby="dv" style="background: var(--sup); border: 1px solid var(--borda); border-radius: 14px; padding: 24px">
+<h2 id="dv" style="margin: 0 0 14px; font-size: 17px">Divergências × especificação</h2>
+<div style="overflow-x: auto">
+<table style="width: 100%; min-width: 640px; border-collapse: collapse; font-size: 14px">
+<thead><tr style="color: var(--sub); text-align: left">
+<th scope="col" style="padding: 8px 10px; font-weight: 500">Tema</th>
+<th scope="col" style="padding: 8px 10px; font-weight: 500">Tabela</th>
+<th scope="col" style="padding: 8px 10px; font-weight: 500">Detalhe</th>
+<th scope="col" style="padding: 8px 10px; font-weight: 500">Desde</th>
+</tr></thead>
+<tbody>
+<tr style="border-top: 1px solid var(--borda)">
+<td class="num" style="padding: 12px 10px">noticias_sem_marca</td><td style="padding: 12px 10px">v1-noticias</td>
+<td style="padding: 12px 10px">1.060 do Google News em 2025 sem hora e sem "só data" na origem</td>
+<td style="padding: 12px 10px"><span style="font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; color: var(--at); background: var(--atf)">nova</span></td>
+</tr>
+<tr style="border-top: 1px solid var(--borda)">
+<td class="num" style="padding: 12px 10px">noticias_sem_marca</td><td style="padding: 12px 10px">v1-noticias</td>
+<td style="padding: 12px 10px">4.307 do Google News em 2026 na mesma situação</td>
+<td style="padding: 12px 10px"><span style="font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; color: var(--at); background: var(--atf)">nova</span></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section aria-labelledby="ss" style="background: var(--sup); border: 1px solid var(--borda); border-radius: 14px; overflow: hidden">
+<div style="padding: 20px 24px 8px">
+<h2 id="ss" style="margin: 0; font-size: 17px">Relatório completo</h2>
+<p style="margin: 2px 0 0; font-size: 13px; color: var(--sub)">Clique numa seção para abrir</p>
+</div>
+<sc-for list="{{secoes}}" as="s" hint-placeholder-count="8">
+<div style="border-top: 1px solid var(--borda)">
+<button type="button" class="sec" aria-expanded="{{s.aberta}}" onClick="{{s.alternar}}">
+<span style="{{s.ponto}}"></span>
+<span class="num" style="width: 28px; color: var(--sub); font-size: 13px">{{s.n}}</span>
+<span style="flex: 1">{{s.nome}}</span>
+<span style="font-size: 13px; color: var(--sub)">{{s.resumo}}</span>
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="{{s.seta}}"><path d="M9 6l6 6-6 6" stroke="var(--sub)" stroke-width="2" stroke-linecap="round"></path></svg>
+</button>
+<sc-if value="{{s.aberta}}" hint-placeholder-val="{{ false }}">
+<div style="padding: 4px 24px 20px 66px; color: var(--sub); font-size: 14px">
+<sc-if value="{{s.tabela}}" hint-placeholder-val="{{ false }}">
+<div style="overflow-x: auto">
+<table style="width: 100%; min-width: 520px; border-collapse: collapse">
+<thead><tr style="text-align: left"><th scope="col" style="padding: 6px 8px; font-weight: 500">Ticker</th><th scope="col" style="padding: 6px 8px; font-weight: 500">Data</th><th scope="col" style="padding: 6px 8px; font-weight: 500">Retorno</th><th scope="col" style="padding: 6px 8px; font-weight: 500">Origem</th></tr></thead>
+<tbody>
+<sc-for list="{{suspeitos}}" as="r" hint-placeholder-count="3">
+<tr style="border-top: 1px solid var(--borda); color: var(--txt)"><td class="num" style="padding: 8px">{{r.t}}</td><td class="num" style="padding: 8px">{{r.d}}</td><td class="num" style="padding: 8px">{{r.r}}</td><td style="padding: 8px">{{r.o}}</td></tr>
+</sc-for>
+</tbody>
+</table>
+</div>
+</sc-if>
+<sc-if value="{{s.semTabela}}" hint-placeholder-val="{{ true }}">
+<p style="margin: 0">{{s.texto}}</p>
+</sc-if>
+</div>
+</sc-if>
+</div>
+</sc-for>
+</section>
+
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"tema":{"editor":"enum","options":["escuro","claro"],"default":"escuro"},"$preview":{"width":1280,"height":1500}}'>
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { aberta: 11 }; }
+  renderVals() {
+    const ponto = cor => 'flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--' + cor + ')';
+    const base = [
+      [1, 'Existência das tabelas', '10 de 10 no contrato', 'ok', '8 tabelas do contrato e 7 auxiliares, incluindo as novas v1-emissores_ticker e v1-eventos_acoes.'],
+      [2, 'Colunas e chaves', 'colunas novas aceitas', 'ok', 'situacao, data_entrega e qtd_*_base_atual já fazem parte do contrato.'],
+      [3, 'Resumo das tabelas', '409.968 notícias', 'ok', 'Notícias de 2021 a 03/11/2026; preços de 30/12/2019 a 03/11/2026.'],
+      [4, 'Duplicatas', 'nenhuma na chave', 'ok', 'Repetições de matérias são informativas e tratadas na deduplicação entre origens.'],
+      [5, 'Notícias', '6.560 sem FinBERT', 'at', 'Documentos novos da CVM aguardando o FinBERT e a juíza da coleta.'],
+      [6, 'Valores distintos', 'todos permitidos', 'ok', 'Inclui situacao = ok, ajuste_ifrs17 e reapresentado.'],
+      [7, 'Preços', '1 pregão faltando', 'ok', 'IVVB11 em 24/10/2025 (pode ser suspensão).'],
+      [8, 'Balanços', 'desde 2020', 'ok', '3.192 balanços; 12 com ajuste de IFRS 17 (Hapvida).'],
+      [9, 'Tickers e CNPJs', 'emissores por período', 'ok', 'JBS e Natura ligadas ao emissor certo em cada período.'],
+      [10, 'Quantidade de ações suspeita', 'nenhuma', 'ok', 'Regra com teto P/VP × 1000 ≤ 20.'],
+      [11, 'Retornos diários suspeitos', '3 eventos', 'ok', ''],
+      [12, 'Lacunas nas séries', 'nenhuma', 'ok', 'Preços e índices sem lacunas acima de 5 pregões.'],
+      [13, 'Notícias por mês', 'jan–jul/2025 cadastrado', 'at', 'Período sem coleta do Google News; a recarga vai preencher.'],
+      [14, 'Vazios e zeros', '3 títulos vazios', 'ok', 'A leitura trata títulos vazios como ausentes.'],
+      [15, 'Painel de execuções', 'daily ok', 'ok', 'b3_indices, build_entrega, corrigir_horas e cvm_itr_dfp são etapas manuais.'],
+      [16, 'Composição e cobertura', '118.116 linhas', 'ok', 'Composição histórica do Ibovespa desde 2021.']
+    ];
+    const secoes = base.map(([n, nome, resumo, cor, texto]) => {
+      const aberta = this.state.aberta === n;
+      return {
+        n, nome, resumo, texto, aberta,
+        tabela: aberta && n === 11, semTabela: aberta && n !== 11,
+        ponto: ponto(cor),
+        seta: 'flex: none; transition: transform .15s; transform: rotate(' + (aberta ? 90 : 0) + 'deg)',
+        alternar: () => this.setState({ aberta: aberta ? 0 : n })
+      };
+    });
+    return {
+      tema: this.props.tema ?? 'escuro',
+      secoes,
+      suspeitos: [
+        { t: 'PCAR3', d: '01/03/2021', r: '+112,3%', o: 'limite (+100%)' },
+        { t: 'UGPA3', d: '28/06/2021', r: '+119,3%', o: 'limite (+100%)' },
+        { t: 'PCAR3', d: '23/08/2023', r: '−66,6%', o: 'evento conhecido: cisão do Éxito' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

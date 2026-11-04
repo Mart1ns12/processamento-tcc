@@ -97,7 +97,7 @@ def test_status_parcial_tambem_roda_a_carga(cenario):
     codigo, saida = _executar(raiz, params, falso)
     assert codigo == 0
     assert falso.etapas() == ["rotina", "carga", "publicador"]
-    assert "# dia: etapa=carga fim codigo=0 detalhe=status parcial" in saida
+    assert "# dia: etapa=carga fim codigo=0 em=2026-10-26T10:00:00-03:00 detalhe=status parcial" in saida
 
 
 def test_rotina_falhou_sem_carga_antiga_publica_so_a_execucao(cenario):
@@ -151,7 +151,20 @@ def test_dia_sem_pregao_devolve_3_e_explica(cenario):
     falso = Falso(raiz, status=None, rotina=(0, [linha]))
     codigo, saida = _executar(raiz, params, falso)
     assert codigo == 3
-    assert "# dia: etapa=rotina fim codigo=0 detalhe=dia sem pregão" in saida
+    assert "# dia: etapa=rotina fim codigo=0 em=2026-10-26T10:00:00-03:00 detalhe=dia sem pregão" in saida
+
+
+def test_marcas_de_inicio_levam_data_e_hora_com_fuso(cenario):
+    raiz, api, params = cenario
+    falso = Falso(raiz, status="parcial", carga=(0, ["Saída de 2026-10-26 em X: status parcial"]),
+                  publicador=(0, [PUBLICOU_COMPLETO]))
+    _codigo, saida = _executar(raiz, params, falso)
+    inicios = [linha for linha in saida if " inicio=" in linha]
+    assert len(inicios) == 3
+    assert all(linha.endswith(" inicio=2026-10-26T10:00:00-03:00") for linha in inicios)
+    r = marcos_acao("dia", saida, rodando=False, codigo=0, significado=SIGNIFICADOS["dia"][0])
+    assert r[1]["detalhe"] == "status parcial"
+    assert "em=" not in r[1]["detalhe"]
 
 
 def test_carga_que_falha_devolve_4_e_nao_publica(cenario):

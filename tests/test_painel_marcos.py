@@ -3,7 +3,9 @@
 Função pura: nenhum teste usa banco, rede ou arquivo. Os valores esperados vêm do plano visual (T1 a T15).
 """
 
-from processamento.painel.marcos import marcos_acao
+from datetime import datetime
+
+from processamento.painel.marcos import marcos_acao, marcos_dia, progresso_dia
 
 
 def estados(resultado):
@@ -172,3 +174,85 @@ def test_dia_parado_no_meio_marca_etapa_atual_como_erro():
     r = marcos_acao("dia", linhas, rodando=False, codigo=1, significado="parado pelo painel")
     assert estados(r) == ["concluida", "erro", "pulada", "erro"]
     assert r[3]["detalhe"] == "parado pelo painel"
+
+
+# ---------------------------------------------------------------- progresso do dia completo
+
+LINHAS_PROG = [
+    "# dia: etapa=rotina inicio=2026-11-03T08:00:00-03:00",
+    "# dia: etapa=rotina fim codigo=0 em=2026-11-03T08:05:00-03:00 detalhe=status ok",
+    "# dia: etapa=carga inicio=2026-11-03T08:05:10-03:00",
+]
+MEDIAS = {"rotina": 320, "carga": 300, "publicador": 10}
+AMOSTRAS = {"rotina": 3, "carga": 3, "publicador": 2}
+
+
+def _progresso(linhas=LINHAS_PROG, medias=MEDIAS, amostras=AMOSTRAS, agora="2026-11-03T08:07:10-03:00",
+               rodando=True):
+    marcos = marcos_dia(linhas, rodando=rodando, codigo=None if rodando else 0, significado=None)
+    return progresso_dia(linhas, marcos, medias, amostras, datetime.fromisoformat(agora), rodando)
+
+
+def test_progresso_dia_rodando_com_contrato_completo():
+    assert _progresso() == {
+        "etapas": [
+            {"id": "rotina", "rotulo": "Rotina", "estado": "concluida", "percentual": 100,
+             "inicio": "2026-11-03T08:00:00-03:00", "fim": "2026-11-03T08:05:00-03:00", "duracao_s": 300,
+             "media_s": 320, "info": "5 min 0 s"},
+            {"id": "carga", "rotulo": "Carga completa", "estado": "agora", "percentual": 40,
+             "inicio": "2026-11-03T08:05:10-03:00", "fim": None, "duracao_s": None,
+             "media_s": 300, "info": "40%"},
+            {"id": "publicador", "rotulo": "Publicador", "estado": "espera", "percentual": 0,
+             "inicio": None, "fim": None, "duracao_s": None, "media_s": 10, "info": "≈ 10 s"},
+        ],
+        "restante_s": 190,
+        "restante_texto": "faltam ≈ 3 min 10 s (média das últimas 2)",
+        "amostras": 2,
+    }
+
+
+def test_progresso_dia_sem_media_de_uma_etapa_pendente():
+    p = _progresso(medias={"rotina": 320, "carga": 300, "publicador": None},
+                   amostras={"rotina": 3, "carga": 3, "publicador": 0})
+    assert p["restante_s"] is None
+    assert p["restante_texto"] == "sem média ainda"
+    assert p["etapas"][2]["info"] == "sem média ainda"
+
+
+def test_progresso_dia_percentual_limitado_a_99():
+    p = _progresso(agora="2026-11-03T08:12:10-03:00")
+    carga = p["etapas"][1]
+    assert carga["percentual"] == 99
+    assert p["restante_s"] == 10
+    assert p["restante_texto"] == "faltam ≈ 10 s (média das últimas 2)"
+
+
+def test_progresso_dia_formato_antigo_sem_horas():
+    linhas = [
+        "# dia: etapa=rotina inicio=10:00:00",
+        "# dia: etapa=rotina fim codigo=0 detalhe=status ok",
+        "# dia: etapa=carga inicio=10:01:00",
+    ]
+    medias = {"rotina": 320, "carga": 300, "publicador": 10}
+    amostras = {"rotina": 3, "carga": 3, "publicador": 3}
+    p = _progresso(linhas=linhas, medias=medias, amostras=amostras, agora="2026-11-03T10:02:00-03:00")
+    rotina, carga, _publicador = p["etapas"]
+    assert rotina["info"] == "concluída"
+    assert rotina["duracao_s"] is None
+    assert carga["percentual"] is None
+    assert carga["info"] == "em andamento"
+    assert p["restante_s"] == 310
+    assert p["restante_texto"] == "faltam ≈ 5 min 10 s (média das últimas 3)"
+
+
+def test_progresso_dia_parado_nao_tem_restante():
+    linhas = LINHAS_PROG + [
+        "# dia: etapa=carga fim codigo=0 em=2026-11-03T08:08:00-03:00 detalhe=status ok",
+        "# dia: etapa=publicador inicio=2026-11-03T08:08:00-03:00",
+        "# dia: etapa=publicador fim codigo=0 em=2026-11-03T08:08:10-03:00 detalhe=publicado",
+    ]
+    p = _progresso(linhas=linhas, agora="2026-11-03T08:09:00-03:00", rodando=False)
+    assert p["restante_s"] is None
+    assert p["restante_texto"] is None
+    assert p["amostras"] is None
+    assert [e["estado"] for e in p["etapas"]] == ["concluida", "concluida", "concluida"]

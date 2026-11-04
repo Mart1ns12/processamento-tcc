@@ -11,13 +11,15 @@ Comportamento travado aqui:
 Nenhum teste usa banco, rede ou escreve em tests/dados/ (as fixtures são copiadas para tmp_path).
 """
 
+import json
 import shutil
 from pathlib import Path
 
 import pytest
 
 from fabrica_painel import montar_raiz
-from processamento.painel.mercado import cartao_coerencia, dia_atipico, ler_dia, pct0, pct2
+from processamento.painel.mercado import (bloco_mercado, cartao_coerencia, dia_atipico, ler_dia, pct0, pct2,
+                                          serie_ibov)
 
 DADOS = Path(__file__).parent / "dados" / "painel"
 
@@ -178,3 +180,87 @@ def test_mercado_dia_quebrado_nao_levanta(pregao):
     assert dia["disponivel"] is False
     assert dia["motivo"] == "mercado_dia.json: JSON inválido"
     assert cartao_coerencia(dia, LIMITES_COERENCIA)["cartao"]["farol"] == "idle"
+
+
+def test_ler_dia_sem_fechamento_nao_tem_nivel_do_ibov(dia, tmp_path):
+    assert dia["ibov_nivel"] is None
+    assert ler_dia(tmp_path, "saida", None)["ibov_nivel"] is None
+
+
+def _grava_fechamento(raiz, pasta, referencia, valor, status="ok"):
+    """saida/<pasta>/mercado_dia.json sintético, só com o fechamento do IBOV."""
+    destino = raiz / "saida" / pasta
+    destino.mkdir(parents=True, exist_ok=True)
+    dados = {"pacote": "mercado_dia", "registros": [
+        {"data_referencia": referencia, "IBOV": {"fechamento": {"valor": valor, "status": status}}}]}
+    (destino / "mercado_dia.json").write_text(json.dumps(dados), encoding="utf-8")
+
+
+SERIE_IBOV = [
+    ("2026-10-20", "2026-10-19", 100, "ok"),
+    ("2026-10-21", "2026-10-20", 101, "ok"),
+    ("2026-10-22", "2026-10-21", 102, "ok"),
+    ("2026-10-23", "2026-10-22", 103, "ok"),
+    ("2026-10-24", "2026-10-23", 104, "ok"),
+    ("2026-10-25", "2026-10-23", 999, "ok"),
+    ("2026-10-26", "2026-10-24", 105, "indisponivel"),
+    ("2026-10-27", "2026-10-26", 106, "ok"),
+    ("2026-10-28", "2026-10-27", 107, "ok"),
+]
+
+
+def _monta_serie(raiz):
+    for pasta, referencia, valor, status in SERIE_IBOV:
+        _grava_fechamento(raiz, pasta, referencia, valor, status)
+
+
+def test_serie_ibov_pregoes_mais_recentes_sem_repetir_nem_indisponiveis(tmp_path):
+    _monta_serie(tmp_path)
+    assert serie_ibov(tmp_path, "saida", "2026-10-27", 4) == [
+        {"data": "2026-10-21", "nivel": 102.0},
+        {"data": "2026-10-22", "nivel": 103.0},
+        {"data": "2026-10-23", "nivel": 999.0},
+        {"data": "2026-10-26", "nivel": 106.0},
+    ]
+
+
+def test_serie_ibov_sem_ate_ou_sem_n_valido_fica_vazia(tmp_path):
+    _monta_serie(tmp_path)
+    assert serie_ibov(tmp_path, "saida", None, 4) == []
+    assert serie_ibov(tmp_path, "saida", "2026-10-27", None) == []
+    assert serie_ibov(tmp_path, "saida", "2026-10-27", 0) == []
+
+
+def test_serie_ibov_pasta_inexistente_nao_levanta(tmp_path):
+    assert serie_ibov(tmp_path, "saida", "2026-10-27", 4) == []
+
+
+def test_bloco_mercado_formata_nivel_e_variacao():
+    dados = {"disponivel": True, "data_pregao": "2026-10-30", "ibov": -0.007471067345997895,
+             "ibov_nivel": 167922.0, "fonte": "x"}
+    assert bloco_mercado(dados, []) == {
+        "disponivel": True, "motivo": None, "data_pregao": "2026-10-30",
+        "ibov_nivel": 167922.0, "ibov_nivel_texto": "167.922",
+        "ibov_var": -0.007471067345997895, "ibov_var_texto": "-0,75%",
+        "serie": [], "fonte": "x",
+    }
+
+
+def test_bloco_mercado_milhar_com_ponto_e_nivel_ausente_sem_dados():
+    b = bloco_mercado({"disponivel": True, "ibov": None, "ibov_nivel": 1234567.89}, [])
+    assert b["ibov_nivel_texto"] == "1.234.568"
+    assert b["ibov_var_texto"] == "sem dados"
+    b = bloco_mercado({"disponivel": True, "ibov": 0.01, "ibov_nivel": None}, [])
+    assert b["ibov_nivel"] is None
+    assert b["ibov_nivel_texto"] == "sem dados"
+
+
+def test_bloco_mercado_indisponivel():
+    b = bloco_mercado({"disponivel": False, "motivo": "pasta de saída não encontrada", "data_pregao": None,
+                       "ibov": None, "ibov_nivel": None, "fonte": None}, [])
+    assert b["disponivel"] is False
+    assert b["motivo"] == "pasta de saída não encontrada"
+    assert b["ibov_nivel"] is None
+    assert b["ibov_nivel_texto"] == "sem dados"
+    assert b["ibov_var"] is None
+    assert b["ibov_var_texto"] == "sem dados"

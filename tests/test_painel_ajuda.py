@@ -9,13 +9,13 @@ from processamento.painel.ajuda import (
 RAIZ_REAL = Path(__file__).resolve().parents[1]   # só leitura do parametros.yaml real
 RAIZ_FIXTURA = Path(__file__).resolve().parent / "dados" / "painel" / "raiz"
 
-IDS = {"resumo", "fluxo", "coleta", "processamento", "interface", "pacotes", "contrato", "rodada",
+IDS = {"hoje", "fluxo", "progresso", "coleta", "processamento", "interface", "pacotes", "contrato", "rodada",
        "carga_vs_rotina", "linha_tempo", "prazo", "folga", "saude", "saude_contrato",
        "saude_quantidade_acoes", "saude_retornos", "saude_lacunas", "saude_horario_noticias",
        "saude_cobertura", "experimento", "teste_funcionamento", "cadeado", "modelo", "top5_retido",
        "chance", "modelo_sombra", "grafico", "faixa_acaso", "historico", "testes", "acao_rotina",
-       "acao_carga", "acao_diagnostico", "acao_wordpress", "acao_testes", "api", "banco_api", "tempo_api", "novidades",
-       "dia_atipico", "etapas_coleta", "saude_coerencia_mercado", "acao_dia"}
+       "acao_carga", "acao_diagnostico", "acao_testes", "api", "banco_api", "tempo_api", "o_que_mudou",
+       "dia_atipico", "mercado", "etapas_coleta", "saude_coerencia_mercado", "acao_dia"}
 CHAVES_FAZER = {"saude_contrato", "saude_quantidade_acoes", "saude_retornos", "saude_lacunas",
                 "saude_horario_noticias", "saude_cobertura", "saude_sem_dados", "saude_sem_diagnostico",
                 "coleta_warn", "coleta_bad", "rotina_falhou", "rotina_parcial", "rotina_interrompida",

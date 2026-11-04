@@ -458,6 +458,47 @@ def bloco_banco(situacao: object, esperado: object, pregao: object) -> dict:
             "pontos": [{"nivel": "warn", "texto": texto, "chave": "banco_atrasado"}]}
 
 
+def _estado_titulo(bloco: dict) -> tuple[str, str]:
+    """Estado e título de um nó do fluxo; bloco vazio ou sem estado conhecido vira "idle" e "sem dados"."""
+    estado, titulo = bloco.get("estado"), bloco.get("titulo")
+    if estado not in ("ok", "warn", "bad", "idle") or not isinstance(titulo, str):
+        return "idle", "sem dados"
+    return estado, titulo
+
+
+def fluxo_nos(fluxo_dia: object, banco: object, api: object) -> dict:
+    """Os cinco nós do fluxo do painel (coleta, processamento, banco da API, API, interface), com cor e horário.
+
+    Sem fluxo do dia, coleta, processamento e interface ficam "sem dados"; banco e API vêm dos blocos deles.
+    rodape: a última carga completa (ou "sem dados").
+    """
+    f = _dic(fluxo_dia)
+    disponivel = f.get("disponivel") is True
+    coleta = _dic(f.get("coleta")) if disponivel else {}
+    proc = _dic(f.get("processamento")) if disponivel else {}
+    interface = _dic(f.get("interface")) if disponivel else {}
+    carga = _dic(f.get("carga")) if disponivel else {}
+    b, a = _dic(banco), _dic(api)
+
+    fim = _sp(proc.get("fim"))
+    ultima = _data_de(b.get("ultima_publicacao"))
+    consultado = a.get("consultado_em")
+    nos = [
+        ("coleta", "Coleta", coleta, coleta.get("entrega_hhmm"), "fluxo-coleta"),
+        ("processamento", "Processamento", proc, None if fim is None else f"{fim:%H:%M}", "fluxo-processamento"),
+        ("banco", "Banco da API", b, None if ultima is None else f"{ultima:%d/%m}", "fluxo-banco"),
+        ("api", "API", a, consultado[:5] if isinstance(consultado, str) and consultado else None, "fluxo-api"),
+        ("interface", "Interface", interface, None, "fluxo-interface"),
+    ]
+    saida = []
+    for id_, nome, bloco, quando, alvo in nos:
+        estado, texto = _estado_titulo(bloco)
+        saida.append({"id": id_, "nome": nome, "estado": estado, "texto": texto, "quando": quando, "alvo": alvo})
+    rotulo = carga.get("rotulo")
+    rodape = rotulo if isinstance(rotulo, str) else "última carga completa: sem dados"
+    return {"disponivel": disponivel, "nos": saida, "rodape": rodape}
+
+
 def _pontos_do_bloco(bloco: object, alvo: str) -> list[dict]:
     """Pontos (warn/bad) que um bloco já traz (API, Banco, dia atípico), com o alvo da tela."""
     saida = []

@@ -109,6 +109,10 @@ def _marca(imprimir: Callable[[str], object], texto: str) -> None:
     imprimir(f"# dia: {texto}")
 
 
+def _hora(m: datetime) -> str:
+    return m.isoformat(timespec="seconds")
+
+
 def _resultado(imprimir: Callable[[str], object], chave: str, codigo: int) -> int:
     _marca(imprimir, f"resultado={chave} {_FRASES[chave]}")
     return codigo
@@ -129,7 +133,7 @@ def executar_dia(d: date, raiz: Path, params_painel: dict, *, rodar, imprimir=pr
 
     # 1. Rotina (só leitura do banco da coleta)
     inicio = agora()
-    _marca(imprimir, f"etapa=rotina inicio={inicio:%H:%M:%S}")
+    _marca(imprimir, f"etapa=rotina inicio={_hora(inicio)}")
     codigo, linhas = rodar(
         [sys.executable, "-m", "processamento.rotina", "--data", dia, "--sem-esperar"], raiz, base)
     status = status_rotina(raiz, "saida", d, inicio)
@@ -139,7 +143,7 @@ def executar_dia(d: date, raiz: Path, params_painel: dict, *, rodar, imprimir=pr
         detalhe = f"status {status}"
     else:
         detalhe = f"código {codigo}, sem saída nova"
-    _marca(imprimir, f"etapa=rotina fim codigo={codigo} detalhe={detalhe}")
+    _marca(imprimir, f"etapa=rotina fim codigo={codigo} em={_hora(agora())} detalhe={detalhe}")
 
     if status is None or status == "em_andamento":
         _marca(imprimir, "etapa=carga pulada motivo=a rotina não gerou saída nova")
@@ -148,7 +152,7 @@ def executar_dia(d: date, raiz: Path, params_painel: dict, *, rodar, imprimir=pr
 
     if status in ("ok", "parcial"):
         # 2. Carga completa (só leitura do banco; grava em saida_completa/)
-        _marca(imprimir, f"etapa=carga inicio={agora():%H:%M:%S}")
+        _marca(imprimir, f"etapa=carga inicio={_hora(agora())}")
         codigo_carga, linhas_carga = rodar(
             [sys.executable, "-m", "processamento.saida", "--data", dia, "--completo"], raiz, base)
         detalhe_carga = f"código {codigo_carga}"
@@ -156,7 +160,7 @@ def executar_dia(d: date, raiz: Path, params_painel: dict, *, rodar, imprimir=pr
             m = relatorios.RE_SAIDA.match(linha)
             if m:
                 detalhe_carga = f"status {m.group(1)}"
-        _marca(imprimir, f"etapa=carga fim codigo={codigo_carga} detalhe={detalhe_carga}")
+        _marca(imprimir, f"etapa=carga fim codigo={codigo_carga} em={_hora(agora())} detalhe={detalhe_carga}")
         if codigo_carga != 0:
             _marca(imprimir, "etapa=publicador pulada motivo=a carga completa falhou")
             return _resultado(imprimir, "carga_falhou", 4)
@@ -169,14 +173,14 @@ def executar_dia(d: date, raiz: Path, params_painel: dict, *, rodar, imprimir=pr
             return _resultado(imprimir, "publicador_bloqueado", 6)
 
     # 4. Publicador do projeto da API (argv fixo; nunca --forcar nem --criar-tabelas)
-    _marca(imprimir, f"etapa=publicador inicio={agora():%H:%M:%S}")
+    _marca(imprimir, f"etapa=publicador inicio={_hora(agora())}")
     codigo_pub, linhas_pub = rodar(
         [api["python"], "-m", "publicador", "--data", dia], Path(api["dir_api"]),
         ambiente_publicador(base, raiz))
     resultado = resultado_publicador(linhas_pub)
     detalhe_pub = {"so_execucao": "só a execução", "completa": "publicado (completo)",
                    "recusada": "recusado"}.get(resultado or "", f"código {codigo_pub}")
-    _marca(imprimir, f"etapa=publicador fim codigo={codigo_pub} detalhe={detalhe_pub}")
+    _marca(imprimir, f"etapa=publicador fim codigo={codigo_pub} em={_hora(agora())} detalhe={detalhe_pub}")
 
     if codigo_pub == 0:
         return _resultado(imprimir, "completa" if resultado == "completa" else "so_execucao", 0)

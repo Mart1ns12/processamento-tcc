@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Painel — Experimento</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.t-escuro{--bg:#0F1115;--sup:#171A21;--sup2:#1E222B;--borda:#2A2F3A;--txt:#E8EAED;--sub:#A3ABB9;--acento:#6EA8FF;--ok:#3FB950;--okf:#12301B;--at:#E3A33B;--atf:#3A2A0E;--falha:#FF6B6B;--falhaf:#3D1416;--trilho:#262B35}
+.t-claro{--bg:#F5F6F8;--sup:#FFFFFF;--sup2:#F0F2F5;--borda:#DCE0E6;--txt:#15181E;--sub:#545D6B;--acento:#1F5FD6;--ok:#1A7F37;--okf:#E3F4E7;--at:#8A5A00;--atf:#FCF0D9;--falha:#C62828;--falhaf:#FBE4E4;--trilho:#E6E9EE}
+a{color:var(--acento)}a:hover{color:var(--txt)}
+.aba{display:inline-flex;align-items:center;min-height:44px;padding:0 14px;border-radius:8px;text-decoration:none;color:var(--sub);font-weight:500;font-size:14px}
+.aba:hover{background:var(--sup2);color:var(--txt)}
+.aba-ativa{background:var(--sup2);color:var(--txt);box-shadow:inset 0 -2px 0 var(--acento)}
+.num{font-family:'IBM Plex Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums}
+</style>
+</helmet>
+<div class="t-{{tema}}" style="min-height: 100vh; background: var(--bg); color: var(--txt); font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 15px; line-height: 1.5">
+
+<header style="border-bottom: 1px solid var(--borda); background: var(--sup)">
+<div style="max-width: 1240px; margin: 0 auto; padding: 12px 24px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px">
+<div style="display: flex; align-items: center; gap: 10px">
+<svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true"><rect x="1" y="1" width="26" height="26" rx="7" stroke="var(--acento)" stroke-width="2"></rect><path d="M7 18l4-5 4 3 6-8" stroke="var(--acento)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+<div>
+<div style="font-weight: 700; font-size: 16px">Painel do Processamento</div>
+<div style="font-size: 12px; color: var(--sub)">TCC · Análise de sentimento e ativos</div>
+</div>
+</div>
+<nav aria-label="Seções" style="display: flex; flex-wrap: wrap; gap: 4px; flex: 1 1 auto">
+<a class="aba" href="Main.dc.html">Hoje</a>
+<a class="aba" href="Coleta.dc.html">Coleta</a>
+<a class="aba" href="Diagnostico.dc.html">Diagnóstico</a>
+<a class="aba" href="Execucoes.dc.html">Execuções</a>
+<a class="aba" href="API.dc.html">API</a>
+<a class="aba aba-ativa" href="Experimento.dc.html" aria-current="page">Experimento</a>
+</nav>
+<div class="num" style="font-size: 13px; color: var(--sub)">ter, 03/11/2026 · 19:42</div>
+</div>
+</header>
+
+<main style="max-width: 1240px; margin: 0 auto; padding: 28px 24px 48px; display: flex; flex-direction: column; gap: 24px">
+
+<div>
+<h1 style="margin: 0; font-size: 26px">Experimento</h1>
+<p style="margin: 4px 0 0; color: var(--sub)">Estado da operação do modelo. Ações e resultados ficam na interface.</p>
+</div>
+
+<div style="display: flex; gap: 12px; padding: 14px 16px; border-radius: 12px; background: var(--atf); align-items: flex-start">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="flex: none; margin-top: 2px"><path d="M12 8v5M12 16.5v.5M10.3 3.9 2.6 17.5A2 2 0 0 0 4.3 20.5h15.4a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" stroke="var(--at)" stroke-width="2" stroke-linecap="round"></path></svg>
+<div><strong>Top 5 interno pausado.</strong> O modelo é da versão de preparação 6 e o código está na 7. Volta com o treino da rodada 3, depois da recarga da coleta.</div>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px">
+<div style="background: var(--sup); border: 1px solid var(--borda); border-radius: 14px; padding: 20px">
+<div style="font-size: 13px; color: var(--sub)">Modelo em produção</div>
+<div style="font-size: 20px; font-weight: 600; margin-top: 4px">Regressão logística</div>
+<dl style="margin: 12px 0 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 14px">
+<dt style="color: var(--sub)">Configuração</dt><dd class="num" style="margin: 0">rodada 001</dd>
+<dt style="color: var(--sub)">Treinado em</dt><dd class="num" style="margin: 0">02/11/2026</dd>
+<dt style="color: var(--sub)">Versão</dt><dd class="num" style="margin: 0">preparação 6</dd>
+<dt style="color: var(--sub)">Oficial</dt><dd style="margin: 0">não (provisório)</dd>
+</dl>
+</div>
+<div style="background: var(--sup); border: 1px solid var(--borda); border-radius: 14px; padding: 20px">
+<div style="font-size: 13px; color: var(--sub)">Dataset</div>
+<div style="font-size: 20px; font-weight: 600; margin-top: 4px">Versão 7 pendente</div>
+<dl style="margin: 12px 0 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 14px">
+<dt style="color: var(--sub)">Último gerado</dt><dd class="num" style="margin: 0">v6 · 02/11</dd>
+<dt style="color: var(--sub)">Período</dt><dd class="num" style="margin: 0">2021 → 2026</dd>
+<dt style="color: var(--sub)">Sem coleta</dt><dd style="margin: 0">jan–jul/2025 (recarga)</dd>
+<dt style="color: var(--sub)">Retreino mensal</dt><dd style="margin: 0">desligado</dd>
+</dl>
+</div>
+<div style="background: var(--sup); border: 1px solid var(--borda); border-radius: 14px; padding: 20px">
+<div style="font-size: 13px; color: var(--sub)">Teste final</div>
+<div style="display: flex; align-items: center; gap: 8px; margin-top: 4px">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2" stroke="var(--ok)" stroke-width="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3" stroke="var(--ok)" stroke-width="2"></path></svg>
+<span style="font-size: 20px; font-weight: 600">Travado</span>
+</div>
+<dl style="margin: 12px 0 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 14px">
+<dt style="color: var(--sub)">Início</dt><dd class="num" style="margin: 0">23/06/2026</dd>
+<dt style="color: var(--sub)">Fim</dt><dd style="margin: 0">a definir (D2)</dd>
+<dt style="color: var(--sub)">Pregões acumulados</dt><dd class="num" style="margin: 0">94</dd>
+<dt style="color: var(--sub)">Uso</dt><dd style="margin: 0">nenhum (uso único)</dd>
+</dl>
+</div>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; gap: 24px">
+<section aria-labelledby="rg" style="flex: 999 1 520px; min-width: 0; background: var(--sup); border: 1px solid var(--borda); border-radius: 14px; padding: 24px">
+<h2 id="rg" style="margin: 0; font-size: 17px">Registro do protocolo</h2>
+<p style="margin: 2px 0 18px; font-size: 13px; color: var(--sub)">Todas as rodadas ficam registradas, inclusive as que não valem mais</p>
+<ol style="list-style: none; margin: 0; padding: 0">
+<sc-for list="{{rodadas}}" as="r" hint-placeholder-count="5">
+<li style="display: flex; gap: 14px">
+<div style="display: flex; flex-direction: column; align-items: center">
+<span style="{{r.ponto}}"></span>
+<span style="{{r.linha}}"></span>
+</div>
+<div style="padding-bottom: 18px; min-width: 0">
+<div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center">
+<span style="font-weight: 600">{{r.nome}}</span>
+<span style="{{r.selo}}">{{r.status}}</span>
+</div>
+<div style="font-size: 13px; color: var(--sub)">{{r.detalhe}}</div>
+</div>
+</li>
+</sc-for>
+</ol>
+</section>
+
+<section aria-labelledby="ck" style="flex: 1 1 340px; background: var(--sup); border: 1px solid var(--borda); border-radius: 14px; padding: 24px">
+<h2 id="ck" style="margin: 0; font-size: 17px">Antes do teste final</h2>
+<p style="margin: 2px 0 14px; font-size: 13px; color: var(--sub)">Decisões que precisam estar fechadas</p>
+<ul style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px">
+<sc-for list="{{checklist}}" as="c" hint-placeholder-count="8">
+<li style="display: flex; gap: 10px; align-items: flex-start">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="flex: none; margin-top: 3px"><circle cx="12" cy="12" r="9" stroke="{{c.cor}}" stroke-width="2"></circle><path d="{{c.marca}}" stroke="{{c.cor}}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+<span><span class="num" style="color: var(--sub)">{{c.id}}</span> {{c.txt}}</span>
+</li>
+</sc-for>
+</ul>
+</section>
+</div>
+
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"tema":{"editor":"enum","options":["escuro","claro"],"default":"escuro"},"$preview":{"width":1280,"height":1400}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const selo = (c, f) => 'font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; color: var(--' + c + '); background: var(--' + f + ')';
+    const itens = [
+      ['Protocolo · rodada 001', 'válida', 'ok', 'okf', '02/11 · seleção de variáveis registrada'],
+      ['Busca · rodada 001', 'válida', 'ok', 'okf', '02/11 · família escolhida: logística'],
+      ['Protocolo e busca · rodada 002', 'reproduziu', 'ok', 'okf', '02/11 · repetição idêntica (mesmo hash)'],
+      ['Sensibilidade (exploratória)', 'registrada', 'acento', 'sup2', '02/11 · fora da contagem do protocolo'],
+      ['Rodada 003 (dados novos)', 'aguardando', 'at', 'atf', 'Depois da recarga e do FinBERT da coleta · passa a ser a oficial']
+    ];
+    const rodadas = itens.map(([nome, status, c, f, detalhe], i) => ({
+      nome, status, detalhe, selo: selo(c, f),
+      ponto: 'flex: none; width: 12px; height: 12px; border-radius: 50%; margin-top: 6px; background: ' + (c === 'at' ? 'transparent; border: 2px solid var(--at)' : 'var(--' + c + ')'),
+      linha: i === itens.length - 1 ? 'flex: 1; width: 2px' : 'flex: 1; width: 2px; background: var(--borda); margin-top: 4px'
+    }));
+    const feito = 'M8 12.5l2.5 2.5L16 9.5';
+    const pend = 'M12 8v4l2 2';
+    const check = [
+      ['D1', 'Histórico desde 2021, com limitações registradas', true],
+      ['D2', 'Data de fim do teste final', false],
+      ['D3', 'Hipótese e medida principal', true],
+      ['D4', 'Família, colunas e referências congeladas', true],
+      ['D5', 'Dados novos antes do teste → nova rodada', true],
+      ['D6', 'Dataset congelado com hash registrado', false],
+      ['D7', 'Conferência de preços reescritos', true],
+      ['D8', 'Custos definidos antes', true],
+      ['D9', 'Auditoria de eventos após 23/06', false],
+      ['D10', 'Chance oculta até o teste ao vivo', true]
+    ].map(([id, txt, ok]) => ({ id, txt, cor: ok ? 'var(--ok)' : 'var(--at)', marca: ok ? feito : pend }));
+    return { tema: this.props.tema ?? 'escuro', rodadas, checklist: check };
+  }
+}
+</script>
+</body>
+</html>

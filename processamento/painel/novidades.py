@@ -1,14 +1,16 @@
-"""Novidades do painel: compara o diagnóstico visto com o anterior guardado em logs/painel (arquivos .log).
+"""Novidades do painel: compara o diagnóstico atual com o anterior guardado em logs/painel/diagnosticos.
 
-Só `atualizar_copias` grava, e só dentro da pasta do painel. Nenhuma função acessa banco ou rede.
+Cada diagnóstico vira um resumo JSON (só os dados que as comparações usam). Só `atualizar_resumos` grava,
+e só dentro da pasta do painel. Nenhuma função acessa banco ou rede.
 Arquivo ausente ou ilegível vira `disponivel` False ou lista vazia, nunca exceção.
 """
 
 from __future__ import annotations
 
+import json
 import os
 import re
-import shutil
+import threading
 from pathlib import Path
 
 from processamento.painel.relatorios import ler_diagnostico
@@ -28,6 +30,8 @@ from processamento.painel.saude import (
 )
 
 VISTO, ANTERIOR = "diagnostico_visto.log", "diagnostico_anterior.log"
+PASTA_RESUMOS = "diagnosticos"
+VERSAO_RESUMO = 1
 TABELAS_DIARIAS = {"v1-precos", "v1-noticias", "v1-indices"}
 NOMES_LINHAS = {"v1-noticias": "notícias", "v1-precos": "preços", "v1-cadastro": "empresas no cadastro",
                 "v1-mudancas_ticker": "mudanças de ticker", "v1-balancos": "balanços",
@@ -40,6 +44,9 @@ FAROL_NOME = {"ok": "verde", "warn": "amarelo", "bad": "vermelho", "idle": "cinz
 MAX_FRASE = 4
 
 RE_MOMENTO = re.compile(r"^(\d{4})-(\d{2})-(\d{2}) (\d{2}:\d{2})")
+RE_NOME = re.compile(r"^\d{4}-\d{2}-\d{2}_\d{4}\.json$")
+MOTIVO_SEM_ANTERIOR = ("Ainda sem diagnóstico anterior guardado: "
+                       "as novidades aparecem a partir do próximo diagnóstico.")
 
 
 # ---------------------------------------------------------------- auxiliares
@@ -51,19 +58,20 @@ def _ler_linhas(caminho: Path) -> list[str] | None:
         return None
 
 
-def _gerado_em(caminho: Path) -> str | None:
-    linhas = _ler_linhas(caminho)
-    if linhas is None:
-        return None
-    return next((linha[len("- Gerado em: "):].strip() for linha in linhas if linha.startswith("- Gerado em: ")), None)
-
-
 def _momento_br(gerado: str | None) -> str | None:
     """'AAAA-MM-DD HH:MM (…)' vira 'DD/MM/AAAA HH:MM'; outro texto vira None."""
     m = RE_MOMENTO.match(gerado or "")
     if not m:
         return None
     return f"{m.group(3)}/{m.group(2)}/{m.group(1)} {m.group(4)}"
+
+
+def _nome_resumo(gerado: str | None) -> str | None:
+    """'AAAA-MM-DD HH:MM (…)' vira 'AAAA-MM-DD_HHMM.json'; outro texto vira None."""
+    m = RE_MOMENTO.match(gerado or "")
+    if not m:
+        return None
+    return f"{m.group(1)}-{m.group(2)}-{m.group(3)}_{m.group(4).replace(':', '')}.json"
 
 
 def _inteiro(texto: str | None) -> int | None:
@@ -87,42 +95,111 @@ def _lista(nomes: list[str], singular: str, plural: str) -> str:
     return f" ({singular if len(nomes) == 1 else plural}: {', '.join(nomes)})"
 
 
-# ---------------------------------------------------------------- cópias
-
-def atualizar_copias(docs_md: Path, pasta_painel: Path) -> None:
-    """Mantém VISTO (o diagnóstico visto por último) e ANTERIOR (o que era VISTO antes de mudar). Só grava em pasta_painel."""
-    gerado = _gerado_em(docs_md)
-    if gerado is None:
-        return
-    visto = pasta_painel / VISTO
+def _ler_resumo(caminho: Path) -> dict | None:
     try:
-        if visto.is_file():
-            if _gerado_em(visto) == gerado:
-                return
-            os.replace(visto, pasta_painel / ANTERIOR)
-        pasta_painel.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(docs_md, visto)
+        dado = json.loads(caminho.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return dado if isinstance(dado, dict) else None
+
+
+# ---------------------------------------------------------------- resumo
+
+def resumir(docs_md: Path) -> dict | None:
+    """Resumo JSON do diagnóstico (só os dados que as comparações usam); None se não puder ser lido."""
+    diag = ler_diagnostico(docs_md)
+    if not diag.get("disponivel"):
+        return None
+    linhas = _ler_linhas(docs_md)
+    if linhas is None:
+        return None
+    periodo: dict[str, dict] = {}
+    for r in tabela_md(linhas, "Período e entidades") or []:
+        if r.get("tabela"):
+            periodo[r["tabela"]] = {"linhas": _inteiro(r.get("linhas")), "inicio": r.get("inicio")}
+    qtd = _qtd_acoes(diag, linhas)
+    ret = _suspeitos(diag, linhas)
+    lac = _lacunas(linhas)
+    cob = _cobertura_nota(diag)
+    return {
+        "versao": VERSAO_RESUMO,
+        "gerado_em": diag.get("gerado_em"),
+        "periodo": periodo,
+        "divergencias": len(diag["divergencias"]),
+        "quantidade_acoes": {"n": qtd[0], "tickers": qtd[1]} if qtd is not None else None,
+        "retornos": {"n": ret[0], "pares": [list(p) for p in ret[1]]} if ret is not None else None,
+        "lacunas": {s: list(v) for s, v in lac.items()} if lac is not None else None,
+        "cobertura": list(cob) if cob is not None else None,
+        "farois": {c["id"]: {"titulo": c["titulo"], "farol": c["farol"]}
+                   for c in cartoes_saude(docs_md).get("cartoes") or []},
+    }
+
+
+# ---------------------------------------------------------------- guarda dos resumos
+
+def _nomes_resumos(pasta: Path) -> list[str]:
+    """Nomes AAAA-MM-DD_HHMM.json guardados, do mais antigo para o mais novo."""
+    try:
+        return sorted(p.name for p in pasta.iterdir() if p.is_file() and RE_NOME.match(p.name))
+    except OSError:
+        return []
+
+
+def _gravar_resumo(pasta: Path, resumo: dict) -> None:
+    """Grava o resumo se o arquivo do seu momento ainda não existir. Escrita atômica (tmp + os.replace)."""
+    nome = _nome_resumo(resumo.get("gerado_em"))
+    if nome is None or (pasta / nome).exists():
+        return
+    pasta.mkdir(parents=True, exist_ok=True)
+    tmp = pasta / f".{nome}.{os.getpid()}-{threading.get_ident()}.tmp"
+    try:
+        tmp.write_text(json.dumps(resumo, ensure_ascii=False, indent=1), encoding="utf-8")
+        os.replace(tmp, pasta / nome)
+    except OSError:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
+def atualizar_resumos(docs_md: Path, pasta_painel: Path, manter: int | None) -> None:
+    """Guarda o resumo do diagnóstico atual em pasta_painel/diagnosticos. Só grava lá.
+
+    Migração: se a pasta ainda não tem nenhum .json, guarda também o resumo de ANTERIOR e de VISTO (logs antigos).
+    Se `manter` é inteiro > 0, apaga os resumos mais antigos além desse número. Erro de disco: retorna em silêncio.
+    """
+    atual = resumir(docs_md)
+    if atual is None:
+        return
+    pasta = pasta_painel / PASTA_RESUMOS
+    try:
+        if not any(pasta.glob("*.json")):
+            for caminho in (pasta_painel / ANTERIOR, pasta_painel / VISTO):
+                antigo = resumir(caminho) if caminho.is_file() else None
+                if antigo is not None:
+                    _gravar_resumo(pasta, antigo)
+        _gravar_resumo(pasta, atual)
+        if isinstance(manter, int) and not isinstance(manter, bool) and manter > 0:
+            for nome in _nomes_resumos(pasta)[:-manter]:
+                (pasta / nome).unlink(missing_ok=True)
     except OSError:
         return
 
 
 # ---------------------------------------------------------------- comparação
 
-def _periodo_entidades(la: list[str], lb: list[str]) -> list[dict]:
-    antes = {r.get("tabela"): r for r in tabela_md(lb, "Período e entidades") or []}
+def _periodo_entidades(ra: dict, rb: dict) -> list[dict]:
+    antes = rb["periodo"]
     achados: list[dict] = []
-    for r in tabela_md(la, "Período e entidades") or []:
-        tabela = r.get("tabela")
-        if not tabela or tabela not in antes:
+    for tabela, a in ra["periodo"].items():
+        if tabela not in antes:
             continue
-        a = antes[tabela]
-        n_atual, n_antes = _inteiro(r.get("linhas")), _inteiro(a.get("linhas"))
+        b = antes[tabela]
+        n_atual, n_antes = a["linhas"], b["linhas"]
         if n_atual is not None and n_antes is not None and n_atual != n_antes:
             d = n_atual - n_antes
             tipo = "crescimento" if tabela in TABELAS_DIARIAS else "mudanca"
             sinal = "+" if d > 0 else "-"
             achados.append(_achado(f"{sinal}{_milhar(abs(d))} {NOMES_LINHAS.get(tabela, tabela)}", tipo))
-        ini, ini_antes = r.get("inicio"), a.get("inicio")
+        ini, ini_antes = a["inicio"], b["inicio"]
         if _valor(ini) and _valor(ini_antes) and ini != ini_antes:
             curto = NOMES_CURTOS.get(tabela, tabela)
             if ini < ini_antes:
@@ -133,8 +210,8 @@ def _periodo_entidades(la: list[str], lb: list[str]) -> list[dict]:
     return achados
 
 
-def _divergencias(diag_a: dict, diag_b: dict) -> list[dict]:
-    d = len(diag_a["divergencias"]) - len(diag_b["divergencias"])
+def _divergencias(ra: dict, rb: dict) -> list[dict]:
+    d = ra["divergencias"] - rb["divergencias"]
     if d < 0:
         return [_achado(_plural(-d, "divergência", "divergências") + " a menos", "mudanca")]
     if d > 0:
@@ -162,12 +239,12 @@ def _qtd_acoes(diag: dict, linhas: list[str]) -> tuple[int, list[str]] | None:
     return n, tickers
 
 
-def _quantidade(diag_a: dict, la: list[str], diag_b: dict, lb: list[str]) -> list[dict]:
-    atual, anterior = _qtd_acoes(diag_a, la), _qtd_acoes(diag_b, lb)
-    if atual is None or anterior is None or atual[0] == anterior[0]:
+def _quantidade(ra: dict, rb: dict) -> list[dict]:
+    atual, anterior = ra["quantidade_acoes"], rb["quantidade_acoes"]
+    if atual is None or anterior is None or atual["n"] == anterior["n"]:
         return []
-    n_a, tickers_a = atual
-    n_b, tickers_b = anterior
+    n_a, tickers_a = atual["n"], atual["tickers"]
+    n_b, tickers_b = anterior["n"], anterior["tickers"]
     if n_a < n_b:
         saiu = [t for t in tickers_b if t not in tickers_a]
         texto = f"quantidade de ações corrigida em {_plural(n_b - n_a, 'empresa', 'empresas')}"
@@ -198,12 +275,12 @@ def _suspeitos(diag: dict, linhas: list[str]) -> tuple[int, list[tuple[str, str]
     return n, pares
 
 
-def _retornos(diag_a: dict, la: list[str], diag_b: dict, lb: list[str]) -> list[dict]:
-    atual, anterior = _suspeitos(diag_a, la), _suspeitos(diag_b, lb)
-    if atual is None or anterior is None or atual[0] == anterior[0]:
+def _retornos(ra: dict, rb: dict) -> list[dict]:
+    atual, anterior = ra["retornos"], rb["retornos"]
+    if atual is None or anterior is None or atual["n"] == anterior["n"]:
         return []
-    n_a, pares_a = atual
-    n_b, pares_b = anterior
+    n_a, pares_a = atual["n"], [tuple(p) for p in atual["pares"]]
+    n_b, pares_b = anterior["n"], [tuple(p) for p in anterior["pares"]]
     if n_a < n_b:
         saiu = [f"{t} em {d}" for t, d in pares_b if (t, d) not in pares_a]
         texto = _plural(n_b - n_a, "preço suspeito", "preços suspeitos") + " a menos"
@@ -232,10 +309,12 @@ def _agrupar(series: list[str], chave_de) -> dict[tuple, list[str]]:
     return grupos
 
 
-def _lacunas_indices(la: list[str], lb: list[str]) -> list[dict]:
-    atual, anterior = _lacunas(la), _lacunas(lb)
+def _lacunas_indices(ra: dict, rb: dict) -> list[dict]:
+    atual, anterior = ra["lacunas"], rb["lacunas"]
     if atual is None or anterior is None:
         return []
+    atual = {s: tuple(v) for s, v in atual.items()}
+    anterior = {s: tuple(v) for s, v in anterior.items()}
     achados: list[dict] = []
     mudou = [s for s in anterior if s in atual and anterior[s] != atual[s]]
     for (antes, depois), series in _agrupar(mudou, lambda s: (anterior[s], atual[s])).items():
@@ -261,8 +340,8 @@ def _cobertura_nota(diag: dict) -> tuple[int, int, str, str] | None:
     return None
 
 
-def _cobertura(diag_a: dict, diag_b: dict) -> list[dict]:
-    atual, anterior = _cobertura_nota(diag_a), _cobertura_nota(diag_b)
+def _cobertura(ra: dict, rb: dict) -> list[dict]:
+    atual, anterior = ra["cobertura"], rb["cobertura"]
     if atual is None or anterior is None:
         return []
     d = atual[0] - anterior[0]
@@ -274,9 +353,8 @@ def _cobertura(diag_a: dict, diag_b: dict) -> list[dict]:
     return [_achado(texto, "crescimento")]
 
 
-def _cartoes(atual: Path, anterior: Path) -> list[dict]:
-    ca = {c["id"]: c for c in cartoes_saude(atual)["cartoes"]}
-    cb = {c["id"]: c for c in cartoes_saude(anterior)["cartoes"]}
+def _cartoes(ra: dict, rb: dict) -> list[dict]:
+    ca, cb = ra["farois"], rb["farois"]
     achados: list[dict] = []
     for id_, c in ca.items():
         antes = cb.get(id_)
@@ -303,6 +381,22 @@ def _indisponivel(motivo: str | None, atual_em: str | None, anterior_em: str | N
             "frase": None, "itens": []}
 
 
+def comparar_resumos(ra: dict, rb: dict) -> dict:
+    """Mudanças e crescimentos do resumo `ra` (atual) em relação ao resumo `rb` (anterior). Sem I/O."""
+    atual_em = _momento_br(ra.get("gerado_em"))
+    anterior_em = _momento_br(rb.get("gerado_em"))
+    achados = (_periodo_entidades(ra, rb)
+               + _divergencias(ra, rb)
+               + _quantidade(ra, rb)
+               + _retornos(ra, rb)
+               + _lacunas_indices(ra, rb)
+               + _cobertura(ra, rb)
+               + _cartoes(ra, rb))
+    itens = [i for i in achados if i["tipo"] == "mudanca"] + [i for i in achados if i["tipo"] == "crescimento"]
+    return {"disponivel": True, "motivo": None, "atual_em": atual_em, "anterior_em": anterior_em,
+            "frase": _frase(itens, anterior_em), "itens": itens}
+
+
 def comparar(atual: Path, anterior: Path) -> dict:
     """Mudanças e crescimentos de `atual` em relação a `anterior` (dois diagnósticos). Só leitura."""
     diag_a, diag_b = ler_diagnostico(atual), ler_diagnostico(anterior)
@@ -312,28 +406,27 @@ def comparar(atual: Path, anterior: Path) -> dict:
         return _indisponivel(diag_a.get("motivo"), atual_em, anterior_em)
     if not diag_b.get("disponivel"):
         return _indisponivel(diag_b.get("motivo"), atual_em, anterior_em)
-    la, lb = _ler_linhas(atual), _ler_linhas(anterior)
-    if la is None or lb is None:
+    ra, rb = resumir(atual), resumir(anterior)
+    if ra is None or rb is None:
         return _indisponivel("diagnóstico não pode ser lido", atual_em, anterior_em)
-
-    achados = (_periodo_entidades(la, lb)
-               + _divergencias(diag_a, diag_b)
-               + _quantidade(diag_a, la, diag_b, lb)
-               + _retornos(diag_a, la, diag_b, lb)
-               + _lacunas_indices(la, lb)
-               + _cobertura(diag_a, diag_b)
-               + _cartoes(atual, anterior))
-    itens = [i for i in achados if i["tipo"] == "mudanca"] + [i for i in achados if i["tipo"] == "crescimento"]
-    return {"disponivel": True, "motivo": None, "atual_em": atual_em, "anterior_em": anterior_em,
-            "frase": _frase(itens, anterior_em), "itens": itens}
+    return comparar_resumos(ra, rb)
 
 
-def novidades(docs_md: Path, pasta_painel: Path) -> dict:
-    """Atualiza as cópias e compara o diagnóstico atual com o anterior guardado (ANTERIOR)."""
-    atualizar_copias(docs_md, pasta_painel)
-    anterior = pasta_painel / ANTERIOR
-    if not anterior.is_file():
-        return {"disponivel": False,
-                "motivo": "Ainda sem diagnóstico anterior guardado: as novidades aparecem a partir do próximo diagnóstico.",
-                "atual_em": _momento_br(_gerado_em(docs_md)), "anterior_em": None, "frase": None, "itens": []}
-    return comparar(docs_md, anterior)
+def novidades(docs_md: Path, pasta_painel: Path, manter: int | None = None) -> dict:
+    """Guarda o resumo do diagnóstico atual e compara com o resumo imediatamente anterior guardado."""
+    atualizar_resumos(docs_md, pasta_painel, manter)
+    atual = resumir(docs_md)
+    if atual is None:
+        diag = ler_diagnostico(docs_md)
+        return _indisponivel(diag.get("motivo") or "diagnóstico não pode ser lido", None, None)
+    atual_em = _momento_br(atual["gerado_em"])
+    nome = _nome_resumo(atual["gerado_em"])
+    pasta = pasta_painel / PASTA_RESUMOS
+    anteriores = [n for n in _nomes_resumos(pasta) if nome is not None and n < nome]
+    if not anteriores:
+        return _indisponivel(MOTIVO_SEM_ANTERIOR, atual_em, None)
+    ra = _ler_resumo(pasta / nome) or atual
+    rb = _ler_resumo(pasta / anteriores[-1])
+    if rb is None:
+        return _indisponivel("diagnóstico anterior não pode ser lido", atual_em, None)
+    return comparar_resumos(ra, rb)

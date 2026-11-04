@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Painel — API</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.t-escuro{--bg:#0F1115;--sup:#171A21;--sup2:#1E222B;--borda:#2A2F3A;--txt:#E8EAED;--sub:#A3ABB9;--acento:#6EA8FF;--ok:#3FB950;--okf:#12301B;--at:#E3A33B;--atf:#3A2A0E;--falha:#FF6B6B;--falhaf:#3D1416;--trilho:#262B35}
+.t-claro{--bg:#F5F6F8;--sup:#FFFFFF;--sup2:#F0F2F5;--borda:#DCE0E6;--txt:#15181E;--sub:#545D6B;--acento:#1F5FD6;--ok:#1A7F37;--okf:#E3F4E7;--at:#8A5A00;--atf:#FCF0D9;--falha:#C62828;--falhaf:#FBE4E4;--trilho:#E6E9EE}
+a{color:var(--acento)}a:hover{color:var(--txt)}
+.aba{display:inline-flex;align-items:center;min-height:44px;padding:0 14px;border-radius:8px;text-decoration:none;color:var(--sub);font-weight:500;font-size:14px}
+.aba:hover{background:var(--sup2);color:var(--txt)}
+.aba-ativa{background:var(--sup2);color:var(--txt);box-shadow:inset 0 -2px 0 var(--acento)}
+.num{font-family:'IBM Plex Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.botao{min-height:44px;padding:0 18px;border-radius:8px;border:1px solid var(--borda);background:var(--sup2);color:var(--txt);font:600 14px 'IBM Plex Sans',system-ui,sans-serif;cursor:pointer}
+.botao:hover{border-color:var(--acento)}
+.botao-pri{background:var(--acento);border-color:var(--acento);color:#0B0D11}
+.t-claro .botao-pri{color:#FFFFFF}
+</style>
+</helmet>
+<div class="t-{{tema}}" style="min-height: 100vh; background: var(--bg); color: var(--txt); font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 15px; line-height: 1.5">
+
+<header style="border-bottom: 1px solid var(--borda); background: var(--sup)">
+<div style="max-width: 1240px; margin: 0 auto; padding: 12px 24px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px">
+<div style="display: flex; align-items: center; gap: 10px">
+<svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true"><rect x="1" y="1" width="26" height="26" rx="7" stroke="var(--acento)" stroke-width="2"></rect><path d="M7 18l4-5 4 3 6-8" stroke="var(--acento)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+<div>
+<div style="font-weight: 700; font-size: 16px">Painel do Processamento</div>
+<div style="font-size: 12px; color: var(--sub)">TCC · Análise de sentimento e ativos</div>
+</div>
+</div>
+<nav aria-label="Seções" style="display: flex; flex-wrap: wrap; gap: 4px; flex: 1 1 auto">
+<a class="aba" href="Main.dc.html">Hoje</a>
+<a class="aba" href="Coleta.dc.html">Coleta</a>
+<a class="aba" href="Diagnostico.dc.html">Diagnóstico</a>
+<a class="aba" href="Execucoes.dc.html">Execuções</a>
+<a class="aba aba-ativa" href="API.dc.html" aria-current="page">API</a>
+<a class="aba" href="Experimento.dc.html">Experimento</a>
+</nav>
+<div class="num" style="font-size: 13px; color: var(--sub)">ter, 03/11/2026 · 19:42</div>
+</div>
+</header>
+
+<main style="max-width: 1240px; margin: 0 auto; padding: 28px 24px 48px; display: flex; flex-direction: column; gap: 24px">
+
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 16px">
+<div>
+<h1 style="margin: 0; font-size: 26px">API</h1>
+<p style="margin: 4px 0 0; color: var(--sub)">O que a interface está lendo · Railway · contrato <span class="num">1.0</span></p>
+</div>
+<button class="botao botao-pri" type="button" onClick="{{conferir}}">{{rotuloConferir}}</button>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px">
+<div style="background: var(--sup); border: 1px solid var(--borda); border-radius: 14px; padding: 18px">
+<div style="font-size: 13px; color: var(--sub)">Saúde</div>
+<div style="display: flex; align-items: center; gap: 8px; margin-top: 6px"><span style="width: 10px; height: 10px; border-radius: 50%; background: var(--ok)"></span><span style="font-size: 22px; font-weight: 600">No ar</span></div>
+<div class="num" style="font-size: 12px; color: var(--sub); margin-top: 6px">/v1/saude · 200</div>
+</div>
+<div style="background: var(--sup); border: 1px solid var(--borda); border-radius: 14px; padding: 18px">
+<div style="font-size: 13px; color: var(--sub)">Último dia publicado</div>
+<div class="num" style="font-size: 22px; font-weight: 500; margin-top: 6px">03/11/2026</div>
+<div style="font-size: 12px; color: var(--sub); margin-top: 6px">às 11:30 · 8 pacotes</div>
+</div>
+<div style="background: var(--sup); border: 1px solid var(--borda); border-radius: 14px; padding: 18px">
+<div style="font-size: 13px; color: var(--sub)">Conferência</div>
+<div style="display: flex; align-items: center; gap: 8px; margin-top: 6px"><span style="{{conf.ponto}}"></span><span style="font-size: 22px; font-weight: 600">{{conf.titulo}}</span></div>
+<div style="font-size: 12px; color: var(--sub); margin-top: 6px">{{conf.sub}}</div>
+</div>
+<div style="background: var(--sup); border: 1px solid var(--borda); border-radius: 14px; padding: 18px">
+<div style="font-size: 13px; color: var(--sub)">Tempo de resposta</div>
+<div class="num" style="font-size: 22px; font-weight: 500; margin-top: 6px">[ms]</div>
+<svg viewBox="0 0 200 36" width="100%" height="36" role="img" aria-label="Tempo de resposta nos últimos dias (ilustrativo)" style="display: block; margin-top: 6px"><polyline points="0,24 25,20 50,26 75,18 100,22 125,14 150,20 175,16 200,18" fill="none" stroke="var(--acento)" stroke-width="2"></polyline></svg>
+<div style="font-size: 12px; color: var(--sub)">ilustrativo · medido pelo painel</div>
+</div>
+</div>
+
+<section aria-labelledby="cr" style="background: var(--sup); border: 1px solid var(--borda); border-radius: 14px; padding: 24px">
+<h2 id="cr" style="margin: 0; font-size: 17px">Correções por publicação</h2>
+<p style="margin: 2px 0 18px; font-size: 13px; color: var(--sub)">Fotos e pontos de série corrigidos em cada dia (escala logarítmica)</p>
+<div style="display: flex; flex-direction: column; gap: 10px">
+<sc-for list="{{correcoes}}" as="c" hint-placeholder-count="5">
+<div style="display: grid; grid-template-columns: 70px 1fr 90px; gap: 12px; align-items: center">
+<span class="num" style="font-size: 13px; color: var(--sub)">{{c.d}}</span>
+<div style="height: 14px; border-radius: 4px; background: var(--trilho); overflow: hidden"><div style="{{c.barra}}"></div></div>
+<span class="num" style="font-size: 13px; text-align: right">{{c.v}}</span>
+</div>
+</sc-for>
+</div>
+<p style="margin: 14px 0 0; font-size: 13px; color: var(--sub)">26/10: ruído de float32 contado como correção, antes da tolerância de 1e-6. Valores em branco: não registrados neste protótipo.</p>
+</section>
+
+<section aria-labelledby="pc" style="background: var(--sup); border: 1px solid var(--borda); border-radius: 14px; padding: 24px">
+<h2 id="pc" style="margin: 0 0 14px; font-size: 17px">Pacotes do último dia</h2>
+<div style="overflow-x: auto">
+<table style="width: 100%; min-width: 560px; border-collapse: collapse; font-size: 14px">
+<thead><tr style="text-align: left; color: var(--sub)"><th scope="col" style="padding: 8px 10px; font-weight: 500">Pacote</th><th scope="col" style="padding: 8px 10px; font-weight: 500">Registros</th><th scope="col" style="padding: 8px 10px; font-weight: 500">Situação</th></tr></thead>
+<tbody>
+<sc-for list="{{pacotes}}" as="p" hint-placeholder-count="8">
+<tr style="border-top: 1px solid var(--borda)"><td class="num" style="padding: 10px">{{p.n}}</td><td class="num" style="padding: 10px">{{p.r}}</td><td style="padding: 10px"><span style="{{p.selo}}">{{p.s}}</span></td></tr>
+</sc-for>
+</tbody>
+</table>
+</div>
+</section>
+
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"tema":{"editor":"enum","options":["escuro","claro"],"default":"escuro"},"$preview":{"width":1280,"height":1300}}'>
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { conf: 'ok' }; }
+  conferir() {
+    if (this.state.conf === 'rodando') return;
+    this.setState({ conf: 'rodando' });
+    setTimeout(() => this.setState({ conf: 'ok' }), 1800);
+  }
+  renderVals() {
+    const selo = (c, f) => 'font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; color: var(--' + c + '); background: var(--' + f + ')';
+    const dados = [['23/10', null], ['26/10', 36650], ['27/10', null], ['30/10', 231], ['03/11', 193]];
+    const lmax = Math.log10(36650);
+    const correcoes = dados.map(([d, v]) => ({
+      d, v: v === null ? '—' : v.toLocaleString('pt-BR'),
+      barra: v === null ? 'height: 100%; width: 0' : 'height: 100%; border-radius: 4px; width: ' + Math.round(Math.log10(v) / lmax * 100) + '%; background: var(--' + (v > 10000 ? 'at' : 'acento') + ')'
+    }));
+    const pacotes = [
+      ['resumo_acao', '85', 'enviado'], ['noticias_dia', '85', 'enviado'], ['series_diarias', '177 séries', 'enviado'], ['mercado_dia', '1', 'enviado'],
+      ['fundamentos_trimestrais', '30 versões', 'enviado'], ['proventos', '13 versões', 'enviado'], ['execucao', '1', 'enviado'], ['experimento_top', '—', 'retido (provisório)']
+    ].map(([n, r, s]) => ({ n, r, s, selo: s === 'enviado' ? selo('ok', 'okf') : selo('at', 'atf') }));
+    const c = this.state.conf;
+    const conf = c === 'rodando'
+      ? { titulo: 'Conferindo…', sub: 'comparando os pacotes com a API', ponto: 'width: 10px; height: 10px; border-radius: 50%; background: var(--acento)' }
+      : { titulo: 'OK', sub: '10 pacotes batem com os arquivos', ponto: 'width: 10px; height: 10px; border-radius: 50%; background: var(--ok)' };
+    return {
+      tema: this.props.tema ?? 'escuro',
+      correcoes, pacotes, conf,
+      rotuloConferir: c === 'rodando' ? 'Conferindo…' : 'Conferir a API',
+      conferir: () => this.conferir()
+    };
+  }
+}
+</script>
+</body>
+</html>

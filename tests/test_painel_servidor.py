@@ -19,7 +19,7 @@ import pytest
 
 from fabrica_painel import montar_raiz
 from processamento.calendario import SP
-from processamento.painel import acoes, ajuda, api, leitores
+from processamento.painel import acoes, ajuda, api, leitores, servidor
 from processamento.painel.servidor import (
     CSP_PAGINA,
     criar_servidor,
@@ -199,7 +199,8 @@ def test_api_painel_visao_com_as_fixtures(srv):
     _, _, corpo = pedir(srv, "GET", "/api/painel")
     dados = _json(corpo)
     assert set(dados["visao"]) == {"fluxo", "linha_tempo", "saude", "calendario", "resumo", "tempos", "ajuda",
-                                   "dia", "glossario", "api", "banco", "coleta_etapas", "novidades", "dia_atipico"}
+                                   "dia", "glossario", "api", "banco", "coleta_etapas", "novidades", "dia_atipico",
+                                   "mercado", "fluxo_nos"}
     fluxo = dados["visao"]["fluxo"]
     assert fluxo["coleta"]["estado"] == "ok"
     assert fluxo["coleta"]["etapas_concluidas"] == 9
@@ -248,8 +249,6 @@ def test_api_painel_resumo_tempos_e_ajuda(srv):
                   "origem": "execucao"},
         "diagnostico": {"segundos": None, "curto": None, "texto": "Ainda sem medição: pode levar alguns minutos.",
                         "origem": None},
-        "wordpress": {"segundos": None, "curto": None, "texto": "Ainda sem medição: pode levar alguns minutos.",
-                      "origem": None},
         "testes": {"segundos": 96, "curto": "~2 min", "texto": "Da última vez, pelo painel, levou 1 min 36 s.",
                    "origem": "painel"},
         "dia": {"segundos": None, "curto": None, "texto": "Ainda sem medição: pode levar alguns minutos.",
@@ -281,6 +280,23 @@ def test_dia_sem_pregao_nao_quebra_a_frase(subir):
     _, _, corpo = pedir(s, "GET", "/api/painel")
     dados = _json(corpo)
     assert dados["visao"]["dia"].startswith("Hoje é domingo, 25/10/2026 (sem pregão).")
+
+
+def test_api_painel_mercado_e_fluxo_nos(srv):
+    _, _, corpo = pedir(srv, "GET", "/api/painel")
+    visao_v = _json(corpo)["visao"]
+    mercado = visao_v["mercado"]
+    assert mercado["disponivel"] is True
+    assert mercado["data_pregao"] == "2026-10-22"
+    assert mercado["ibov_nivel"] is None
+    assert mercado["ibov_nivel_texto"] == "sem dados"
+    assert mercado["ibov_var_texto"] == "-1,15%"
+    assert mercado["serie"] == []
+    fluxo = visao_v["fluxo_nos"]
+    assert fluxo["disponivel"] is True
+    assert [no["id"] for no in fluxo["nos"]] == ["coleta", "processamento", "banco", "api", "interface"]
+    assert fluxo["nos"][0]["quando"] == "08:22"
+    assert fluxo["rodape"] == "última carga completa: 24/10 23:00 · 2 pacotes"
 
 
 # ---------------------------------------------------------------- arquivos sensíveis
@@ -385,32 +401,23 @@ def test_post_iniciar_nao_aceita_teste_final(srv):
     assert srv.chamadas == []
 
 
-# ---------------------------------------------------------------- validação da wordpress (botão e link fixos)
+# ---------------------------------------------------------------- validação da wordpress (saiu do painel)
 
-def test_validacao_wordpress_botao_com_comando_fixo(srv):
+def test_validacao_wordpress_saiu_do_painel(srv):
     _, _, corpo = pedir(srv, "GET", "/api/painel")
-    botao = _json(corpo)["botoes"]["wordpress"]
-    assert botao["titulo"] == "Validar a wordpress"
-    assert botao["comando"] == "python -m processamento.diagnostico.wordpress"
-    assert botao["habilitado"] is True
-    assert botao["data"] is None
-
-
-def test_validacao_wordpress_link_serve_so_o_arquivo_fixo(srv):
-    status, _, corpo = pedir(srv, "GET", "/api/validacao-wordpress?arquivo=../.env")
-    assert status == 404
-    assert _json(corpo) == {"erro": "docs/validacao_wordpress.md não encontrado (rode a validação)"}
+    dados = _json(corpo)
+    assert "wordpress" not in dados["botoes"]
+    assert "wordpress" not in dados["visao"]["tempos"]
     (srv.raiz / "docs").mkdir(exist_ok=True)
     (srv.raiz / "docs" / "validacao_wordpress.md").write_text("# Validação da wordpress\n", encoding="utf-8")
-    status, cab, corpo = pedir(srv, "GET", "/api/validacao-wordpress")
-    assert status == 200
-    assert cab["content-type"].startswith("text/plain")
-    assert corpo.decode("utf-8") == "# Validação da wordpress\n"
+    status, _, corpo = pedir(srv, "GET", "/api/validacao-wordpress")
+    assert status == 404
+    assert _json(corpo) == {"erro": "não encontrado"}
 
 
 def test_wordpress_nao_aceita_comando_livre(srv):
-    for corpo in [{"acao": "processamento.diagnostico.wordpress"}, {"acao": "wordpress; del *"},
-                  {"acao": "wordpress --apagar"}]:
+    for corpo in [{"acao": "wordpress"}, {"acao": "processamento.diagnostico.wordpress"},
+                  {"acao": "wordpress; del *"}, {"acao": "wordpress --apagar"}]:
         status, _, dados = pedir(srv, "POST", "/api/acao/iniciar", corpo)
         assert status == 400, corpo
         assert _json(dados) == {"erro": "ação desconhecida"}
@@ -433,6 +440,23 @@ def test_estado_com_marcos_fatia_linhas_e_calcula_etapas(tmp_path):
     sem_linhas = estado_com_marcos(ex, None)
     assert sem_linhas["linhas"] == []
     assert len(sem_linhas["marcos"]) == 3
+
+
+def test_api_acao_parada_nao_tem_progresso(srv):
+    _, _, corpo = pedir(srv, "GET", "/api/acao")
+    assert _json(corpo)["progresso"] is None
+
+
+def test_estado_com_marcos_dia_calcula_progresso(tmp_path):
+    ex = acoes.Executor(tmp_path, tmp_path / "logs")
+    iniciou, msg = ex.iniciar("dia", [sys.executable, "-c",
+                                      "print('# dia: etapa=rotina inicio=2026-10-23T10:00:00-03:00')"])
+    assert iniciou, msg
+    ex.esperar(30)
+
+    r = estado_com_marcos(ex, None, pasta_logs_painel=tmp_path / "logs", n_media=3, agora=RELOGIO())
+    assert [e["id"] for e in r["progresso"]["etapas"]] == ["rotina", "carga", "publicador"]
+    assert r["progresso"]["restante_s"] is None
 
 
 # ---------------------------------------------------------------- trava
@@ -509,6 +533,36 @@ def test_host_e_origem_permitidos():
 
 def test_campos_da_ajuda_batem_com_o_yaml(tmp_path):
     assert set(leitores.ler_valores_ajuda(montar_raiz(tmp_path))) | {"abertura"} == ajuda.CAMPOS
+
+
+def test_servidor_so_escuta_em_127_0_0_1(tmp_path):
+    s = criar_servidor(montar_raiz(tmp_path), 0, montar_comando=_montar_falso([]), relogio=RELOGIO)
+    try:
+        assert s.server_address[0] == "127.0.0.1"
+        assert s.socket.getsockname()[0] == "127.0.0.1"
+        assert s.porta != 0
+    finally:
+        s.server_close()
+
+
+def test_porta_pedida_e_aberta_so_em_127_0_0_1(tmp_path, monkeypatch):
+    pedidos = []
+
+    class _Falso:
+        def __init__(self, endereco, handler):
+            pedidos.append(endereco)
+            self.server_address = ("127.0.0.1", 5555)
+
+    monkeypatch.setattr(servidor, "_Servidor", _Falso)
+    criar_servidor(montar_raiz(tmp_path), 8765, montar_comando=_montar_falso([]), relogio=RELOGIO)
+    assert pedidos == [("127.0.0.1", 8765)]
+
+
+def test_codigo_do_servidor_so_cita_127_0_0_1():
+    texto = (REPO / "processamento" / "painel" / "servidor.py").read_text(encoding="utf-8")
+    assert '_Servidor(("127.0.0.1", porta), _Handler)' in texto
+    assert "0.0.0.0" not in texto
+    assert "::" not in texto
 
 
 def test_modulo_do_painel_nao_importa_banco_nem_env():
@@ -588,7 +642,7 @@ def test_dia_sem_api_configurada_fica_bloqueado_e_nao_quebra(srv):
     assert dados["visao"]["dia_atipico"]["ativo"] is False
     assert dados["visao"]["coleta_etapas"]["resumo"] == "9 de 9 etapas concluídas"
     assert dados["visao"]["novidades"]["disponivel"] is False
-    assert (srv.raiz / "logs" / "painel" / "diagnostico_visto.log").is_file()
+    assert any((srv.raiz / "logs" / "painel" / "diagnosticos").glob("*.json"))
     assert list(dados["botoes"])[0] == "dia"
     assert dados["botoes"]["dia"]["habilitado"] is False
     assert dados["botoes"]["dia"]["motivo"] == (

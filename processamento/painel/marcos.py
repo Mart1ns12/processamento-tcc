@@ -9,23 +9,26 @@ from __future__ import annotations
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime
 
+from processamento.calendario import SP
+from processamento.painel.leitores import _instante, duracao_segundos, formatar_duracao
 from processamento.painel.relatorios import (
+    IDS_ETAPAS_DIA,
     RE_CONSULTA,
+    RE_DIA_FIM,
+    RE_DIA_INICIO,
+    RE_DIA_PULADA,
     RE_INICIO,
     RE_PYTEST_RESUMO,
     RE_SAIDA,
     resultado_terminal,
+    tempos_etapas_dia,
 )
 
 RE_PROGRESSO = re.compile(r"\[\s*(\d{1,3})%\]\s*$")
 RE_RELATORIO = re.compile(r"^Relatório: .+ \| divergências: (\d+)$")
 
-# Marcadores que o `processamento/painel/dia.py` imprime (uma linha por etapa).
-RE_DIA_INICIO = re.compile(r"^# dia: etapa=(\w+) inicio=(\S+)$")
-RE_DIA_FIM = re.compile(r"^# dia: etapa=(\w+) fim codigo=(-?\d+) detalhe=(.*)$")
-RE_DIA_PULADA = re.compile(r"^# dia: etapa=(\w+) pulada motivo=(.*)$")
-_IDS_DIA = ("rotina", "carga", "publicador")
 _ETAPAS_DIA = [
     ("rotina", "Rotina do dia (só leitura do banco da coleta)"),
     ("carga", "Carga completa em saida_completa/"),
@@ -141,11 +144,6 @@ ETAPAS: dict[str, list[Etapa]] = {
         Etapa("relatorio", "Gravando docs/diagnostico_banco.md", conclui=_relatorio),
         FIM,
     ],
-    "wordpress": [
-        Etapa("leitura", "Lendo o banco da coleta (só leitura) e conferindo a origem wordpress"),
-        Etapa("relatorio", "Gravando docs/validacao_wordpress.md"),
-        FIM,
-    ],
     "testes": [
         Etapa("coleta", "Encontrando os testes", conclui=_testes_encontrados),
         Etapa("execucao", "Rodando os testes (sem o banco)", conclui=_resumo_pytest, progresso=_percentual),
@@ -158,7 +156,6 @@ TERMINAIS: dict[str, Callable[[str], tuple[str, str] | None] | None] = {
     "rotina": _terminal_rotina,
     "carga": _terminal_banco,
     "diagnostico": _terminal_banco,
-    "wordpress": _terminal_banco,
     "testes": None,
 }
 
@@ -169,22 +166,22 @@ def marcos_dia(linhas: list[str], *, rodando: bool, codigo: int | None, signific
     comecou = False
     for linha in linhas:
         m = RE_DIA_INICIO.match(linha)
-        if m and m.group(1) in _IDS_DIA:
+        if m and m.group(1) in IDS_ETAPAS_DIA:
             est[m.group(1)]["estado"] = "agora"
             comecou = True
             continue
         m = RE_DIA_FIM.match(linha)
-        if m and m.group(1) in _IDS_DIA:
+        if m and m.group(1) in IDS_ETAPAS_DIA:
             est[m.group(1)]["estado"] = "concluida" if int(m.group(2)) == 0 else "erro"
-            est[m.group(1)]["detalhe"] = m.group(3)
+            est[m.group(1)]["detalhe"] = m.group(4)
             continue
         m = RE_DIA_PULADA.match(linha)
-        if m and m.group(1) in _IDS_DIA:
+        if m and m.group(1) in IDS_ETAPAS_DIA:
             est[m.group(1)]["estado"] = "pulada"
             est[m.group(1)]["detalhe"] = m.group(2)
 
     terminou = not rodando and codigo is not None
-    for i in _IDS_DIA:
+    for i in IDS_ETAPAS_DIA:
         if terminou and est[i]["estado"] == "agora":
             est[i]["estado"] = "erro"
         elif terminou and est[i]["estado"] == "espera":
@@ -195,6 +192,83 @@ def marcos_dia(linhas: list[str], *, rodando: bool, codigo: int | None, signific
         est["fim"]["estado"] = "concluida" if codigo == 0 else "erro"
         est["fim"]["detalhe"] = significado
     return [est[i] for i, _ in _ETAPAS_DIA]
+
+
+ROTULOS_PROGRESSO = {"rotina": "Rotina", "carga": "Carga completa", "publicador": "Publicador"}
+
+
+def _decorrido(inicio: str | None, agora: datetime) -> int | None:
+    """Segundos desde o início (ISO do log) até `agora`; None sem horário."""
+    ini = _instante(inicio)
+    if ini is None:
+        return None
+    return max(0, int((agora - ini).total_seconds()))
+
+
+def _percentual_etapa(estado: str, decorrido: int | None, media: int | None) -> int | None:
+    if estado in ("concluida", "erro"):
+        return 100
+    if estado in ("espera", "pulada"):
+        return 0
+    if estado == "agora" and decorrido is not None and media:
+        return min(99, decorrido * 100 // media)
+    return None
+
+
+def _info_etapa(estado: str, percentual: int | None, duracao: int | None, media: int | None) -> str:
+    if estado == "concluida":
+        return formatar_duracao(duracao) if duracao is not None else "concluída"
+    if estado == "agora":
+        return f"{percentual}%" if percentual is not None else "em andamento"
+    if estado == "espera":
+        return f"≈ {formatar_duracao(media)}" if media is not None else "sem média ainda"
+    if estado == "pulada":
+        return "pulada"
+    return "erro"
+
+
+def progresso_dia(linhas: list[str], marcos: list[dict], medias: dict, amostras: dict, agora: datetime,
+                  rodando: bool) -> dict:
+    """Progresso do dia completo: por etapa, estado, percentual e tempo estimado; e o que falta (estimativa).
+
+    `marcos` é a saída de `marcos_dia`; `medias` e `amostras` vêm de `relatorios.medias_etapas_dia`.
+    Sem média ou sem horário a estimativa fica None ("sem média ainda"); ausência nunca vira 0.
+    """
+    if agora.tzinfo is None:
+        agora = agora.replace(tzinfo=SP)
+    tempos = tempos_etapas_dia(linhas)
+    estados = {m["id"]: m["estado"] for m in marcos}
+    etapas = []
+    for i, rotulo in ROTULOS_PROGRESSO.items():
+        estado = estados.get(i, "espera")
+        t = tempos[i]
+        media = medias.get(i)
+        decorrido = _decorrido(t["inicio"], agora)
+        percentual = _percentual_etapa(estado, decorrido, media)
+        duracao = duracao_segundos(t["inicio"], t["fim"])
+        etapas.append({"id": i, "rotulo": rotulo, "estado": estado, "percentual": percentual,
+                       "inicio": t["inicio"], "fim": t["fim"], "duracao_s": duracao, "media_s": media,
+                       "info": _info_etapa(estado, percentual, duracao, media)})
+    if not rodando:
+        return {"etapas": etapas, "restante_s": None, "restante_texto": None, "amostras": None}
+
+    pendentes = [e for e in etapas if e["estado"] in ("espera", "agora")]
+    if not pendentes:
+        return {"etapas": etapas, "restante_s": 0, "restante_texto": "terminando", "amostras": None}
+    k = min(amostras.get(e["id"], 0) for e in pendentes)
+    if any(e["media_s"] is None for e in pendentes):
+        return {"etapas": etapas, "restante_s": None, "restante_texto": "sem média ainda", "amostras": k}
+
+    restante = 0
+    for e in pendentes:
+        if e["estado"] == "agora":
+            # Sem horário, a etapa em andamento conta a média inteira.
+            decorrido = _decorrido(e["inicio"], agora)
+            restante += e["media_s"] if decorrido is None else max(0, e["media_s"] - decorrido)
+        else:
+            restante += e["media_s"]
+    return {"etapas": etapas, "restante_s": restante,
+            "restante_texto": f"faltam ≈ {formatar_duracao(restante)} (média das últimas {k})", "amostras": k}
 
 
 def marcos_acao(acao_id: str | None, linhas: list[str], *, rodando: bool, codigo: int | None,

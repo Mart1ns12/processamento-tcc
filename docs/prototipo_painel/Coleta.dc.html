@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Painel — Coleta</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.t-escuro{--bg:#0F1115;--sup:#171A21;--sup2:#1E222B;--borda:#2A2F3A;--txt:#E8EAED;--sub:#A3ABB9;--acento:#6EA8FF;--ok:#3FB950;--okf:#12301B;--at:#E3A33B;--atf:#3A2A0E;--falha:#FF6B6B;--falhaf:#3D1416;--trilho:#262B35}
+.t-claro{--bg:#F5F6F8;--sup:#FFFFFF;--sup2:#F0F2F5;--borda:#DCE0E6;--txt:#15181E;--sub:#545D6B;--acento:#1F5FD6;--ok:#1A7F37;--okf:#E3F4E7;--at:#8A5A00;--atf:#FCF0D9;--falha:#C62828;--falhaf:#FBE4E4;--trilho:#E6E9EE}
+a{color:var(--acento)}a:hover{color:var(--txt)}
+.aba{display:inline-flex;align-items:center;min-height:44px;padding:0 14px;border-radius:8px;text-decoration:none;color:var(--sub);font-weight:500;font-size:14px}
+.aba:hover{background:var(--sup2);color:var(--txt)}
+.aba-ativa{background:var(--sup2);color:var(--txt);box-shadow:inset 0 -2px 0 var(--acento)}
+.num{font-family:'IBM Plex Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.filtro{min-height:36px;padding:0 14px;border-radius:999px;border:1px solid var(--borda);background:transparent;color:var(--sub);font:500 13px 'IBM Plex Sans',system-ui,sans-serif;cursor:pointer}
+.filtro-on{background:var(--sup2);color:var(--txt);border-color:var(--acento)}
+</style>
+</helmet>
+<div class="t-{{tema}}" style="min-height: 100vh; background: var(--bg); color: var(--txt); font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 15px; line-height: 1.5">
+
+<header style="border-bottom: 1px solid var(--borda); background: var(--sup)">
+<div style="max-width: 1240px; margin: 0 auto; padding: 12px 24px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px">
+<div style="display: flex; align-items: center; gap: 10px">
+<svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true"><rect x="1" y="1" width="26" height="26" rx="7" stroke="var(--acento)" stroke-width="2"></rect><path d="M7 18l4-5 4 3 6-8" stroke="var(--acento)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+<div>
+<div style="font-weight: 700; font-size: 16px">Painel do Processamento</div>
+<div style="font-size: 12px; color: var(--sub)">TCC · Análise de sentimento e ativos</div>
+</div>
+</div>
+<nav aria-label="Seções" style="display: flex; flex-wrap: wrap; gap: 4px; flex: 1 1 auto">
+<a class="aba" href="Main.dc.html">Hoje</a>
+<a class="aba aba-ativa" href="Coleta.dc.html" aria-current="page">Coleta</a>
+<a class="aba" href="Diagnostico.dc.html">Diagnóstico</a>
+<a class="aba" href="Execucoes.dc.html">Execuções</a>
+<a class="aba" href="API.dc.html">API</a>
+<a class="aba" href="Experimento.dc.html">Experimento</a>
+</nav>
+<div class="num" style="font-size: 13px; color: var(--sub)">ter, 03/11/2026 · 19:42</div>
+</div>
+</header>
+
+<main style="max-width: 1240px; margin: 0 auto; padding: 28px 24px 48px; display: flex; flex-direction: column; gap: 24px">
+
+<div>
+<h1 style="margin: 0; font-size: 26px">Coleta</h1>
+<p style="margin: 4px 0 0; color: var(--sub)">O que a equipe da coleta entregou, o que falta e a cobertura das notícias</p>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px">
+<sc-for list="{{kpis}}" as="k" hint-placeholder-count="4">
+<div style="background: var(--sup); border: 1px solid var(--borda); border-radius: 14px; padding: 18px">
+<div style="font-size: 13px; color: var(--sub)">{{k.nome}}</div>
+<div class="num" style="font-size: 26px; font-weight: 500; margin-top: 4px">{{k.valor}}</div>
+<div style="height: 6px; border-radius: 3px; background: var(--trilho); margin-top: 10px; overflow: hidden"><div style="{{k.barra}}"></div></div>
+<div style="font-size: 12px; color: var(--sub); margin-top: 8px">{{k.nota}}</div>
+</div>
+</sc-for>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; gap: 24px">
+
+<section aria-labelledby="pd" style="flex: 999 1 560px; min-width: 0; background: var(--sup); border: 1px solid var(--borda); border-radius: 14px; padding: 24px">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px">
+<div>
+<h2 id="pd" style="margin: 0; font-size: 17px">Pedidos à coleta</h2>
+<p style="margin: 2px 0 0; font-size: 13px; color: var(--sub)">Ficam verdes sozinhos quando o diagnóstico confirma a entrega</p>
+</div>
+<div role="group" aria-label="Filtro" style="display: flex; gap: 6px">
+<button type="button" class="{{f.pend}}" onClick="{{verPend}}">Pendentes · {{nPend}}</button>
+<button type="button" class="{{f.entr}}" onClick="{{verEntr}}">Entregues · {{nEntr}}</button>
+</div>
+</div>
+<ul style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px">
+<sc-for list="{{pedidos}}" as="p" hint-placeholder-count="6">
+<li style="display: flex; gap: 12px; align-items: flex-start; padding: 12px; border-radius: 10px; background: var(--sup2)">
+<span style="{{p.selo}}">{{p.rotulo}}</span>
+<div style="min-width: 0">
+<div style="font-weight: 500">{{p.titulo}}</div>
+<div style="font-size: 13px; color: var(--sub)">{{p.detalhe}}</div>
+</div>
+</li>
+</sc-for>
+</ul>
+</section>
+
+<section aria-labelledby="et" style="flex: 1 1 300px; background: var(--sup); border: 1px solid var(--borda); border-radius: 14px; padding: 24px">
+<h2 id="et" style="margin: 0; font-size: 17px">Daily da coleta</h2>
+<p style="margin: 2px 0 14px; font-size: 13px; color: var(--sub)">03/11 · início 08:00 · concluída</p>
+<ol style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0">
+<sc-for list="{{etapas}}" as="e" hint-placeholder-count="9">
+<li style="display: flex; gap: 12px; align-items: center; min-height: 36px; border-bottom: 1px solid var(--borda)">
+<span style="{{e.ponto}}"></span>
+<span style="flex: 1">{{e.nome}}</span>
+<span style="font-size: 13px; color: var(--sub)">{{e.status}}</span>
+</li>
+</sc-for>
+</ol>
+<p style="margin: 14px 0 0; font-size: 13px; color: var(--sub)">"Análise" falhou 3 vezes no histórico. Não afeta o processamento.</p>
+</section>
+</div>
+
+<section aria-labelledby="cb" style="background: var(--sup); border: 1px solid var(--borda); border-radius: 14px; padding: 24px">
+<h2 id="cb" style="margin: 0; font-size: 17px">Notícias por ano e origem</h2>
+<p style="margin: 2px 0 16px; font-size: 13px; color: var(--sub)">Artigos distintos · diagnóstico de 03/11</p>
+<div style="overflow-x: auto">
+<table style="border-collapse: separate; border-spacing: 6px; min-width: 620px; width: 100%">
+<thead><tr>
+<th scope="col" style="text-align: left; font-size: 13px; color: var(--sub); font-weight: 500">Origem</th>
+<sc-for list="{{anos}}" as="a" hint-placeholder-count="6"><th scope="col" class="num" style="font-size: 13px; color: var(--sub); font-weight: 500">{{a}}</th></sc-for>
+</tr></thead>
+<tbody>
+<sc-for list="{{mapa}}" as="linha" hint-placeholder-count="3">
+<tr>
+<th scope="row" style="text-align: left; font-weight: 500; white-space: nowrap; padding-right: 8px">{{linha.origem}}</th>
+<sc-for list="{{linha.celulas}}" as="c" hint-placeholder-count="6">
+<td style="{{c.estilo}}"><span class="num">{{c.txt}}</span></td>
+</sc-for>
+</tr>
+</sc-for>
+</tbody>
+</table>
+</div>
+</section>
+
+<section aria-labelledby="gn" style="background: var(--sup); border: 1px solid var(--borda); border-radius: 14px; padding: 24px">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 8px">
+<h2 id="gn" style="margin: 0; font-size: 17px">Google News por mês</h2>
+<span style="font-size: 13px; color: var(--at)">Jan–jul/2025 sem coleta · recarga aprovada em 03/11</span>
+</div>
+<div style="display: flex; align-items: flex-end; gap: 4px; height: 150px; margin-top: 18px; border-bottom: 1px solid var(--borda)">
+<sc-for list="{{meses}}" as="m" hint-placeholder-count="28">
+<div title="{{m.titulo}}" style="{{m.barra}}"></div>
+</sc-for>
+</div>
+<div class="num" style="display: flex; justify-content: space-between; font-size: 12px; color: var(--sub); margin-top: 6px">
+<span>jul/2024</span><span>jan/2025</span><span>jan/2026</span><span>out/2026</span>
+</div>
+</section>
+
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"tema":{"editor":"enum","options":["escuro","claro"],"default":"escuro"},"$preview":{"width":1280,"height":1500}}'>
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { filtro: 'pend' }; }
+  ponto(cor) { return 'flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--' + cor + ')'; }
+  renderVals() {
+    const selo = (cor, fundo) => 'flex: none; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; color: var(--' + cor + '); background: var(--' + fundo + ')';
+    const todos = [
+      { e: false, crit: true, titulo: 'Google News de jan a jul/2025', detalhe: 'Recarga de 2023–2025 aprovada; aguardando terminar' },
+      { e: false, crit: false, titulo: 'FinBERT e juíza nos documentos novos da CVM', detalhe: '6.560 notícias sem probabilidade' },
+      { e: false, crit: false, titulo: '38 quantidades de ações sem evento correspondente', detalhe: 'AZUL3 e CNPJ 76483817000120 (2020)' },
+      { e: false, crit: false, titulo: 'Linha em 20/11/2020 (sem pregão)', detalhe: 'JBSS32 e NATU3' },
+      { e: true, titulo: 'Quantidade de ações na base do preço', detalhe: 'Colunas qtd_*_base_atual e tabela de eventos' },
+      { e: true, titulo: 'CVM de 2023 e jan–jul/2025', detalhe: '3,7 mil documentos por ano' },
+      { e: true, titulo: 'JBS e Natura com histórico completo', detalhe: 'Tabela de emissores por período' },
+      { e: true, titulo: 'Receita da Hapvida (IFRS 17)', detalhe: 'situacao = ajuste_ifrs17' },
+      { e: true, titulo: 'Juíza em todo o histórico', detalhe: '98,1% das notícias julgadas' },
+      { e: true, titulo: 'IDIV, IFIX e SMLL completos', detalhe: 'Desde 30/12/2019' }
+    ];
+    const pend = todos.filter(p => !p.e), entr = todos.filter(p => p.e);
+    const lista = (this.state.filtro === 'pend' ? pend : entr).map(p => ({
+      ...p,
+      rotulo: p.e ? 'Entregue' : p.crit ? 'Crítico' : 'Pendente',
+      selo: p.e ? selo('ok', 'okf') : p.crit ? selo('falha', 'falhaf') : selo('at', 'atf')
+    }));
+    const kpi = (nome, valor, pct, cor, nota) => ({ nome, valor, nota, barra: 'height: 100%; border-radius: 3px; width: ' + pct + '%; background: var(--' + cor + ')' });
+    const anos = ['2021', '2022', '2023', '2024', '2025', '2026'];
+    const dados = [
+      { origem: 'Google News', v: [13787, 15328, 24069, 31715, 30654, 122505] },
+      { origem: 'CVM', v: [4360, 3967, 3704, 3702, 3687, 2844] },
+      { origem: 'WordPress', v: [15126, 17440, 0, 0, 0, 2053] }
+    ];
+    const fmt = n => n.toLocaleString('pt-BR');
+    const mapa = dados.map(d => ({
+      origem: d.origem,
+      celulas: d.v.map(n => {
+        const f = n === 0 ? 0 : Math.min(1, 0.18 + Math.log10(n) / 5.4);
+        const est = n === 0
+          ? 'text-align: center; padding: 10px 6px; border-radius: 8px; border: 1px dashed var(--falha); color: var(--falha); font-size: 13px'
+          : 'text-align: center; padding: 10px 6px; border-radius: 8px; font-size: 13px; color: var(--txt); background: color-mix(in srgb, var(--acento) ' + Math.round(f * 55) + '%, var(--sup2))';
+        return { txt: n === 0 ? 'sem dados' : fmt(n), estilo: est };
+      })
+    }));
+    const gn = [2829, 2751, 2731, 2989, 2594, 2990, 38, 0, 0, 0, 0, 0, 0, 4180, 6057, 6722, 6786, 6871, 7079, 7718, 10793, 10740, 11582, 10642, 12312, 16261, 13009, 21215];
+    const rot = ['jul/24','ago/24','set/24','out/24','nov/24','dez/24','jan/25','fev/25','mar/25','abr/25','mai/25','jun/25','jul/25','ago/25','set/25','out/25','nov/25','dez/25','jan/26','fev/26','mar/26','abr/26','mai/26','jun/26','jul/26','ago/26','set/26','out/26'];
+    const max = 21215;
+    const meses = gn.map((n, i) => ({
+      titulo: rot[i] + ': ' + fmt(n) + ' artigos',
+      barra: n < 100
+        ? 'flex: 1; height: 4px; border-radius: 2px; background: var(--falha)'
+        : 'flex: 1; border-radius: 3px 3px 0 0; background: var(--acento); height: ' + Math.max(4, Math.round(n / max * 140)) + 'px'
+    }));
+    const etapas = [
+      ['Preços', 'ok', 'concluída'], ['Macro', 'ok', 'concluída'], ['Notícias', 'ok', 'concluída'], ['Documentos CVM', 'ok', 'concluída'],
+      ['Enriquecimento', 'ok', 'concluída'], ['Juíza', 'ok', 'concluída'], ['Cadastro', 'ok', 'concluída'], ['Entrega', 'ok', 'concluída'], ['Análise', 'sub', 'pulada']
+    ].map(([nome, cor, status]) => ({ nome, status, ponto: this.ponto(cor) }));
+    return {
+      tema: this.props.tema ?? 'escuro',
+      kpis: [
+        kpi('Notícias no banco', '409.968', 100, 'acento', '2021 a 03/11/2026'),
+        kpi('Com FinBERT', '98,4%', 98.4, 'at', '6.560 aguardando'),
+        kpi('Julgadas pela juíza', '98,1%', 98.1, 'ok', '7.903 aguardando'),
+        kpi('Com hora real (2026)', '17,9%', 17.9, 'at', 'Limitação do Google News')
+      ],
+      pedidos: lista, nPend: pend.length, nEntr: entr.length,
+      f: { pend: this.state.filtro === 'pend' ? 'filtro filtro-on' : 'filtro', entr: this.state.filtro === 'entr' ? 'filtro filtro-on' : 'filtro' },
+      verPend: () => this.setState({ filtro: 'pend' }),
+      verEntr: () => this.setState({ filtro: 'entr' }),
+      anos, mapa, meses, etapas
+    };
+  }
+}
+</script>
+</body>
+</html>

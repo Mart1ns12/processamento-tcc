@@ -275,6 +275,8 @@ PARAMETROS_PAINEL = {
     "dia_atipico_min_acoes": _inteiro_positivo, "dia_atipico_ibov_amplo": _positivo,
     "coerencia_ivvb11_min_abs": _positivo, "coerencia_ibov_mediana_dif": _positivo,
     "afetadas_max": _inteiro_positivo, "retorno_dia_abs": _positivo,
+    "dia_media_execucoes": _inteiro_positivo, "diagnosticos_manter": _inteiro_positivo,
+    "mercado_pregoes_linha": _inteiro_positivo,
 }
 
 

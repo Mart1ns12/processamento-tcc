@@ -409,8 +409,6 @@ def test_tempos_acoes_prefere_o_log_do_painel():
                   "origem": "execucao"},
         "diagnostico": {"segundos": None, "curto": None, "texto": "Ainda sem medição: pode levar alguns minutos.",
                         "origem": None},
-        "wordpress": {"segundos": None, "curto": None, "texto": "Ainda sem medição: pode levar alguns minutos.",
-                      "origem": None},
         "testes": {"segundos": 295, "curto": "~5 min", "texto": "Da última vez, pelo painel, levou 4 min 55 s.",
                    "origem": "painel"}}
 
@@ -616,3 +614,57 @@ def test_resumo_sem_diagnostico_vem_antes_dos_cartoes():
                                                "farol": "warn", "numero": "5 retornos"}]}
     r = resumo(HOJE_OK, TRAVA_VAZIA, fluxo(ITEM), LT, saude, TESTES_OK)
     assert [p["alvo"] for p in r["pontos"]] == ["saude", "saude-c-retornos"]
+
+
+FLUXO_DIA_NOS = {
+    "disponivel": True,
+    "coleta": {"estado": "ok", "titulo": "Dados entregues", "entrega_hhmm": "08:22"},
+    "processamento": {"estado": "warn", "titulo": "Gerado com pendências", "fim": "2026-10-23T11:02:30-03:00"},
+    "interface": {"estado": "ok", "titulo": "7 pacotes prontos"},
+    "carga": {"rotulo": "última carga completa: 24/10 23:00 · 2 pacotes"},
+}
+BANCO_NOS = {"estado": "ok", "titulo": "Em dia", "ultima_publicacao": "2026-10-23"}
+API_NOS = {"estado": "ok", "titulo": "No ar", "consultado_em": "10:15:42"}
+
+
+def test_fluxo_nos_cinco_nos_com_estado_horario_e_rodape():
+    assert visao.fluxo_nos(FLUXO_DIA_NOS, BANCO_NOS, API_NOS) == {
+        "disponivel": True,
+        "nos": [
+            {"id": "coleta", "nome": "Coleta", "estado": "ok", "texto": "Dados entregues",
+             "quando": "08:22", "alvo": "fluxo-coleta"},
+            {"id": "processamento", "nome": "Processamento", "estado": "warn", "texto": "Gerado com pendências",
+             "quando": "11:02", "alvo": "fluxo-processamento"},
+            {"id": "banco", "nome": "Banco da API", "estado": "ok", "texto": "Em dia",
+             "quando": "23/10", "alvo": "fluxo-banco"},
+            {"id": "api", "nome": "API", "estado": "ok", "texto": "No ar",
+             "quando": "10:15", "alvo": "fluxo-api"},
+            {"id": "interface", "nome": "Interface", "estado": "ok", "texto": "7 pacotes prontos",
+             "quando": None, "alvo": "fluxo-interface"},
+        ],
+        "rodape": "última carga completa: 24/10 23:00 · 2 pacotes",
+    }
+
+
+def test_fluxo_nos_converte_fim_do_processamento_para_sao_paulo():
+    fluxo_dia = {**FLUXO_DIA_NOS, "processamento": {"estado": "warn", "titulo": "Gerado com pendências",
+                                                    "fim": "2026-10-23T14:02:30+00:00"}}
+    no = visao.fluxo_nos(fluxo_dia, BANCO_NOS, API_NOS)["nos"][1]
+    assert no["quando"] == "11:02"
+
+
+def test_fluxo_nos_sem_fluxo_fica_sem_dados_e_banco_api_vem_dos_blocos():
+    r = visao.fluxo_nos({"disponivel": False, "motivo": "x"}, {}, {})
+    assert r["disponivel"] is False
+    assert [n["id"] for n in r["nos"]] == ["coleta", "processamento", "banco", "api", "interface"]
+    for no in r["nos"]:
+        assert no["estado"] == "idle"
+        assert no["texto"] == "sem dados"
+        assert no["quando"] is None
+    assert r["rodape"] == "última carga completa: sem dados"
+
+    r = visao.fluxo_nos({"disponivel": False, "motivo": "x"}, BANCO_NOS, API_NOS)
+    assert r["nos"][2]["estado"] == "ok"
+    assert r["nos"][2]["quando"] == "23/10"
+    assert r["nos"][3]["quando"] == "10:15"
+    assert r["nos"][0]["estado"] == "idle"

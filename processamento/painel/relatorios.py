@@ -10,7 +10,7 @@ import json
 import re
 from pathlib import Path
 
-from processamento.painel.leitores import duracao_segundos
+from processamento.painel.leitores import _instante, duracao_segundos
 
 RE_INICIO = re.compile(r"^Rotina de (\d{4}-\d{2}-\d{2}) \(início (\d{2}:\d{2}:\d{2})(, --sem-esperar)?\)$")
 RE_CONSULTA = re.compile(r"^(\d{2}:\d{2}:\d{2}) consulta (\d+): (.*)$")
@@ -28,6 +28,12 @@ RE_PYTEST_RESUMO = re.compile(
 )
 RE_PAR = re.compile(r"(\d+) (\w+)")
 RE_TEMPO = re.compile(r" in ([\d.]+s)")
+
+# Marcadores que o `processamento/painel/dia.py` imprime (uma linha por etapa; `em=` só nos fins novos).
+RE_DIA_INICIO = re.compile(r"^# dia: etapa=(\w+) inicio=(\S+)$")
+RE_DIA_FIM = re.compile(r"^# dia: etapa=(\w+) fim codigo=(-?\d+)(?: em=(\S+))? detalhe=(.*)$")
+RE_DIA_PULADA = re.compile(r"^# dia: etapa=(\w+) pulada motivo=(.*)$")
+IDS_ETAPAS_DIA = ("rotina", "carga", "publicador")
 
 TITULO_DIVERGENCIAS = "## Divergências × especificação"
 ORDEM_MODELOS = [
@@ -440,31 +446,96 @@ def ler_ultimo_pytest(pasta_logs_painel: Path) -> dict:
 CODIGOS_COMPLETOS = {"testes": {0, 1}}   # pytest com falhas também rodou até o fim
 
 
+def _arquivos_da_acao(pasta_logs_painel: Path, acao_id: str, max_arquivos: int) -> list[Path]:
+    """Logs `<acao_id>-*.log` da pasta, do mais novo para o mais antigo, no máximo `max_arquivos`."""
+    arquivos = [p for p in _listar(pasta_logs_painel)
+                if p.name.startswith(acao_id + "-") and p.name.endswith(".log") and p.is_file()]
+    return sorted(arquivos, key=lambda p: p.name, reverse=True)[:max_arquivos]
+
+
+def _cabecalho_rodape(linhas: list[str]) -> tuple[str | None, str | None, int | None, bool]:
+    """(inicio, fim, codigo, parado) do log do painel: primeiro cabeçalho inicio= e último rodapé fim=."""
+    inicio = fim = codigo = None
+    parado = False
+    for linha in linhas:
+        m = RE_PYTEST_INICIO.match(linha)
+        if m and inicio is None:
+            inicio = m.group(1)
+            continue
+        m = RE_PYTEST_FIM.match(linha)
+        if m:
+            fim, codigo, parado = m.group(1), int(m.group(2)), "parado=sim" in linha
+    return inicio, fim, codigo, parado
+
+
 def duracao_ultima_acao(pasta_logs_painel: Path, acao_id: str, max_arquivos: int = 20) -> int | None:
     """Segundos da execução mais recente da ação, pelos logs do painel (cabeçalho inicio= e rodapé fim=).
 
     Ignora execução sem rodapé (em andamento ou interrompida), parada pelo painel (parado=sim)
     ou com código de saída de erro. None se nenhuma servir.
     """
-    arquivos = [p for p in _listar(pasta_logs_painel)
-                if p.name.startswith(acao_id + "-") and p.name.endswith(".log") and p.is_file()]
-    for arquivo in sorted(arquivos, key=lambda p: p.name, reverse=True)[:max_arquivos]:
-        inicio = fim = codigo = None
-        parado = False
-        for linha in _ler_texto(arquivo).splitlines():
-            m = RE_PYTEST_INICIO.match(linha)
-            if m and inicio is None:
-                inicio = m.group(1)
-                continue
-            m = RE_PYTEST_FIM.match(linha)
-            if m:
-                fim, codigo, parado = m.group(1), int(m.group(2)), "parado=sim" in linha
+    for arquivo in _arquivos_da_acao(pasta_logs_painel, acao_id, max_arquivos):
+        inicio, fim, codigo, parado = _cabecalho_rodape(_ler_texto(arquivo).splitlines())
         if inicio is None or fim is None or parado or codigo not in CODIGOS_COMPLETOS.get(acao_id, {0}):
             continue
         segundos = duracao_segundos(inicio, fim)
         if segundos is not None:
             return segundos
     return None
+
+
+def _hora_valida(texto: str | None) -> str | None:
+    """A hora ISO como veio do log, se for uma data e hora com fuso (ou sem fuso); None para `10:00:00`."""
+    return texto if _instante(texto) is not None else None
+
+
+def tempos_etapas_dia(linhas: list[str]) -> dict[str, dict]:
+    """{etapa: {"inicio", "fim", "codigo"}} das etapas do dia (rotina, carga, publicador).
+
+    `inicio` e `fim` ficam como ISO do log, ou None (logs antigos só têm a hora, e a etapa pulada não tem código).
+    """
+    tempos = {i: {"inicio": None, "fim": None, "codigo": None} for i in IDS_ETAPAS_DIA}
+    for linha in linhas:
+        m = RE_DIA_INICIO.match(linha)
+        if m and m.group(1) in tempos:
+            tempos[m.group(1)]["inicio"] = _hora_valida(m.group(2))
+            continue
+        m = RE_DIA_FIM.match(linha)
+        if m and m.group(1) in tempos:
+            tempos[m.group(1)]["codigo"] = int(m.group(2))
+            tempos[m.group(1)]["fim"] = _hora_valida(m.group(3))
+    return tempos
+
+
+def medias_etapas_dia(pasta_logs_painel: Path, n: int | None, max_arquivos: int = 20) -> dict:
+    """Média (segundos) de cada etapa do dia nas últimas `n` execuções completas do painel.
+
+    Só conta log com rodapé e sem parado=sim, e em cada etapa só as durações de código 0 com início e fim
+    em ISO. {"medias": {etapa: int|None}, "amostras": {etapa: int}}; sem n válido ou sem logs, tudo None/0.
+    """
+    medias = {i: None for i in IDS_ETAPAS_DIA}
+    amostras = {i: 0 for i in IDS_ETAPAS_DIA}
+    if not isinstance(n, int) or isinstance(n, bool) or n <= 0:
+        return {"medias": medias, "amostras": amostras}
+    duracoes: dict[str, list[int]] = {i: [] for i in IDS_ETAPAS_DIA}
+    for arquivo in _arquivos_da_acao(pasta_logs_painel, "dia", max_arquivos):
+        linhas = _ler_texto(arquivo).splitlines()
+        _inicio, fim, _codigo, parado = _cabecalho_rodape(linhas)
+        if fim is None or parado:
+            continue
+        tempos = tempos_etapas_dia(linhas)
+        for i in IDS_ETAPAS_DIA:
+            t = tempos[i]
+            if t["codigo"] != 0 or len(duracoes[i]) >= n:
+                continue
+            segundos = duracao_segundos(t["inicio"], t["fim"])
+            if segundos is not None:
+                duracoes[i].append(segundos)
+    for i in IDS_ETAPAS_DIA:
+        if duracoes[i]:
+            medias[i] = round(sum(duracoes[i]) / len(duracoes[i]))
+            amostras[i] = len(duracoes[i])
+    return {"medias": medias, "amostras": amostras}
 
 
 def duracoes_painel(pasta_logs_painel: Path, ids: list[str]) -> dict[str, int | None]:
