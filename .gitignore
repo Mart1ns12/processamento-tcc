@@ -213,3 +213,4 @@ __marimo__/
 /modelos/
 # código da extração: outro repositório, só consulta
 extracao-dados-tcc-main/logs/painel/diagnosticos/
+logs/painel/diagnosticos/
