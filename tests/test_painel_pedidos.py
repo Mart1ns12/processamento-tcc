@@ -45,8 +45,8 @@ def test_yaml_real_com_fixture_bate_com_o_gabarito():
     assert d["disponivel"] is True
     assert d["motivo"] is None
     assert d["gerado_em"] == "2026-11-03 13:09 (America/Sao_Paulo)"
-    assert [i["estado"] for i in d["itens"]] == ["pendente"] * 4 + ["entregue"] * 6
-    assert d["contagem"] == {"entregue": 6, "pendente": 4, "sem_dados": 0, "sem_checagem": 0, "erro": 0}
+    assert [i["estado"] for i in d["itens"]] == ["pendente"] * 4 + ["entregue"] * 6 + ["sem_checagem"] * 7
+    assert d["contagem"] == {"entregue": 6, "pendente": 4, "sem_dados": 0, "sem_checagem": 7, "erro": 0}
     assert [i["evidencia"] for i in d["itens"]] == [
         "Meses ainda com poucas notícias: 01/2025, 06/2025, 07/2025",
         "6.560 sem FinBERT · 7.903 sem juíza",
@@ -58,15 +58,17 @@ def test_yaml_real_com_fixture_bate_com_o_gabarito():
         "ajuste_ifrs17: 12 linhas em v1-balancos.situacao",
         "98,1% preenchida (7.903 vazias)",
         "IDIV, IFIX, SMLL desde 30/12/2019, sem lacunas.",
-    ]
+    ] + ["sem checagem automática"] * 7
 
 
-def test_yaml_real_tem_os_dez_itens_na_ordem_do_plano():
+def test_yaml_real_tem_os_itens_na_ordem():
     d = avaliar_pedidos(YAML_REAL, FIXTURE)
     assert [i["id"] for i in d["itens"]] == [
         "google_news_2025", "finbert_juiza_cvm", "acoes_sem_evento", "linha_sem_pregao",
         "qtd_base_preco", "cvm_2023_2025", "emissores_jbs_natura", "hapvida_ifrs17",
         "juiza_historico", "indices_completos",
+        "balanco_bancos_seguradoras", "dfp_2025_santander", "balancos_assai", "balancos_bradespar",
+        "balancos_tim", "emprestimos_zerados", "proventos_bdr_jbs",
     ]
     assert d["itens"][0]["prioridade"] == "critico"
     assert d["itens"][0]["checagem"] == "meses_sem_poucas_noticias"
@@ -102,8 +104,10 @@ def test_docs_inexistente_vira_sem_dados_com_motivo(tmp_path):
     d = avaliar_pedidos(YAML_REAL, tmp_path / "sem_diagnostico.md")
     assert d["disponivel"] is True
     assert d["gerado_em"] is None
-    assert all(i["estado"] == "sem_dados" for i in d["itens"])
-    assert {i["evidencia"] for i in d["itens"]} == {
+    com_checagem = [i for i in d["itens"] if i["checagem"]]
+    assert all(i["estado"] == "sem_dados" for i in com_checagem)
+    assert all(i["estado"] == "sem_checagem" for i in d["itens"] if not i["checagem"])
+    assert {i["evidencia"] for i in com_checagem} == {
         "docs/diagnostico_banco.md não encontrado (rode o diagnóstico)"}
     assert d["contagem"]["sem_dados"] == 10
 

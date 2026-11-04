@@ -71,3 +71,40 @@ pedidos:
     prioridade: "normal"
     checagem: "indices_desde"
     parametros: {indices: ["IDIV", "IFIX", "SMLL"], inicio_ate: "2019-12-30"}
+
+  # Pedidos de 04/11/2026: indicadores "indisponível" no resumo_acao por falta de dado da coleta.
+  # Sem checagem automática: o diagnóstico não traz esses campos por empresa (conferência manual).
+  - id: "balanco_bancos_seguradoras"
+    texto: "Lucro e PL de bancos e seguradoras"
+    detalhe: "BBAS3 e BBDC3/BBDC4 sem lucro_liquido e patrimonio_liquido em todos os balanços (plano de contas de instituição financeira); BBSE3 e IRBR3 sem lucro_liquido (rótulo do lucro das seguradoras)"
+    prioridade: "normal"
+
+  - id: "dfp_2025_santander"
+    texto: "DFP 2025 do Santander (SANB11)"
+    detalhe: "Linhas da DFP de 31/12/2025 com todas as contas nulas; os ITRs de 2026 vieram"
+    prioridade: "normal"
+
+  - id: "balancos_assai"
+    texto: "Balanços do Assaí (ASAI3) desde o 4T21"
+    detalhe: "Só há balanços até 30/09/2021; o CNPJ está em cnpjs_sem_balanco"
+    prioridade: "normal"
+
+  - id: "balancos_bradespar"
+    texto: "Balanços da Bradespar (BRAP4) desde 2024"
+    detalhe: "Último balanço é a DFP de 31/12/2023; indicadores caem pela regra de balanço antigo"
+    prioridade: "normal"
+
+  - id: "balancos_tim"
+    texto: "Balanços da TIM (TIMS3) de 2024 e 2025"
+    detalhe: "Trimestres de 2024 e DFP de 31/12/2025 com lucro e PL zerados; derruba as medianas do setor da VIVT3"
+    prioridade: "normal"
+
+  - id: "emprestimos_zerados"
+    texto: "Confirmar empréstimos zerados de Allos, Odontoprev e Locaweb"
+    detalhe: "ALOS3, SAUD3 e LWSA3 com empréstimos de curto e longo prazo = 0: confirmar se é real ou falta de dado (ex.: debêntures)"
+    prioridade: "normal"
+
+  - id: "proventos_bdr_jbs"
+    texto: "Proventos e razão BDR/ação da JBS (JBSS32)"
+    detalhe: "Opcional: hoje P/L, P/VP, DY, payout e proventos do BDR ficam indisponíveis (regra D9)"
+    prioridade: "normal"

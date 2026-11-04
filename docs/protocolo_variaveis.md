@@ -210,6 +210,6 @@ Registrado em 04/11/2026 a partir das decisões acima, para o painel (aba Experi
 | D5 | Dados novos antes do teste final geram nova rodada | fechada |
 | D6 | Dataset congelado com hash registrado | pendente |
 | D7 | Conferência de preços reescritos (tolerância 1e-6) | fechada |
-| D8 | Custos definidos antes | fechada |
+| D8 | Custos definidos antes | pendente |
 | D9 | Auditoria de eventos após 23/06 | pendente |
 | D10 | Chance oculta até o teste ao vivo | fechada |

@@ -392,15 +392,31 @@ class _Handler(BaseHTTPRequestHandler):
         else:
             self._json(404, {"erro": "não encontrado"})
 
+    def _descartar_corpo(self) -> None:
+        """Lê e descarta um corpo pequeno antes de recusar o pedido.
+
+        Sem isso, o Windows pode fechar a conexão com RST e o cliente não recebe o 403.
+        """
+        try:
+            tamanho = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            return
+        if 0 < tamanho <= LIMITE_CORPO:
+            self.rfile.read(tamanho)
+
     def do_POST(self) -> None:
+        srv = self.server
+        if not host_permitido(self.headers.get("Host"), srv.porta):
+            self._descartar_corpo()
         if not self._host_ok():
             return
-        srv = self.server
         if not origem_permitida(self.headers.get("Origin"), srv.porta):
+            self._descartar_corpo()
             self._json(403, {"erro": "origem não permitida"})
             return
         recebido = self.headers.get("X-Painel-Token", "")
         if not hmac.compare_digest(recebido.encode("utf-8"), srv.token.encode("utf-8")):
+            self._descartar_corpo()
             self._json(403, {"erro": "token inválido"})
             return
         try:

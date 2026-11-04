@@ -366,8 +366,8 @@ def test_api_painel_pedidos_com_o_yaml_do_projeto(srv):
     _, _, corpo = pedir(srv, "GET", "/api/painel")
     pedidos = _json(corpo)["visao"]["pedidos"]
     assert pedidos["disponivel"] is True
-    assert len(pedidos["itens"]) == 10
-    assert pedidos["contagem"] == {"entregue": 0, "pendente": 0, "sem_dados": 10, "sem_checagem": 0, "erro": 0}
+    assert len(pedidos["itens"]) == 17
+    assert pedidos["contagem"] == {"entregue": 0, "pendente": 0, "sem_dados": 10, "sem_checagem": 7, "erro": 0}
 
 
 def test_api_painel_diagnostico_da_fixture(srv):
