@@ -126,8 +126,8 @@ def test_chave_a_mais_da_erro(tmp_path):
 
 # --- família em produção (treino.familia_producao) ------------------------------------------
 
-def test_arquivo_real_produz_a_logistica():
-    assert carregar_parametros_treino().familia_producao == "logistica"
+def test_arquivo_real_produz_o_xgb():
+    assert carregar_parametros_treino().familia_producao == "xgb"
 
 
 def test_familia_producao_ausente_e_xgb(tmp_path):

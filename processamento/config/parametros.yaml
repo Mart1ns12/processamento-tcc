@@ -219,7 +219,7 @@ treino:
     fim: null                       # véspera da entrada em produção (etapa 8), "AAAA-MM-DD"; vazio = trava ativa. Depois: teste ao vivo
     liberado: false                 # true SÓ por decisão do usuário; mesmo assim exige --teste-final; uso único
   modelo_oficial: false            # true SÓ quando o histórico completo chegar e o desenvolvimento for refeito com ele (pegadinha 13)
-  familia_producao: "logistica"    # família publicada pela rotina: "xgb" ou "logistica" (rodada 1, protocolo seção 8); padrão "xgb" se faltar
+  familia_producao: "xgb"   # família publicada pela rotina: "xgb" ou "logistica"; "xgb" desde a rodada 3 (protocolo, seção 8); padrão "xgb" se faltar
   topk: [5, 3]                      # o primeiro é o corte principal
   xgboost: {n_estimators: 300, max_depth: 3, learning_rate: 0.03, subsample: 0.8, colsample_bytree: 0.8, min_child_weight: 50, reg_lambda: 5}
   grade: {max_depth: [2, 3], min_child_weight: [50, 200]}   # escolhida só nas dobras de desenvolvimento

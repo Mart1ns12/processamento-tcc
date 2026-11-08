@@ -125,7 +125,7 @@ def params_teste(**trocas):
         acaso_sorteios=200,
         bootstrap_reamostragens=50,
         calibracao_linhas_minimas=100,
-        familia_producao="xgb",  # os fixtures ajustam XGBoost; o YAML de produção é a logística (testes da logística pedem)
+        familia_producao="xgb",  # os fixtures ajustam XGBoost; o YAML de produção também é o XGBoost desde a rodada 3 (testes da logística pedem)
     )
     ajustes.update(trocas)
     return dataclasses.replace(base, **ajustes)

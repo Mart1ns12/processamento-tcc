@@ -4,6 +4,7 @@ Os CSV vêm de tests/fabrica_treino.py e vão para tmp_path. Nada de banco ou re
 derrubando o acesso). A trava do teste final fica em test_treino_trava.py.
 """
 
+import hashlib
 import json
 
 import pandas as pd
@@ -234,6 +235,34 @@ def test_configuracao_congela_colunas_e_hiperparametros(ambiente, tmp_path):
     assert meta1["colunas"] == congelado["colunas_1"]
     assert meta3["hiperparametros"] == congelado["hiperparametros"]
     assert meta3["blocos"] == {"blocos_preco": ["preco_contexto"], "noticias_contexto": True}
+
+
+def test_configuracao_grava_a_origem_nos_dois_metas(ambiente, tmp_path):
+    origem = {"busca": 3, "protocolo": 3}
+    caminho = _gravar_congelado(ambiente, tmp_path / "congelado.json", rodadas_de_origem=origem, vencedor="referencia")
+    assert treino.main(_argv(ambiente, "--configuracao", str(caminho)), params=params_teste()) == 0
+    sha = hashlib.sha256(caminho.read_bytes()).hexdigest()
+    esperado = {"arquivo": caminho.name, "sha256": sha, "rodadas_de_origem": origem, "vencedor": "referencia"}
+    for nome in ("xgb-2026-01.meta.json", "xgb-m1-2026-01.meta.json"):
+        meta = json.loads((ambiente["modelos"] / nome).read_text(encoding="utf-8"))
+        assert meta["configuracao"] == esperado
+
+
+def test_configuracao_sem_chaves_de_rodada_grava_none(ambiente, tmp_path):
+    caminho = _gravar_congelado(ambiente, tmp_path / "congelado.json")
+    assert treino.main(_argv(ambiente, "--configuracao", str(caminho)), params=params_teste()) == 0
+    meta3 = json.loads((ambiente["modelos"] / "xgb-2026-01.meta.json").read_text(encoding="utf-8"))
+    assert meta3["configuracao"]["arquivo"] == caminho.name
+    assert meta3["configuracao"]["sha256"] == hashlib.sha256(caminho.read_bytes()).hexdigest()
+    assert meta3["configuracao"]["rodadas_de_origem"] is None
+    assert meta3["configuracao"]["vencedor"] is None
+
+
+def test_sem_configuracao_os_metas_trazem_configuracao_none(ambiente):
+    _rodar(ambiente)
+    for nome in ("xgb-2026-01.meta.json", "xgb-m1-2026-01.meta.json"):
+        meta = json.loads((ambiente["modelos"] / nome).read_text(encoding="utf-8"))
+        assert meta["configuracao"] is None
 
 
 def test_configuracao_nao_roda_a_selecao(ambiente, tmp_path, monkeypatch):

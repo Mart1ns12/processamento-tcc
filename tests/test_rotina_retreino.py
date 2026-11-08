@@ -135,6 +135,7 @@ def test_caso_1_grava_os_quatro_arquivos_com_o_corte_certo(tmp_path, completo):
     meta = _ler(pasta, "xgb-2026-11.meta.json")
     dev = _ler(pasta, "xgb-2026-01.meta.json")
     assert all(chave in meta for chave in modelos.CHAVES_METADADOS)
+    assert meta["configuracao"] is None   # dev sem --configuracao: nada a copiar
     assert meta["n_linhas_treino"] == 768
     assert meta["periodo_treino"] == {"inicio": "2026-08-03", "fim": "2026-10-29"}
     assert meta["retreino"]["corte_antes_de"] == "2026-11-01"
@@ -231,6 +232,21 @@ def test_metadados_do_treino_de_dev_seguem_modelo_oficial():
         meta = treino._metadados("3", ["a"], res, {}, params, [], "2026-11-03T09:00:00-03:00", bloco, None)
         assert meta["provisorio"] is provisorio
         assert meta["aviso"] == (treino.AVISO_PROVISORIO if provisorio else None)
+
+
+def test_retreino_copia_a_origem_da_configuracao_do_dev(tmp_path, completo):
+    params = params_teste(teste_final_fim=date(2026, 10, 30))
+    pasta = _pasta_dev(tmp_path, params=params)
+    origem = {"arquivo": "configuracao_final_rodada_003.json", "sha256": "ab" * 32,
+              "rodadas_de_origem": {"busca": 3, "protocolo": 3}, "vencedor": "referencia"}
+    for nome in ("xgb-2026-01.meta.json", "xgb-m1-2026-01.meta.json"):
+        meta_dev = _ler(pasta, nome)
+        meta_dev["configuracao"] = origem
+        (pasta / nome).write_text(json.dumps(meta_dev, ensure_ascii=False), encoding="utf-8")
+    df = _apagar_alvo(_ate(completo, "2026-10-30"), "2026-10-30")
+    retreino.retreinar_mes(df, INFO, _cal(df), D1, pasta_modelos=pasta, params=params, agora=AGORA)
+    assert _ler(pasta, "xgb-2026-11.meta.json")["configuracao"] == origem
+    assert _ler(pasta, "xgb-m1-2026-11.meta.json")["configuracao"] == origem
 
 
 def test_sem_linhas_antes_do_mes_levanta_pre_requisito(tmp_path, completo):

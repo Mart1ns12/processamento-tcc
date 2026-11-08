@@ -84,13 +84,27 @@ def _registro(raiz: Path) -> tuple[list[dict], str | None]:
 
 # ---------------------------------------------------------------- modelo em produção
 
+def _familia_do_vencedor(v: object) -> str | None:
+    """Família do vencedor da busca: "referencia" é o XGBoost do ponto de partida."""
+    if not isinstance(v, str):
+        return None
+    if v == "referencia" or v.startswith("xgb"):
+        return "xgb"
+    if v.startswith("lgbm"):
+        return "lgbm"
+    return v
+
+
 def _configuracao(eventos: list[dict] | None, familia: str | None) -> str | None:
     """Rodada da busca que escolheu a família e a rodada que a reproduziu, ex.: "busca rodada 001 (reproduzida na 002)"."""
     if not eventos or not familia:
         return None
     fins = [e for e in eventos if e.get("tipo") == "busca" and e.get("evento") == "fim"]
-    n = next((e.get("rodada") for e in fins
-              if e.get("repete_rodada") is None and e.get("vencedor") == familia), None)
+    candidatas = [e for e in fins
+                  if e.get("repete_rodada") is None and e.get("status") != "invalida"
+                  and _familia_do_vencedor(e.get("vencedor")) == familia]
+    # a mais nova é a oficial
+    n = max((r for r in (_inteiro(e.get("rodada")) for e in candidatas) if r is not None), default=None)
     if _inteiro(n) is None:
         return None
     k = next((e.get("rodada") for e in fins

@@ -218,6 +218,7 @@ Registrado em 08/11/2026, **antes de rodar a sensibilidade da rodada 3**. Como o
 | Dataset (substitui a linha de 02/11) | Treino no sha `c954b437c55e41f20a84e91a647964cc33a1c3cf4bb60df474f3f560c81851aa`, com cópia guardada fora do repositório; o sha do dataset do teste é registrado antes de rodar |
 | Modelos antigos | Arquivados em `modelos/antigos/`, sem apagar |
 | Sensibilidade | Só com a família vencedora |
+| Cópia do dataset congelado (D6, fechada em 08/11/2026) | `dataset-todas-2026-11-06.csv`, sha256 `c954b437c55e41f20a84e91a647964cc33a1c3cf4bb60df474f3f560c81851aa`, guardado em dois locais: a pasta local `C:\Users\danie\Desktop\TCC\Arquivos\copias_congeladas\dataset_v7_rodada_003\` (com `principais`, `hora_real_noite`, os `.json` e o `SHA256SUMS.txt`) e o Google Drive do usuário. O sha do dataset do teste final continua sendo registrado antes de rodar |
 
 **Desenho da sensibilidade da rodada 3** (exploratória; fora de `docs/protocolo_tentativas.jsonl` e da contagem de testes; IC sem ajuste por comparações múltiplas):
 - Casos a, b, c e d iguais aos da rodada 1 (tabela acima), com as mesmas regras de recorte.
@@ -236,7 +237,7 @@ Registrado em 04/11/2026 a partir das decisões acima, para o painel (aba Experi
 | D3 | Hipótese e medida principal: ganho de AUC por pregão do modelo 3 sobre o 1, com IC 95% acima de 0 | fechada |
 | D4 | Família, colunas e referências congeladas | fechada |
 | D5 | Dados novos antes do teste final geram nova rodada | fechada |
-| D6 | Dataset congelado com hash registrado | pendente |
+| D6 | Dataset congelado com hash registrado | fechada |
 | D7 | Conferência de preços reescritos (tolerância 1e-6) | fechada |
 | D8 | Custos definidos antes | pendente |
 | D9 | Auditoria de eventos após 23/06 | pendente |

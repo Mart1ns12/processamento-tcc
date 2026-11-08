@@ -812,10 +812,11 @@ def _montar_metricas(res: dict, lidos: dict, params: ParametrosTreino, modo: str
 
 def _metadados(modelo: str, colunas: list[str], res: dict, info: dict, params: ParametrosTreino,
                universo: list[str], gerado_em: str, bloco: dict, calibracao: dict | None,
-               familia: str = "xgb") -> dict:
+               familia: str = "xgb", configuracao: dict | None = None) -> dict:
     """`.meta.json` de um modelo provisório, já em tipos JSON (traz todas as chaves de `CHAVES_METADADOS`).
 
     `familia` ("xgb" ou "logistica") vai junto; fora de `CHAVES_METADADOS`, então é opcional para quem lê.
+    `configuracao` é a origem do `--configuracao` (`_origem_configuracao`), ou None sem a opção.
     """
     cfg, prep = res["cfg"], res["prep"]
     return _para_json({
@@ -826,6 +827,7 @@ def _metadados(modelo: str, colunas: list[str], res: dict, info: dict, params: P
         "colunas": list(colunas),
         "blocos": {"blocos_preco": list(cfg["blocos_preco"]), "noticias_contexto": cfg["noticias_contexto"]},
         "hiperparametros": dict(cfg["hiperparametros"]),
+        "configuracao": configuracao,
         "semente": params.semente,
         "periodo_treino": {"inicio": _iso(prep["data"].min()), "fim": _iso(prep["data"].max())},
         "n_linhas_treino": len(prep),
@@ -849,7 +851,8 @@ def _sem_gerado(meta: dict) -> dict:
     return {k: v for k, v in meta.items() if k != "gerado_em"}
 
 
-def _treinar_e_salvar(res: dict, params: ParametrosTreino, pasta_modelos: Path, info: dict, universo: list[str]) -> dict:
+def _treinar_e_salvar(res: dict, params: ParametrosTreino, pasta_modelos: Path, info: dict, universo: list[str],
+                      configuracao: dict | None = None) -> dict:
     """Modelo 3 e modelo 1 treinados em todas as linhas de desenvolvimento, marcados como provisórios."""
     prep, cfg = res["prep"], res["cfg"]
     hiper = cfg["hiperparametros"]
@@ -859,9 +862,9 @@ def _treinar_e_salvar(res: dict, params: ParametrosTreino, pasta_modelos: Path, 
     ajuste1 = _ajustar(prep[cfg["colunas_1"]], prep["alvo"], hiper, params, familia)
     gerado = _agora()
     meta3 = _metadados("3", cfg["colunas_3"], res, info, params, universo, gerado,
-                       res["modelos"][MODELO_CALIBRADO], res["calibracao"], familia)
+                       res["modelos"][MODELO_CALIBRADO], res["calibracao"], familia, configuracao)
     meta1 = _metadados("1", cfg["colunas_1"], res, info, params, universo, gerado,
-                       res["modelos"]["modelo_1"], None, familia)
+                       res["modelos"]["modelo_1"], None, familia, configuracao)
     nome3, nome1 = modelos.nome_modelo(mes, "3", familia), modelos.nome_modelo(mes, "1", familia)
     modelos.salvar_modelo(ajuste3, meta3, pasta_modelos, nome3)
     modelos.salvar_modelo(ajuste1, meta1, pasta_modelos, nome1)
@@ -939,6 +942,22 @@ def _ler_configuracao(caminho: Path, sha256: str | None, params: ParametrosTrein
         "colunas_1": congelado["colunas_1"],
         "colunas_3": congelado["colunas_3"],
         "familia": familia,
+    }
+
+
+def _origem_configuracao(caminho: Path) -> dict:
+    """De onde veio a configuração do treino de desenvolvimento (`--configuracao`), para os `.meta.json`.
+
+    `arquivo` e `sha256` identificam o JSON exato. `rodadas_de_origem` e `vencedor` são copiados do próprio
+    JSON quando ele traz essas chaves (senão, None).
+    """
+    caminho = Path(caminho)
+    congelado = json.loads(caminho.read_text(encoding="utf-8"))
+    return {
+        "arquivo": caminho.name,
+        "sha256": modelos.sha256_arquivo(caminho),
+        "rodadas_de_origem": congelado.get("rodadas_de_origem"),
+        "vencedor": congelado.get("vencedor"),
     }
 
 
@@ -1032,15 +1051,17 @@ def executar(
         leitor = partial(ler_desenvolvimento, params=params)
 
     lidos = {nome: None if arquivos[nome] is None else leitor(arquivos[nome]) for nome in TIPOS_DATASET}
+    origem = None
     if modo == "desenvolvimento" and configuracao is not None:
         congelada = _ler_configuracao(configuracao, lidos["todas"][1].get("sha256"), params)
+        origem = _origem_configuracao(configuracao)
     res = _avaliar(lidos, params, modo, fim, congelada)
     df_todas, info_todas = lidos["todas"]
     universo = sorted({str(u) for u in _dev(df_todas, params)["universo"].dropna()})
     gerado = _agora()
     if modo == "desenvolvimento":
         pasta = Path(pasta_saida) / f"dev-{data_dataset:%Y-%m-%d}"
-        modelo_salvo = _treinar_e_salvar(res, params, Path(pasta_modelos), info_todas, universo)
+        modelo_salvo = _treinar_e_salvar(res, params, Path(pasta_modelos), info_todas, universo, origem)
     else:
         pasta = Path(pasta_saida) / f"teste-final-{data_dataset:%Y-%m-%d}"
         modelo_salvo = None

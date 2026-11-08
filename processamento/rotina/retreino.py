@@ -73,6 +73,7 @@ def _metadados_retreino(modelo: str, colunas: list[str], dev: dict, calibracao: 
         "colunas": list(colunas),
         "blocos": {"blocos_preco": congelada["blocos_preco"], "noticias_contexto": congelada["noticias_contexto"]},
         "hiperparametros": dict(congelada["hiperparametros"]),
+        "configuracao": dev.get("configuracao"),   # origem do --configuracao do desenvolvimento (None se não houver)
         "semente": params.semente,
         "periodo_treino": {"inicio": treino._iso(prep["data"].min()), "fim": treino._iso(prep["data"].max())},
         "n_linhas_treino": len(prep),

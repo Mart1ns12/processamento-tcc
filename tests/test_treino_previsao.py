@@ -324,6 +324,36 @@ def test_juntar_noticias_sem_tom_com_tom_preenchido_nao_mexe():
     assert juntada.equals(contrib)
 
 
+def test_top_do_dia_junta_noticias_sem_tom_em_qualquer_familia(monkeypatch):
+    """Não logístico (XGBoost, SHAP): sem tom no dia, qtd e extremo também viram parte do tom."""
+    import dataclasses
+
+    params = dataclasses.replace(carregar_parametros_treino(), motivos_qtd=3, motivos_limiar=0.01)
+    colunas = ["ret_1d", "noticias_dia_qtd", "noticias_dia_tom", "noticias_dia_extremo"]
+    dia = pd.DataFrame(
+        {
+            "ticker": ["AAAA3"],
+            "ret_1d": [0.01],
+            "noticias_dia_qtd": [0.0],
+            "noticias_dia_tom": [NAN],
+            "noticias_dia_extremo": [NAN],
+        }
+    )
+    contrib = pd.DataFrame(
+        [{"ret_1d": -0.04, "noticias_dia_qtd": 0.02, "noticias_dia_tom": 0.03, "noticias_dia_extremo": 0.01, "vies": 0.1}]
+    )
+    monkeypatch.setattr(modelos, "prob", lambda modelo, X: np.array([0.6]))
+    monkeypatch.setattr(modelos, "contribuicoes", lambda modelo, X: contrib)
+    metadados = {"colunas": colunas, "calibracao": {"aprovada": False}}
+    itens = previsao.top_do_dia(dia, dia.copy(), object(), metadados, params)
+    motivos = itens[0]["motivos"]
+    assert [(m["fator"], m["efeito"]) for m in motivos] == [("noticias_dia_tom", "ajudou"), ("ret_1d", "atrapalhou")]
+    assert motivos[0]["contribuicao"] == pytest.approx(0.06)
+    assert motivos[0]["valor"] is None
+    assert motivos[1]["contribuicao"] == pytest.approx(-0.04)
+    assert motivos[1]["valor"] == pytest.approx(0.01)
+
+
 def test_top_do_dia_com_modelo_logistico_fluxo_completo():
     import dataclasses
 

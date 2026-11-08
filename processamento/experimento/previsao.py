@@ -52,7 +52,7 @@ _NOTICIAS_SEM_TOM = ("noticias_dia_qtd", "noticias_dia_extremo")
 
 
 def juntar_noticias_sem_tom(contrib_linha: pd.Series, bruto: pd.Series) -> pd.Series:
-    """Logística: sem tom no dia, as contribuições de qtd e extremo viram parte do tom.
+    """Sem tom no dia (qualquer família; a soma vale para logit e para SHAP): as contribuições de qtd e extremo viram parte do tom.
 
     Os três indicadores de notícia são quase idênticos quando não há notícia; sem isto, o motivo "Sem notícias"
     sairia três vezes. Se o tom tem valor, devolve a linha como está.
@@ -121,14 +121,12 @@ def top_do_dia(
     contrib = modelos.contribuicoes(modelo, X).rename(columns=preparacao.COLUNA_BRUTA)
     aprovada = metadados["calibracao"]["aprovada"]
     brutos = bruto_dia[[preparacao.COLUNA_BRUTA.get(c, c) for c in colunas]]
-    logistica = isinstance(modelo, modelos.ModeloLogistico)
 
     ranking = _ranking(preparado_dia, prob, params.topk[0])
     itens = []
     for posicao, pos, ticker in zip(ranking["posicao"].tolist(), ranking["pos"].tolist(), ranking["ticker"].tolist()):
-        contrib_linha = contrib.iloc[pos]
-        if logistica:  # só a logística: indicadores de notícia quase idênticos (ver juntar_noticias_sem_tom)
-            contrib_linha = juntar_noticias_sem_tom(contrib_linha, brutos.iloc[pos])
+        # qualquer família: a soma vale para o logit e para o SHAP
+        contrib_linha = juntar_noticias_sem_tom(contrib.iloc[pos], brutos.iloc[pos])
         itens.append(
             {
                 "posicao": int(posicao),

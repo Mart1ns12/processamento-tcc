@@ -130,11 +130,12 @@ def test_rodadas_itens_na_ordem_do_registro(tmp_path, monkeypatch):
         ("Busca · rodada 001", "concluída", "ok", "02/11/2026 · vencedor: logistica · busca_rodada_001.md"),
         ("Busca · rodada 002", "reproduziu", "ok", "02/11/2026 · repetição da rodada 001, mesmo resultado · busca_rodada_002.md"),
         ("Protocolo · rodada 002", "reproduziu", "ok", "02/11/2026 · repetição da rodada 001, mesmo resultado · protocolo_rodada_002.md"),
+        ("Protocolo · rodada 003", "válida", "ok", "08/11/2026 · adotados: bloco_a · protocolo_rodada_003.md"),
+        ("Busca · rodada 003", "concluída", "ok", "08/11/2026 · vencedor: referencia · busca_rodada_003.md"),
+        ("Protocolo · rodada 004", "reproduziu", "ok", "08/11/2026 · repetição da rodada 003, mesmo resultado · protocolo_rodada_004.md"),
+        ("Busca · rodada 004", "reproduziu", "ok", "08/11/2026 · repetição da rodada 003, mesmo resultado · busca_rodada_004.md"),
         ("Sensibilidade (exploratória) · rodada 001", "registrada", "info",
          "dados de 30/10/2026 · 4 análises · fora da contagem do protocolo"),
-        ("Próxima rodada (dados novos)", "aguardando", "warn",
-         "O código está na versão de preparação 7 e as rodadas registradas usaram a 6. Pela D5, dados novos "
-         "antes do teste final geram nova rodada, que passa a ser a oficial."),
     ]
 
 
@@ -166,15 +167,51 @@ def test_sem_jsonl_mostra_so_a_sensibilidade(tmp_path, monkeypatch):
     assert r["modelo"]["configuracao"] is None
 
 
+# ---------------------------------------------------------------- configuração do modelo
+
+def _fim_busca(rodada, vencedor, **extra):
+    return {"tipo": "busca", "evento": "fim", "rodada": rodada, "vencedor": vencedor, "status": "concluida", **extra}
+
+
+EVENTOS_CONFIGURACAO = [
+    _fim_busca(1, "logistica"),
+    _fim_busca(2, "logistica", repete_rodada=1, reproduziu=True),
+    _fim_busca(3, "referencia"),
+    _fim_busca(4, "referencia", repete_rodada=3, reproduziu=True),
+]
+
+
+def test_configuracao_xgb_usa_a_rodada_oficial_mais_nova():
+    assert ae._configuracao(EVENTOS_CONFIGURACAO, "xgb") == "busca rodada 003 (reproduzida na 004)"
+    assert ae._configuracao(EVENTOS_CONFIGURACAO, "logistica") == "busca rodada 001 (reproduzida na 002)"
+
+
+def test_configuracao_sem_repeticao_da_rodada_oficial():
+    assert ae._configuracao(EVENTOS_CONFIGURACAO[:3], "xgb") == "busca rodada 003"
+
+
+def test_configuracao_so_com_busca_invalida_fica_none():
+    assert ae._configuracao([_fim_busca(1, "xgb_2_50", status="invalida")], "xgb") is None
+
+
+def test_familia_do_vencedor():
+    assert ae._familia_do_vencedor("referencia") == "xgb"
+    assert ae._familia_do_vencedor("xgb_2_50") == "xgb"
+    assert ae._familia_do_vencedor("lgbm_1") == "lgbm"
+    assert ae._familia_do_vencedor("logistica") == "logistica"
+    assert ae._familia_do_vencedor(None) is None
+    assert ae._familia_do_vencedor(3) is None
+
+
 # ---------------------------------------------------------------- checklist
 
 def test_checklist_com_o_protocolo_real():
     r = checklist(REPO, PARAMS)
     assert r["disponivel"] is True and r["motivo"] is None
-    assert r["n_fechadas"] == 6 and r["n_total"] == 10
+    assert r["n_fechadas"] == 7 and r["n_total"] == 10
     assert [i["id"] for i in r["itens"]] == [f"D{n}" for n in range(1, 11)]
     assert [i["situacao"] for i in r["itens"]] == [
-        "fechada", "pendente", "fechada", "fechada", "fechada", "pendente", "fechada", "pendente", "pendente", "fechada"]
+        "fechada", "pendente", "fechada", "fechada", "fechada", "fechada", "fechada", "pendente", "pendente", "fechada"]
     assert [i["texto"] for i in r["itens"]] == TEXTOS_CHECKLIST
 
 
@@ -184,7 +221,7 @@ def test_checklist_com_fim_do_teste_final_fecha_d2(tmp_path):
     d2 = r["itens"][1]
     assert d2 == {"id": "D2", "texto": "Data de fim do teste final: 31/03/2027", "situacao": "fechada",
                   "cumprida": True, "automatica": True}
-    assert r["n_fechadas"] == 7
+    assert r["n_fechadas"] == 8
 
 
 def test_checklist_sem_d10_marca_faltando(tmp_path):
