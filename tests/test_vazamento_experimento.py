@@ -97,7 +97,18 @@ def cenario():
 # Dias de corte testados: o da suíte original (T_INDICE), uma sexta (t+1 na segunda), o primeiro
 # pregão depois do período sem coleta (params) e uma quinta cuja sexta seguinte virou feriado.
 CASOS_T = ["T_INDICE", "sexta", "logo_depois_sem_coleta", "vespera_de_feriado"]
-FIM_SEM_COLETA = max(fim for _, fim in carregar_parametros_experimento().periodos_sem_coleta)
+# Período sem coleta fixo do teste (o do yaml foi esvaziado em 08/11/2026): a borda continua testada.
+PERIODO_SEM_COLETA_TESTE = ((date(2025, 1, 1), date(2025, 7, 31)),)
+FIM_SEM_COLETA = max(fim for _, fim in PERIODO_SEM_COLETA_TESTE)
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _periodo_sem_coleta_fixo():
+    """montar_dataset sem `params` lê o yaml: aqui ele recebe o período fixo acima, só neste módulo."""
+    params = dataclasses.replace(carregar_parametros_experimento(), periodos_sem_coleta=PERIODO_SEM_COLETA_TESTE)
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr("processamento.experimento.dataset.carregar_parametros_experimento", lambda: params)
+        yield
 
 
 def _primeiro_indice(cal, condicao, minimo=100):

@@ -9,6 +9,8 @@ Tabela ausente gera uma nota "pulada: tabela ausente" e a seção não consulta.
 
 from __future__ import annotations
 
+from datetime import date
+
 import pandas as pd
 
 from processamento import calendario, fontes
@@ -1154,16 +1156,26 @@ def secao_quantidade_acoes(ler, mapa: dict, existentes: set, exclusoes: Exclusoe
     É nota, não divergência: a quantidade de `v1-acoes_emitidas` provavelmente está em milhares
     (pendência da coleta, seção 10). `t` padrão é o último pregão com preço do IBOV. Lê só pela
     camada de leitura (`fontes.ler_tabela`).
+
+    As entradas manuais de `fundamentos.quantidade_suspeita_manual` saem sempre, pois não leem o banco.
     """
     secao = nova_secao("Quantidade de ações suspeita")
+    params_fund = carregar_parametros_fundamentos()
+    _checagem_quantidade_automatica(secao, ler, mapa, existentes, exclusoes, t, params_fund)
+    _entradas_manuais_quantidade(secao, params_fund.quantidade_suspeita_manual)
+    return secao
+
+
+def _checagem_quantidade_automatica(secao: dict, ler, mapa: dict, existentes: set, exclusoes: Exclusoes | None,
+                                    t, params_fund) -> None:
+    """Preenche `secao` com a checagem automática; pulada se falta tabela ou pregão do IBOV."""
     faltam = [c for c in TABELAS_QUANTIDADE if not _existe(mapa, existentes, c)]
     if faltam:
         for c in faltam:
             secao["notas"].append(_pulada(mapa, c))
-        return secao
+        return
     if exclusoes is None:
         exclusoes = carregar_exclusoes()
-    params_fund = carregar_parametros_fundamentos()
     limite, teto = params_fund.pvp_minimo_plausivel, params_fund.pvp_maximo_plausivel_x1000
 
     precos = fontes.ler_tabela("precos", ler=ler)
@@ -1171,7 +1183,7 @@ def secao_quantidade_acoes(ler, mapa: dict, existentes: set, exclusoes: Exclusoe
         cal = calendario.pregoes(precos)
         if not cal:
             secao["notas"].append("sem pregão com preço do IBOV: checagem não feita")
-            return secao
+            return
         t = cal[-1]
     ts = pd.Timestamp(t).normalize()
     cadastro = fontes.ler_tabela("cadastro", ler=ler)
@@ -1182,7 +1194,7 @@ def secao_quantidade_acoes(ler, mapa: dict, existentes: set, exclusoes: Exclusoe
     achados = _suspeitas_em(ts, precos, cadastro, balancos, acoes, exclusoes, limite, teto, emissores)
     if not achados:
         secao["notas"].append(f"nenhuma empresa com quantidade de ações suspeita em {ts.date().isoformat()}")
-        return secao
+        return
     limite_txt = f"{limite:.2f}".replace(".", ",")
     teto_txt = f"{teto:g}".replace(".", ",")
     secao["notas"].append(
@@ -1195,7 +1207,21 @@ def secao_quantidade_acoes(ler, mapa: dict, existentes: set, exclusoes: Exclusoe
         ["tickers", "cnpj", "data_referencia", "acoes", "pvp"],
         [[", ".join(a["tickers"]), a["cnpj"], a["data_referencia"], a["acoes"], a["pvp"]] for a in achados],
     )
-    return secao
+
+
+def _entradas_manuais_quantidade(secao: dict, lista: tuple[tuple[str, date, str], ...]) -> None:
+    """Nota e tabela das entradas de `fundamentos.quantidade_suspeita_manual` (na ordem do yaml)."""
+    if not lista:
+        secao["notas"].append("nenhuma entrada manual")
+        return
+    secao["notas"].append(
+        f"entradas manuais em fundamentos.quantidade_suspeita_manual: {len(lista)}; "
+        "a quantidade delas é tratada como suspeita a partir de `desde` (decisão manual)")
+    adicionar_tabela(
+        secao, "Entradas manuais (fundamentos.quantidade_suspeita_manual)",
+        ["ticker", "desde", "motivo"],
+        [[ticker, desde.isoformat(), motivo] for ticker, desde, motivo in lista],
+    )
 
 
 # ---------------------------------------------------------------------------

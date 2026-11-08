@@ -1,6 +1,6 @@
 # Diagnóstico do banco da coleta (só leitura)
 
-- Gerado em: 2026-11-08 13:04 (America/Sao_Paulo)
+- Gerado em: 2026-11-08 13:58 (America/Sao_Paulo)
 - Banco: tcc_scraper
 - MySQL: 8.0.46-0ubuntu0.24.04.4
 - Comando: `python -m processamento.diagnostico`
@@ -558,6 +558,7 @@
 - período analisado (pregões do IBOV): 2019-12-30 a 2026-11-06
 - v1-proventos: 3 tickers do cadastro sem linhas (informativo)
 - excluídos por decisão (config/exclusoes.yaml): CRFB3, SRNA3, STBP11, STBP3, STBP4
+- mudanças registradas em v1-mudancas_ticker: AZUL4 → AZUL3, CCRO3 → MOTV3, CPLE6 → CPLE3, ELET3 → AXIA3, ELET6 → AXIA3, EMBR3 → EMBJ3, JBSS3 → JBSS32, NTCO3 → NATU3, ODPV3 → SAUD3, PETZ3 → AUAU3
 - exclusão a rever: 06057223000171 tem balanço
 
 ### Comparação de conjuntos

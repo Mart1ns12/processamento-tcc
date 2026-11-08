@@ -251,8 +251,8 @@ Notícia da empresa vale para todas as suas classes: PETR3 e PETR4 recebem os me
 | Situação | Resultado | Por quê |
 |---|---|---|
 | Antes de `cobertura_inicio` | As 6 colunas vazias, inclusive `qtd` | Não havia coleta |
-| Pregão em `experimento.periodos_sem_coleta` (01/01 a 31/07/2025) | As 6 colunas vazias, inclusive `qtd`; `noticias_dia` `indisponivel` | Não houve coleta, logo não é "sem notícia" |
-| Base da `mudanca_tom` tocando o período | `mudanca_tom` vazia (até ~meados de set/2025) | A base exige a janela inteira coberta |
+| Pregão em `experimento.periodos_sem_coleta` (**vazia desde 08/11/2026**: a coleta preencheu jan–jul/2025; antes, 01/01 a 31/07/2025; ver `docs/conferencia_rodada_003.md`) | As 6 colunas vazias, inclusive `qtd`; `noticias_dia` `indisponivel` | Não houve coleta, logo não é "sem notícia". Mecanismo mantido para períodos futuros |
+| Base da `mudanca_tom` tocando o período | `mudanca_tom` vazia | A base exige a janela inteira coberta |
 | Data coberta sem notícia | `qtd = 0`; tom, extremo e `mudanca_tom` vazios | É tratado como fato: "não houve notícia" |
 | Notícia sem probabilidade | Conta em `qtd`; fora dos scores | Ausente, nunca neutra |
 | Histórico curto | Variável vazia | Mínimos da seção 4 |
@@ -326,7 +326,7 @@ Todos em `processamento/config/parametros.yaml`, salvo aviso.
 | `experimento.janela_dias_entre_origens` | 1 | Distância máxima por título |
 | `experimento.titulo_palavras_min_entre_origens` | 5 | Mínimo de palavras |
 | `experimento.principais.*` | `cvm_ipe`; `reportagem`; `protagonista`, `citada_com_fato` | Versão `principais` |
-| `experimento.periodos_sem_coleta` | 2025-01-01 a 2025-07-31 | Colunas de notícias vazias |
+| `experimento.periodos_sem_coleta` | Vazia desde 08/11/2026 (antes, 2025-01-01 a 2025-07-31; `docs/conferencia_rodada_003.md`) | Colunas de notícias vazias |
 | `experimento.noticias_mes_fracao_minima` | 0,25 | Só o aviso do diagnóstico |
 | `experimento.retornos` | 1, 5, 20 | `ret_*` |
 | `experimento.exposicao_pregoes` / `_minimo` | 120 / 60 | `exposicao_*` |
@@ -337,7 +337,7 @@ Todos em `processamento/config/parametros.yaml`, salvo aviso.
 | `fase1.beta_pregoes` / `beta_minimo` | 252 / 120 | `beta` |
 | `fase1.base_defasagem_max_pregoes` | 5 | `ret_*`, `ret_vs_setor`, suspeitos |
 | `fase1.retorno_suspeito_min` / `_max` | −0,75 / +1,00 | Máscaras, alvo e `dy_12m` |
-| `experimento.periodos_sem_coleta_cvm` | 2023-01-01 a 2023-12-31; 2025-01-01 a 2025-07-31 | `fato_relevante_cvm` vazia |
+| `experimento.periodos_sem_coleta_cvm` | Vazia desde 03/11/2026 (antes, 2023 e jan–jul/2025) | `fato_relevante_cvm` vazia |
 | `fundamentos.meses_janela` | 12 | `dy_12m` |
 | `fundamentos.balanco_idade_max_meses` | 15 | `dias_desde_resultado`, `var_lucro_aa` |
 | `treino.semente` | 20261023 | `controle_sorteado` |
@@ -365,7 +365,7 @@ Todos em `processamento/config/parametros.yaml`, salvo aviso.
    | 07–10/2026 | ~21.500 | Com `wordpress` em 10/2026 |
 
    **O teste final (desde 23/06/2026) tem bem mais notícias por mês do que o desenvolvimento.**
-2. **Buraco de jan–jul/2025.** Janeiro tem 38 artigos e fevereiro a julho têm zero, em todas as origens. Tratado por `periodos_sem_coleta`; o diagnóstico avisa quando a coleta preencher.
+2. **Buraco de jan–jul/2025.** Janeiro tem 38 artigos e fevereiro a julho têm zero, em todas as origens. Tratado por `periodos_sem_coleta` até 08/11/2026. **Resolvido:** a coleta preencheu as 3 origens, e a lista ficou vazia no dataset da rodada 3 (`docs/conferencia_rodada_003.md`; jan–jul/2025 com 2,8 a 3,8 notícias por linha).
 3. **`cvm_ipe` não existe em 2023** nem de 02 a 07/2025. A especificação não registra o de 2023.
 4. **`wordpress` marca mais ações por artigo:** ~2,3 pares por artigo em 2021, contra ~1,15 no `google_news`. Isso muda `qtd` e o tom por empresa nos anos com essa origem.
 5. **A amostra manual da `wordpress`** (`docs/validacao_wordpress.md`) não foi revisada; a origem entrou por decisão, com a coleta confirmando a fonte.

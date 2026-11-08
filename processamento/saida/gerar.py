@@ -22,7 +22,7 @@ from processamento.experimento import dataset as exp_dataset
 from processamento.experimento import modelos, treino
 from processamento.experimento.dataset import AVISO_SMLL_AUSENTE, DadosExperimento, montar_dataset
 from processamento.experimento.parametros import carregar_parametros_experimento, carregar_parametros_treino
-from processamento.fatos.fundamentos import carregar_parametros_fundamentos
+from processamento.fatos.fundamentos import avisos_quantidade_suspeita_manual, carregar_parametros_fundamentos
 from processamento.fatos.multiplos import multiplos_diarios
 from processamento.fatos.precos import carregar_parametros_precos, mapas_cadastro, pares_do_painel
 from processamento.rotina import checagem as checagem_diaria
@@ -188,6 +188,7 @@ def gerar(d: date, *, ler=None, pasta_saida: Path | None = None, pasta_modelos: 
         aviso_suspeitos = AVISO_SUSPEITOS_FALHA.format(tipo=type(erro).__name__)
     if aviso_suspeitos is not None:
         avisos.append(aviso_suspeitos)
+    avisos.extend(avisos_quantidade_suspeita_manual(params_fund.quantidade_suspeita_manual, ins.t))
 
     # Cálculos compartilhados entre pacotes: calculados no primeiro uso; se falham, o pacote que usa vira aviso.
     @functools.cache

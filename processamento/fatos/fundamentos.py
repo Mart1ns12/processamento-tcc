@@ -9,8 +9,10 @@ from __future__ import annotations
 
 import dataclasses
 import math
+import re
 import unicodedata
 from dataclasses import dataclass
+from datetime import date
 
 import pandas as pd
 
@@ -53,6 +55,13 @@ _CHAVES_FUNDAMENTOS = {
     "subsetores_financeiros", "meses_janela", "anos_payout", "anos_historico_proventos", "pvp_minimo_plausivel",
     "pvp_maximo_plausivel_x1000", "balanco_idade_max_meses",
 }
+_CHAVES_OPCIONAIS_FUNDAMENTOS = {"quantidade_suspeita_manual"}  # ausente = lista vazia
+_CHAVES_ENTRADA_MANUAL = ("ticker", "desde", "motivo")
+_DATA_ISO = re.compile(r"\d{4}-\d{2}-\d{2}")
+AVISO_QUANTIDADE_MANUAL = (
+    "Quantidade de ações tratada como suspeita por decisão manual (fundamentos.quantidade_suspeita_manual): "
+    "{ticker} desde {desde} ({motivo}). Valor de mercado, P/L, P/VP e payout saem indisponíveis."
+)
 
 
 class ErroParametrosFundamentos(Exception):
@@ -70,6 +79,7 @@ class ParametrosFundamentos:
     pvp_minimo_plausivel: float
     balanco_idade_max_meses: int = 15
     pvp_maximo_plausivel_x1000: float = math.inf
+    quantidade_suspeita_manual: tuple[tuple[str, date, str], ...] = ()  # (ticker, desde, motivo)
 
 
 def _inteiro_positivo(valor: object, onde: str) -> int:
@@ -93,12 +103,54 @@ def _numero_maior_que_zero(valor: object, onde: str) -> float:
     return float(valor)
 
 
+def _data_manual(valor: object, onde: str) -> date:
+    """Confere uma data AAAA-MM-DD (texto entre aspas no YAML) ou um objeto date; senão levanta o erro."""
+    if isinstance(valor, date):
+        return date(valor.year, valor.month, valor.day)
+    if isinstance(valor, str) and _DATA_ISO.fullmatch(valor):
+        try:
+            return date.fromisoformat(valor)
+        except ValueError:
+            pass
+    raise ErroParametrosFundamentos(f"{onde} deve ser uma data AAAA-MM-DD válida, entre aspas (recebeu {valor!r})")
+
+
+def _quantidade_suspeita_manual(valor: object) -> tuple[tuple[str, date, str], ...]:
+    """Lista de `{ticker, desde, motivo}` → triplas (ticker, desde, motivo); levanta `ErroParametrosFundamentos` se não bater."""
+    if not isinstance(valor, list):
+        raise ErroParametrosFundamentos("fundamentos.quantidade_suspeita_manual deve ser uma lista")
+    triplas: list[tuple[str, date, str]] = []
+    vistos: set[str] = set()
+    for i, item in enumerate(valor):
+        onde = f"fundamentos.quantidade_suspeita_manual[{i}]"
+        if not isinstance(item, dict):
+            raise ErroParametrosFundamentos(f"{onde} deve ser um mapeamento com ticker, desde e motivo (recebeu {item!r})")
+        faltantes = [c for c in _CHAVES_ENTRADA_MANUAL if c not in item]
+        if faltantes:
+            raise ErroParametrosFundamentos(f"faltam chaves em {onde}: {faltantes}")
+        extras = set(item) - set(_CHAVES_ENTRADA_MANUAL)
+        if extras:
+            raise ErroParametrosFundamentos(f"chave desconhecida em {onde}: {sorted(extras)}")
+        ticker = item["ticker"]
+        if not isinstance(ticker, str) or not ticker.strip():
+            raise ErroParametrosFundamentos(f"{onde}.ticker deve ser um texto não vazio (recebeu {ticker!r})")
+        motivo = item["motivo"]
+        if not isinstance(motivo, str) or not motivo.strip():
+            raise ErroParametrosFundamentos(f"{onde}.motivo deve ser um texto não vazio (recebeu {motivo!r})")
+        ticker = ticker.strip()
+        if ticker in vistos:
+            raise ErroParametrosFundamentos(f"ticker repetido em fundamentos.quantidade_suspeita_manual: {ticker!r}")
+        vistos.add(ticker)
+        triplas.append((ticker, _data_manual(item["desde"], f"{onde}.desde"), motivo))
+    return tuple(triplas)
+
+
 def carregar_parametros_fundamentos(caminho: str | None = None) -> ParametrosFundamentos:
     """Lê o bloco `fundamentos` (do caminho dado ou do parametros.yaml) e valida cada chave."""
     bloco = calendario.carregar_parametros(caminho).get("fundamentos")
     if not isinstance(bloco, dict):
         raise ErroParametrosFundamentos("falta o bloco fundamentos no arquivo de parâmetros")
-    desconhecidas = set(bloco) - _CHAVES_FUNDAMENTOS
+    desconhecidas = set(bloco) - _CHAVES_FUNDAMENTOS - _CHAVES_OPCIONAIS_FUNDAMENTOS
     if desconhecidas:
         raise ErroParametrosFundamentos(f"chave desconhecida no bloco fundamentos: {sorted(desconhecidas)}")
     faltantes = _CHAVES_FUNDAMENTOS - set(bloco)
@@ -128,6 +180,7 @@ def carregar_parametros_fundamentos(caminho: str | None = None) -> ParametrosFun
         balanco_idade_max_meses=_inteiro_positivo(
             bloco["balanco_idade_max_meses"], "fundamentos.balanco_idade_max_meses"
         ),
+        quantidade_suspeita_manual=_quantidade_suspeita_manual(bloco.get("quantidade_suspeita_manual", [])),
     )
 
 
@@ -233,6 +286,19 @@ def quantidade_suspeita(vm: tuple[float, str], foto: FotoBalanco, limite: float,
     return p < limite and p * 1000 <= teto_x1000
 
 
+def cnpjs_suspeita_manual(lista: tuple[tuple[str, date, str], ...], cnpj_de: dict[str, str], data) -> set[str]:
+    """CNPJs dos tickers da lista manual com `desde` <= `data` (ticker sem CNPJ em `cnpj_de` é ignorado)."""
+    dia = pd.Timestamp(data).date()
+    return {cnpj_de[ticker] for ticker, desde, _ in lista if desde <= dia and cnpj_de.get(ticker)}
+
+
+def avisos_quantidade_suspeita_manual(lista: tuple[tuple[str, date, str], ...], t) -> list[str]:
+    """Um aviso por entrada da lista manual já ativa em `t` (`desde` <= t); sem entrada ativa, []."""
+    dia = pd.Timestamp(t).date()
+    return [AVISO_QUANTIDADE_MANUAL.format(ticker=ticker, desde=desde.isoformat(), motivo=motivo)
+            for ticker, desde, motivo in lista if desde <= dia]
+
+
 def limite_do_balanco(data_fim_periodo, meses: int) -> pd.Timestamp:
     """Último dia em que o balanço vale: fim do mês de (data_fim_periodo + `meses` meses)."""
     return pd.Timestamp(data_fim_periodo).normalize() + pd.DateOffset(months=meses) + pd.offsets.MonthEnd(0)
@@ -267,6 +333,7 @@ def indicadores_empresa(
     financeiro: bool,
     pvp_minimo: float | None = None,
     pvp_maximo_x1000: float = math.inf,
+    suspeita_forcada: bool = False,
 ) -> dict[str, tuple[float, str]]:
     """Indicadores da empresa em t: P/L, P/VP, ROE, payout, margens, EBITDA e endividamento.
 
@@ -274,10 +341,12 @@ def indicadores_empresa(
     tabela da F3a do plano). P/L com lucro negativo mantém o valor (vm/L) e o status
     `lucro_negativo`; com lucro zero o valor é NaN.
     Se `pvp_minimo` não for None e a quantidade de ações for suspeita (`quantidade_suspeita`, com
-    `pvp_maximo_x1000` como teto de P/VP × 1000), valor de mercado e pago viram indisponíveis antes das contas:
+    `pvp_maximo_x1000` como teto de P/VP × 1000), ou se `suspeita_forcada` (lista manual,
+    `quantidade_suspeita_manual`), valor de mercado e pago viram indisponíveis antes das contas:
     P/L, P/VP e payout saem indisponíveis.
     """
-    if pvp_minimo is not None and quantidade_suspeita(vm, foto, pvp_minimo, pvp_maximo_x1000):
+    automatica = pvp_minimo is not None and quantidade_suspeita(vm, foto, pvp_minimo, pvp_maximo_x1000)
+    if suspeita_forcada or automatica:
         vm = _falha(INDISPONIVEL)
         pago = _falha(INDISPONIVEL)
     base = foto.status_base
@@ -528,6 +597,7 @@ def calcular_fundamentos_no_dia(t, cal, dados: DadosFundamentos, exclusoes: Excl
     # Indicadores por empresa (CNPJ): uma vez por CNPJ, copiados para cada ticker.
     por_empresa: dict[str, dict[str, tuple[float, str]]] = {}
     financeira_cnpj: dict[str, bool] = {}
+    forcadas = cnpjs_suspeita_manual(params.quantidade_suspeita_manual, cnpj_de, ts)
     for cnpj in sorted({cnpj_de[k] for k in tickers if cnpj_de.get(k)}):
         foto = foto_dentro_do_prazo(foto_balanco(dados.balancos, cnpj, ts, exclusoes), ts, params.balanco_idade_max_meses)
         vm = valor_de_mercado(cnpj, fech, cad, tickers, acoes_na_data(disp, cnpj, ts))
@@ -540,7 +610,8 @@ def calcular_fundamentos_no_dia(t, cal, dados: DadosFundamentos, exclusoes: Excl
         )
         por_empresa[cnpj] = indicadores_empresa(foto, vm, pago, financeira_cnpj[cnpj],
                                                 pvp_minimo=params.pvp_minimo_plausivel,
-                                                pvp_maximo_x1000=params.pvp_maximo_plausivel_x1000)
+                                                pvp_maximo_x1000=params.pvp_maximo_plausivel_x1000,
+                                                suspeita_forcada=cnpj in forcadas)
 
     celulas: dict[str, dict[str, tuple[float, str]]] = {}
     financeira_de: dict[str, bool] = {}
@@ -581,17 +652,18 @@ def calcular_fundamentos_no_dia(t, cal, dados: DadosFundamentos, exclusoes: Excl
 
 def _cnpjs_com_quantidade_suspeita(ts: pd.Timestamp, dados: DadosFundamentos, exclusoes: Exclusoes,
                                    params: ParametrosFundamentos) -> set[str]:
-    """CNPJs do painel cuja quantidade de ações é suspeita em `ts` (mesma conta de `calcular_fundamentos_no_dia`)."""
+    """CNPJs do painel cuja quantidade de ações é suspeita em `ts` (regra automática ou lista manual; mesma conta de `calcular_fundamentos_no_dia`)."""
     cad = cadastro_na_data(dados.cadastro, dados.emissores, ts)
     tickers = tickers_do_painel(cad, exclusoes)
     _, cnpj_de = mapas_cadastro(cad)
     fech = grade_de_precos(dados.precos, [ts], "fechamento", tickers).iloc[0].to_dict()
     disp = acoes_disponiveis(dados.acoes_emitidas, dados.balancos, ts)
     suspeitas = set()
+    forcadas = cnpjs_suspeita_manual(params.quantidade_suspeita_manual, cnpj_de, ts)
     for cnpj in {cnpj_de[k] for k in tickers if cnpj_de.get(k)}:
         vm = valor_de_mercado(cnpj, fech, cad, tickers, acoes_na_data(disp, cnpj, ts))
         foto = foto_balanco(dados.balancos, cnpj, ts, exclusoes)
-        if quantidade_suspeita(vm, foto, params.pvp_minimo_plausivel, params.pvp_maximo_plausivel_x1000):
+        if cnpj in forcadas or quantidade_suspeita(vm, foto, params.pvp_minimo_plausivel, params.pvp_maximo_plausivel_x1000):
             suspeitas.add(cnpj)
     return suspeitas
 

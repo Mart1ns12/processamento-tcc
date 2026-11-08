@@ -1,6 +1,7 @@
 """Testes das seções por tema do diagnóstico (temas.py), com `ler` falso (sem banco)."""
 
 import copy
+import dataclasses
 import re
 from datetime import date, datetime
 
@@ -10,6 +11,7 @@ import pytest
 from fabrica_fundamentos import CNPJ, mundo
 from fabrica_precos import precos_de, pregoes_uteis
 from processamento import fontes
+from processamento.diagnostico import temas
 from processamento.diagnostico.esperado import ETAPAS_COLETA, ETAPAS_EXECUCAO_MANUAL
 from processamento.diagnostico.temas import (
     _data_referencia_usada,
@@ -23,6 +25,7 @@ from processamento.diagnostico.temas import (
     secao_tickers,
 )
 from processamento.exclusoes import Exclusoes
+from processamento.fatos.fundamentos import carregar_parametros_fundamentos
 
 
 @pytest.fixture(scope="module")
@@ -449,14 +452,30 @@ def _existentes_quantidade():
     return {fontes.nome_real(c) for c in ("precos", "mudancas_ticker", "cadastro", "balancos", "acoes_emitidas")}
 
 
-def test_quantidade_suspeita_sem_mudanca_nao_lista_empresas(mapa, tabelas_quantidade):
+def _params_com_manuais(monkeypatch, lista):
+    """`carregar_parametros_fundamentos` de temas devolve os parâmetros reais com a lista manual dada."""
+    real = carregar_parametros_fundamentos()
+    monkeypatch.setattr(temas, "carregar_parametros_fundamentos",
+                        lambda *_a, **_k: dataclasses.replace(real, quantidade_suspeita_manual=lista))
+
+
+@pytest.fixture
+def sem_manuais(monkeypatch):
+    """Parâmetros reais sem entradas manuais (para os testes da checagem automática)."""
+    _params_com_manuais(monkeypatch, ())
+
+
+SUBTITULO_MANUAIS = "Entradas manuais (fundamentos.quantidade_suspeita_manual)"
+
+
+def test_quantidade_suspeita_sem_mudanca_nao_lista_empresas(mapa, tabelas_quantidade, sem_manuais):
     secao = secao_quantidade_acoes(_ler_sem_banco, mapa, _existentes_quantidade(), Exclusoes(), t=T_QUANTIDADE)
-    assert secao["notas"] == ["nenhuma empresa com quantidade de ações suspeita em 2026-03-16"]
+    assert secao["notas"] == ["nenhuma empresa com quantidade de ações suspeita em 2026-03-16", "nenhuma entrada manual"]
     assert secao["tabelas"] == []
     assert secao["divergencias"] == []
 
 
-def test_quantidade_suspeita_com_quantidade_em_milhares_lista_a_empresa(mapa, tabelas_quantidade):
+def test_quantidade_suspeita_com_quantidade_em_milhares_lista_a_empresa(mapa, tabelas_quantidade, sem_manuais):
     acoes = tabelas_quantidade["acoes_emitidas"]
     mascara = acoes["cnpj"] == CNPJ["A"]
     acoes.loc[mascara, ["qtd_on", "qtd_pn"]] = acoes.loc[mascara, ["qtd_on", "qtd_pn"]] / 1000
@@ -465,7 +484,8 @@ def test_quantidade_suspeita_com_quantidade_em_milhares_lista_a_empresa(mapa, ta
 
     assert secao["notas"] == [
         "quantidade de ações suspeita (P/VP < 0,05 e P/VP × 1000 <= 20; v1-acoes_emitidas provavelmente em milhares) "
-        "em 1 empresas em 2026-03-16: valor de mercado, P/L, P/VP e payout = indisponivel (seção 6)"
+        "em 1 empresas em 2026-03-16: valor de mercado, P/L, P/VP e payout = indisponivel (seção 6)",
+        "nenhuma entrada manual",
     ]
     assert secao["divergencias"] == []
     assert len(secao["tabelas"]) == 1
@@ -480,16 +500,45 @@ def test_quantidade_suspeita_com_quantidade_em_milhares_lista_a_empresa(mapa, ta
     assert pvp == pytest.approx(0.0007076923076923077, rel=1e-9)
 
 
-def test_quantidade_suspeita_sem_pregao_do_ibov_nao_faz_a_checagem(mapa, tabelas_quantidade):
+def test_quantidade_suspeita_sem_pregao_do_ibov_nao_faz_a_checagem(mapa, tabelas_quantidade, sem_manuais):
     secao = secao_quantidade_acoes(_ler_sem_banco, mapa, _existentes_quantidade(), Exclusoes())
-    assert secao["notas"] == ["sem pregão com preço do IBOV: checagem não feita"]
+    assert secao["notas"] == ["sem pregão com preço do IBOV: checagem não feita", "nenhuma entrada manual"]
     assert secao["divergencias"] == []
 
 
-def test_quantidade_suspeita_com_tabela_ausente_pula_a_checagem(mapa):
+def test_quantidade_suspeita_com_tabela_ausente_pula_a_checagem(mapa, sem_manuais):
     secao = secao_quantidade_acoes(_ler_sem_banco, mapa, set(), Exclusoes(), t=T_QUANTIDADE)
-    assert len(secao["notas"]) == 5
-    assert all(n.startswith("pulada: tabela ausente") for n in secao["notas"])
+    assert len(secao["notas"]) == 6
+    assert all(n.startswith("pulada: tabela ausente") for n in secao["notas"][:5])
+    assert secao["notas"][5] == "nenhuma entrada manual"
+
+
+def test_quantidade_suspeita_entrada_manual_aparece_na_tabela(mapa, tabelas_quantidade, monkeypatch):
+    _params_com_manuais(monkeypatch, (("AAAA3", date(2026, 11, 3), "teste"),))
+    secao = secao_quantidade_acoes(_ler_sem_banco, mapa, _existentes_quantidade(), Exclusoes(), t=T_QUANTIDADE)
+    assert "entradas manuais em fundamentos.quantidade_suspeita_manual: 1; " in secao["notas"][-1]
+    assert secao["tabelas"] == [{
+        "subtitulo": SUBTITULO_MANUAIS,
+        "colunas": ["ticker", "desde", "motivo"],
+        "linhas": [["AAAA3", "2026-11-03", "teste"]],
+    }]
+
+
+def test_quantidade_suspeita_sem_entradas_manuais_nao_tem_tabela(mapa, tabelas_quantidade, sem_manuais):
+    secao = secao_quantidade_acoes(_ler_sem_banco, mapa, _existentes_quantidade(), Exclusoes(), t=T_QUANTIDADE)
+    assert secao["notas"][-1] == "nenhuma entrada manual"
+    assert secao["tabelas"] == []
+
+
+def test_quantidade_suspeita_entrada_manual_aparece_com_checagem_pulada(mapa, monkeypatch):
+    _params_com_manuais(monkeypatch, (("AAAA3", date(2026, 11, 3), "teste"),))
+    secao = secao_quantidade_acoes(_ler_sem_banco, mapa, set(), Exclusoes(), t=T_QUANTIDADE)
+    assert all(n.startswith("pulada: tabela ausente") for n in secao["notas"][:5])
+    assert secao["tabelas"] == [{
+        "subtitulo": SUBTITULO_MANUAIS,
+        "colunas": ["ticker", "desde", "motivo"],
+        "linhas": [["AAAA3", "2026-11-03", "teste"]],
+    }]
 
 
 def test_data_referencia_usada_segue_a_regra_de_acoes_na_data():

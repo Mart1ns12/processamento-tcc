@@ -65,7 +65,7 @@ def test_arquivo_real_carrega_os_valores_do_plano():
     assert params.origens_principais == ("cvm_ipe",)
     assert params.tipos_principais == ("reportagem",)
     assert params.papeis_principais == ("protagonista", "citada_com_fato")
-    assert params.periodos_sem_coleta == ((date(2025, 1, 1), date(2025, 7, 31)),)
+    assert params.periodos_sem_coleta == ()  # esvaziado em 08/11/2026: a coleta preencheu jan–jul/2025
     assert params.periodos_sem_coleta_cvm == ()
 
 

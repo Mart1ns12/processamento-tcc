@@ -174,6 +174,10 @@ fundamentos:
   anos_historico_proventos: 5   # soma por ano: ano de t e os N − 1 anteriores
   pvp_minimo_plausivel: 0.05    # P/VP calculado abaixo disto = quantidade de ações suspeita (v1-acoes_emitidas em milhares em ~25 empresas; seção 10)
   pvp_maximo_plausivel_x1000: 20.0  # P/VP × 1000 acima disto: multiplicar as ações por 1000 daria P/VP implausível, logo a quantidade não está em milhares
+  # Lista manual temporária (08/11/2026): força a "quantidade de ações suspeita" (seção 6) para a empresa do ticker
+  # a partir de `desde` (inclusive), até a coleta corrigir. Tirar a entrada quando a coleta corrigir. DATAS ENTRE ASPAS.
+  quantidade_suspeita_manual:
+    - {ticker: "RAIZ4", desde: "2026-11-03", motivo: "RAIZ4 virou RAIZ55 em 03/11/2026, cotada por lote de 100 (Ofício Circular B3 022/2026-VPE); quantidade de ações não acompanha o preço até a coleta corrigir"}
   balanco_idade_max_meses: 15   # balanço de referência com data_fim_periodo + N meses antes de t = velho: P/L, P/VP, ROE, margens, EBITDA, endividamento e payout 12m indisponíveis (seção 6)
 # Fase 2: dataset do experimento (seção 7.3; plano da etapa 5). Volatilidade, volume e beta vêm do bloco
 # fase1 (mesma conta do painel). A ret_vs_setor sempre exclui a empresa inteira (E14): fase1.setor_excluir não vale aqui.
@@ -194,8 +198,8 @@ experimento:
   titulo_palavras_min_entre_origens: 5
   # Períodos sem coleta de notícias: colunas de notícias vazias (nunca qtd = 0) e mudanca_tom vazia enquanto a base tocar o período.
   # DATAS ENTRE ASPAS. Rever quando a coleta preencher (o diagnóstico avisa, seção "Notícias por mês").
-  periodos_sem_coleta:
-    - {inicio: "2025-01-01", fim: "2025-07-31"}
+  # Esvaziado em 08/11/2026: a coleta preencheu jan–jul/2025 nas 3 origens (rodada 3, D5 revista). Mecanismo mantido.
+  periodos_sem_coleta: []
   # Só para a CVM (fato_relevante_cvm): pregões sem documentos coletados ficam vazios, nunca 0. Não mexe nas notícias.
   # Esvaziado em 03/11/2026: a coleta preencheu 2023 e jan–jul/2025. Mecanismo mantido (lista vazia = nenhum período).
   periodos_sem_coleta_cvm: []

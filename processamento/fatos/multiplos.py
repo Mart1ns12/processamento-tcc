@@ -22,6 +22,7 @@ from processamento.fatos.fundamentos import (
     LUCRO_NEGATIVO,
     DadosFundamentos,
     ParametrosFundamentos,
+    cnpjs_suspeita_manual,
     foto_dentro_do_prazo,
     indicadores_empresa,
     valor_de_mercado,
@@ -115,9 +116,11 @@ def _multiplos_no_trecho(dados: DadosFundamentos, cad: pd.DataFrame, idx: pd.Dat
             foto, qtd = cache[trecho]
             foto = foto_dentro_do_prazo(foto, ts, params.balanco_idade_max_meses)  # por dia: a idade cruza o limite dentro do trecho
             vm = valor_de_mercado(cnpj, fechs[i], cad_c, tickers, qtd)
+            forcada = cnpj in cnpjs_suspeita_manual(params.quantidade_suspeita_manual, cnpj_de, ts)  # por dia
             ind = indicadores_empresa(foto, vm, (math.nan, INDISPONIVEL), False,
                                       pvp_minimo=params.pvp_minimo_plausivel,
-                                      pvp_maximo_x1000=params.pvp_maximo_plausivel_x1000)
+                                      pvp_maximo_x1000=params.pvp_maximo_plausivel_x1000,
+                                      suspeita_forcada=forcada)
             pl_valor[i, colunas], pl_status[i, colunas] = ind["pl.valor"]
             pvp_valor[i, colunas], pvp_status[i, colunas] = ind["pvp.valor"]
 

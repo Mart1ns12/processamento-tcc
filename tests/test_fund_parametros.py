@@ -5,6 +5,7 @@ Nenhum teste usa banco ou rede.
 """
 
 import re
+from datetime import date
 
 import numpy as np
 import pytest
@@ -40,6 +41,11 @@ def test_yaml_real_traz_o_bloco_fundamentos():
         pvp_minimo_plausivel=0.05,
         balanco_idade_max_meses=15,
         pvp_maximo_plausivel_x1000=20.0,
+        quantidade_suspeita_manual=(
+            ("RAIZ4", date(2026, 11, 3),
+             "RAIZ4 virou RAIZ55 em 03/11/2026, cotada por lote de 100 (Ofício Circular B3 022/2026-VPE); "
+             "quantidade de ações não acompanha o preço até a coleta corrigir"),
+        ),
     )
 
 
