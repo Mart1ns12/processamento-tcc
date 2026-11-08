@@ -6,5 +6,6 @@ tickers_excluidos:            # fora do universo em TODAS as datas (viés de sob
   STBP3: deslistada, sem preço nas fontes
   # JBSS3 saiu em 03/11/2026: a JBS entra pelo emissor (v1-emissores_ticker) como ação ON até 08/06/2025.
 # 26/10/2026: Bradespar (03847461000192) saiu: tem balanços de 2021 a 2023; a regra do balanço velho cuida do resto.
+# 08/11/2026: Assaí (06057223000171) saiu: tem 11 balanços (1T20 a 3T21); o 3T21 vale até 31/12/2022 e a regra
+# do balanço velho cuida do resto. Balanços do 4T21 em diante seguem pedidos à coleta (pedidos_coleta.yaml).
 cnpjs_sem_balanco:            # empresa fica no painel e no modelo; indicadores de balanço = indisponivel
-  "06057223000171": só 3 ITRs de 2021 nas fontes (Assaí; pedido à coleta em 26/10/2026)

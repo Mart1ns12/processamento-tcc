@@ -17,7 +17,7 @@ def _escrever(tmp_path, texto: str) -> str:
 def test_arquivo_real_tem_as_exclusoes_decididas():
     exc = carregar_exclusoes(str(CAMINHO_EXCLUSOES))
     assert set(exc.tickers_excluidos) == {"CRFB3", "SRNA3", "STBP3"}
-    assert set(exc.cnpjs_sem_balanco) == {"06057223000171"}
+    assert set(exc.cnpjs_sem_balanco) == set()  # Assaí saiu em 08/11/2026 (regra do balanço velho)
 
 
 def test_cnpj_sem_aspas_recusado(tmp_path):

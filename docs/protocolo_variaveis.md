@@ -215,6 +215,8 @@ A regra decide pela quantidade de dado que mudou, nunca por resultado de modelo,
 
 **Controle (08/11/2026):** com o banco igual (1.343 notícias de papel nulo, 3.192 balanços, 586.136 notícias), o dataset regenerado com a mesma data saiu **byte a byte igual** ao congelado (mesmo sha256): 0% no total e em todos os grupos. O controle não exercitou o ruído do float32 da regravação diária dos preços, porque não houve regravação desde a geração.
 
+08/11: Assaí saiu de cnpjs_sem_balanco; medida 0% nas colunas do modelo; rodada 3 continua; dataset oficial segue c954… (`docs/medida_dados_novos_2026-11-08_assai.md`).
+
 Implementação (02/11/2026): a rotina passa a publicar a família da configuração congelada (`treino.familia_producao: "logistica"`); o modelo logístico é gravado em JSON (`logistica-AAAA-MM.json`, sem pickle), e a configuração da rodada 001 vale sem mudança.
 
 ### Rodada 3 (08/11/2026): resultado, decisão e desenho da sensibilidade
