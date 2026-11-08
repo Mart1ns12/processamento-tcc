@@ -280,3 +280,64 @@ def test_aviso_usa_o_periodo_real_lido_dos_dados():
         "o modelo só vale como oficial com `treino.modelo_oficial: true` (ESPECIFICACAO 3.4)."
     )
     assert _linha_historico({}) == "> Período de desenvolvimento não informado (ESPECIFICACAO 3.4)."
+
+
+def _metricas_veredito(supera_auc_log=False):
+    m = _metricas()
+    m["modelos"]["modelo_3"]["topk"]["5"]["taxa_acerto"] = 0.5167
+    m["modelos"]["modelo_3"]["auc_medio_pregao"] = 0.5165
+    m["modelos"]["logistica"]["topk"]["5"]["taxa_acerto"] = 0.5112
+    m["modelos"]["logistica"]["auc_medio_pregao"] = 0.5213
+    m["modelos"]["volatilidade"]["auc_medio_pregao"] = 0.5087
+    m["veredito_modelo_3"] = {
+        "acaso": "acima",
+        "supera_volatilidade": True,
+        "supera_volatilidade_auc": True,
+        "supera_logistica": True,
+        "supera_logistica_auc": supera_auc_log,
+        "referencia_terceira": "a logística",
+        "texto": "texto do veredito",
+    }
+    return m
+
+
+def test_supera_mostra_os_numeros_dos_dois_criterios():
+    texto = gerar_relatorio(_metricas_veredito())
+    assert (
+        "- Supera a logística: no top 5 sim (0,5167 × 0,5112); no AUC por pregão não (0,5165 × 0,5213)."
+    ) in texto
+    assert (
+        "- Supera a volatilidade: no top 5 sim (0,5167 × 0,4834); no AUC por pregão sim (0,5165 × 0,5087)."
+    ) in texto
+
+
+def test_supera_com_veredito_antigo_sem_flags_de_auc_mostra_nd():
+    m = _metricas_veredito()
+    del m["veredito_modelo_3"]["supera_logistica_auc"]
+    texto = gerar_relatorio(m)
+    assert "no AUC por pregão n/d (0,5165 × 0,5213)." in texto
+
+
+def _exemplo_com_chance(aprovada, exibir=False, valor=None):
+    m = _metricas()
+    m["calibracao"]["aprovada"] = aprovada
+    m["exemplo_top"]["top"] = [
+        {"posicao": 1, "ticker": "AAAA3", "chance": {"valor": valor, "exibir": exibir}, "motivos": []}
+    ]
+    return m
+
+
+def test_chance_aprovada_e_liberar_false_diz_oculta_por_decisao():
+    texto = gerar_relatorio(_exemplo_com_chance(aprovada=True))
+    assert "1. **AAAA3**, chance: oculta por decisão (calibração aprovada; liberar_chance false). Motivos:" in texto
+    assert "não conferida" not in texto
+
+
+def test_chance_nao_aprovada_diz_nao_aprovada():
+    texto = gerar_relatorio(_exemplo_com_chance(aprovada=False))
+    assert "1. **AAAA3**, chance: não exibida (calibração não aprovada). Motivos:" in texto
+
+
+def test_chance_aprovada_e_liberada_mostra_o_valor():
+    texto = gerar_relatorio(_exemplo_com_chance(aprovada=True, exibir=True, valor=0.61))
+    assert "1. **AAAA3**, chance: 61,0%. Motivos:" in texto

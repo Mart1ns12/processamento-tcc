@@ -319,15 +319,30 @@ def _secao_topk(metricas: dict) -> list[str]:
     return linhas
 
 
+def _linha_supera(nome: str, sup_top5, sup_auc, m3: dict, ref: dict) -> str:
+    """'- Supera X: no top 5 sim (modelo × referência); no AUC por pregão não (modelo × referência).'"""
+    taxa = ((m3.get("topk") or {}).get("5") or {}).get("taxa_acerto")
+    taxa_ref = ((ref.get("topk") or {}).get("5") or {}).get("taxa_acerto")
+    return (
+        f"- Supera {nome}: no top 5 {_sim_nao(sup_top5)} ({_num(taxa, 4)} × {_num(taxa_ref, 4)}); "
+        f"no AUC por pregão {_sim_nao(sup_auc)} "
+        f"({_num(m3.get('auc_medio_pregao'), 4)} × {_num(ref.get('auc_medio_pregao'), 4)})."
+    )
+
+
 def _secao_veredito(metricas: dict) -> list[str]:
     v = metricas.get("veredito_modelo_3")
     linhas = ["## 7. Veredito", ""]
     if not v:
         return linhas + ["Veredito não encontrado."]
+    modelos = metricas.get("modelos") or {}
+    m3 = modelos.get("modelo_3") or {}
     return linhas + [
         f"- Acaso: {ROTULO_ACASO.get(v.get('acaso'), NAO_INFORMADO)}.",
-        f"- Supera a volatilidade: {_sim_nao(v.get('supera_volatilidade'))}.",
-        f"- Supera {v.get('referencia_terceira', 'a logística')}: {_sim_nao(v.get('supera_logistica'))}.",
+        _linha_supera("a volatilidade", v.get("supera_volatilidade"), v.get("supera_volatilidade_auc"),
+                      m3, modelos.get("volatilidade") or {}),
+        _linha_supera(v.get("referencia_terceira", "a logística"), v.get("supera_logistica"),
+                      v.get("supera_logistica_auc"), m3, modelos.get("logistica") or {}),
         "",
         _texto(v.get("texto")),
     ]
@@ -453,8 +468,20 @@ def _secao_calibracao(metricas: dict) -> list[str]:
     return linhas + _tabela_de_dicts(cal.get("tabela"))
 
 
+def _mostra_chance(chance: dict, aprovada) -> str:
+    """Chance de um item do top: exibida, oculta por decisão (aprovada e liberar_chance false) ou não aprovada."""
+    if chance.get("exibir"):
+        return pct(chance.get("valor"))
+    if aprovada is True:
+        return "oculta por decisão (calibração aprovada; liberar_chance false)"
+    if aprovada is False:
+        return "não exibida (calibração não aprovada)"
+    return "não exibida (calibração não conferida)"
+
+
 def _secao_exemplo(metricas: dict) -> list[str]:
     ex = metricas.get("exemplo_top")
+    aprovada = (metricas.get("calibracao") or {}).get("aprovada")
     linhas = ["## 13. Exemplo de top 5", ""]
     if not ex:
         return linhas + ["Sem exemplo."]
@@ -466,7 +493,7 @@ def _secao_exemplo(metricas: dict) -> list[str]:
                 linhas.append(f"{i}. {_texto(item)}")
                 continue
             chance = item.get("chance") or {}
-            mostra = "não exibida (calibração não conferida)" if not chance.get("exibir") else pct(chance.get("valor"))
+            mostra = _mostra_chance(chance, aprovada)
             linhas.append(f"{item.get('posicao')}. **{item.get('ticker')}**, chance: {mostra}. Motivos:")
             for m in item.get("motivos") or []:
                 if not isinstance(m, dict):

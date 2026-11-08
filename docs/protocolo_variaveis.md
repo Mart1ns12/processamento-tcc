@@ -226,6 +226,14 @@ Registrado em 08/11/2026, **antes de rodar a sensibilidade da rodada 3**. Como o
 - Datasets de 2026-11-06: `todas` `c954b437c55e…`, `principais` `ca7d5bd161d1…` e `hora_real_noite` `d1909b4f5a6c…`.
 - Saída em `docs/busca_rodada_003_sensibilidade.md` e `.json`.
 
+**Implementação (08/11/2026):**
+- `treino.familia_producao` passou para `"xgb"`.
+- Os modelos `modelos/xgb-2026-06.json` e `xgb-m1-2026-06.json` foram treinados com `--configuracao docs/configuracao_final_rodada_003.json` e são provisórios. Eles reproduzem exatamente as métricas da busca 003: AUC por pregão do modelo 3 0,516488, do modelo 1 0,515976, ECE 0,015599.
+- Os `.meta.json` ganharam a chave `configuracao` (arquivo, sha256, rodadas de origem, vencedor), que o retreino mensal copia.
+- Os modelos anteriores estão em `modelos/antigos/`.
+- O painel identifica o vencedor `referencia` como XGBoost.
+- Como `sha_parametros` e `sha_codigo` mudaram, uma rodada nova com as mesmas entradas não conta como repetição da 3.
+
 ### Checklist antes do teste final (D1 a D10)
 
 Registrado em 04/11/2026 a partir das decisões acima, para o painel (aba Experimento) ler. Não muda as seções 1 a 7. Situação: `fechada` (decisão tomada) ou `pendente`. A D2 passa a contar como fechada sozinha quando `treino.teste_final.fim` for preenchido no `parametros.yaml`.

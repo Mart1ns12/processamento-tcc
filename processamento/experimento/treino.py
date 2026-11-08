@@ -602,22 +602,56 @@ def _supera(taxa: float | None, outra: float | None) -> bool:
     return taxa is not None and outra is not None and taxa > outra
 
 
+def _n4(x) -> str:
+    """Número com 4 casas e vírgula decimal, como no relatório; None vira n/d."""
+    return "n/d" if x is None else f"{x:.4f}".replace(".", ",")
+
+
+def _par(modelo, referencia) -> str:
+    return f"{_n4(modelo)} × {_n4(referencia)}"
+
+
+def _criterio(refs: list[tuple[str, bool, str]]) -> str:
+    """Texto de um critério (top 5 ou AUC por pregão). `refs`: (rótulo, superou, "modelo × referência")."""
+    ok = [f"{rotulo} ({par})" for rotulo, sup, par in refs if sup]
+    nok = [f"{rotulo} ({par})" for rotulo, sup, par in refs if not sup]
+    partes = []
+    if ok:
+        partes.append("superou " + " e ".join(ok))
+    if nok:
+        partes.append("não superou " + " nem ".join(nok))
+    return ", mas ".join(partes)
+
+
 def _veredito(modelos_bloco: dict, nome_terceira: str = "a logística") -> dict:
     """"Acima do acaso" só conta se o modelo 3 também superar a volatilidade e a referência logística no top 5.
 
     `nome_terceira` é o nome dessa referência no texto: "a logística", ou "o XGBoost" quando a família em
     produção é a logística (o slot "logistica" passa a ser o XGBoost de referência). A chave continua `supera_logistica`.
     """
-    top5 = modelos_bloco[MODELO_CALIBRADO]["topk"]["5"]
+    m3 = modelos_bloco[MODELO_CALIBRADO]
+    top5 = m3["topk"]["5"]
     situacao = top5["vs_acaso"]
-    taxa = top5["taxa_acerto"]
-    sup_vol = _supera(taxa, modelos_bloco["volatilidade"]["topk"]["5"]["taxa_acerto"])
-    sup_log = _supera(taxa, modelos_bloco["logistica"]["topk"]["5"]["taxa_acerto"])
-    if situacao == "acima" and sup_vol and sup_log:
-        texto = f"No top 5, o modelo 3 ficou acima do acaso e superou a regra da volatilidade e {nome_terceira} neste período."
-    elif situacao == "acima":
-        faltam = [nome for nome, ok in (("a regra da volatilidade", sup_vol), (nome_terceira, sup_log)) if not ok]
-        texto = "No top 5, o modelo 3 ficou acima do acaso, mas não superou " + " nem ".join(faltam) + "."
+    taxa, auc = top5["taxa_acerto"], m3.get("auc_medio_pregao")
+    vol, log = modelos_bloco["volatilidade"], modelos_bloco["logistica"]
+    taxa_vol, taxa_log = vol["topk"]["5"]["taxa_acerto"], log["topk"]["5"]["taxa_acerto"]
+    auc_vol, auc_log = vol.get("auc_medio_pregao"), log.get("auc_medio_pregao")
+    sup_vol = _supera(taxa, taxa_vol)
+    sup_log = _supera(taxa, taxa_log)
+    sup_auc_vol = _supera(auc, auc_vol)
+    sup_auc_log = _supera(auc, auc_log)
+    if situacao == "acima":
+        # a decisão continua sendo sup_vol e sup_log no top 5; o texto só mostra os números dos dois critérios
+        conector = " e " if sup_vol and sup_log else (", " if sup_vol or sup_log else ", mas ")
+        no_top5 = _criterio([
+            ("a regra da volatilidade", sup_vol, _par(taxa, taxa_vol)),
+            (nome_terceira, sup_log, _par(taxa, taxa_log)),
+        ])
+        no_auc = _criterio([
+            ("a regra da volatilidade", sup_auc_vol, _par(auc, auc_vol)),
+            (nome_terceira, sup_auc_log, _par(auc, auc_log)),
+        ])
+        texto = f"No top 5, o modelo 3 ficou acima do acaso{conector}{no_top5}; no AUC por pregão, {no_auc} neste período."
     elif situacao == "dentro":
         texto = "No top 5, o modelo 3 ainda não mostrou vantagem sobre o acaso."
     elif situacao == "abaixo":
@@ -625,6 +659,7 @@ def _veredito(modelos_bloco: dict, nome_terceira: str = "a logística") -> dict:
     else:
         texto = "Sem dados suficientes para comparar o modelo 3 com o acaso."
     return {"acaso": situacao, "supera_volatilidade": sup_vol, "supera_logistica": sup_log,
+            "supera_volatilidade_auc": sup_auc_vol, "supera_logistica_auc": sup_auc_log,
             "referencia_terceira": nome_terceira, "texto": texto}
 
 

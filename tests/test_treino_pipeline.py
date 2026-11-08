@@ -319,16 +319,48 @@ def test_ler_configuracao_recusa_familia_diferente_da_producao(ambiente, tmp_pat
     assert cfg["colunas_3"] == json.loads(caminho.read_text(encoding="utf-8"))["colunas_3"]
 
 
-def test_veredito_nomeia_a_terceira_referencia():
-    def bloco(taxa_modelo, taxa_vol, taxa_ref):
-        def top5(taxa, situacao="acima"):
-            return {"topk": {"5": {"taxa_acerto": taxa, "vs_acaso": situacao}}}
-        return {treino.MODELO_CALIBRADO: top5(taxa_modelo), "volatilidade": top5(taxa_vol), "logistica": top5(taxa_ref)}
+def _bloco_veredito(taxa_modelo, taxa_vol, taxa_ref, auc_modelo=0.6, auc_vol=0.5, auc_ref=0.4):
+    def modelo(taxa, auc):
+        return {"auc_medio_pregao": auc, "topk": {"5": {"taxa_acerto": taxa, "vs_acaso": "acima"}}}
+    return {
+        treino.MODELO_CALIBRADO: modelo(taxa_modelo, auc_modelo),
+        "volatilidade": modelo(taxa_vol, auc_vol),
+        "logistica": modelo(taxa_ref, auc_ref),
+    }
 
-    venceu = treino._veredito(bloco(0.6, 0.5, 0.4), "o XGBoost")
+
+def test_veredito_nomeia_a_terceira_referencia():
+    venceu = treino._veredito(_bloco_veredito(0.6, 0.5, 0.4), "o XGBoost")
     assert venceu["supera_logistica"] is True and venceu["referencia_terceira"] == "o XGBoost"
-    assert venceu["texto"].endswith("e o XGBoost neste período.")
-    perdeu = treino._veredito(bloco(0.6, 0.5, 0.7), "o XGBoost")
-    assert perdeu["texto"].endswith("mas não superou o XGBoost.")
-    padrao = treino._veredito(bloco(0.6, 0.5, 0.4))
-    assert padrao["texto"].endswith("e a logística neste período.") and padrao["referencia_terceira"] == "a logística"
+    assert venceu["texto"].endswith("neste período.") and "e o XGBoost (0,6000 × 0,4000)" in venceu["texto"]
+    padrao = treino._veredito(_bloco_veredito(0.6, 0.5, 0.4))
+    assert padrao["referencia_terceira"] == "a logística" and "e a logística (0,6000 × 0,4000)" in padrao["texto"]
+
+
+def test_veredito_top5_e_auc_concordes_nao_tem_mas():
+    v = treino._veredito(_bloco_veredito(0.6, 0.5, 0.4), "o XGBoost")
+    assert v["texto"] == (
+        "No top 5, o modelo 3 ficou acima do acaso e superou a regra da volatilidade (0,6000 × 0,5000) "
+        "e o XGBoost (0,6000 × 0,4000); no AUC por pregão, superou a regra da volatilidade (0,6000 × 0,5000) "
+        "e o XGBoost (0,6000 × 0,4000) neste período."
+    )
+    assert "mas não" not in v["texto"]
+    assert v["supera_logistica"] is True and v["supera_logistica_auc"] is True
+
+
+def test_veredito_top5_maior_e_auc_menor_diz_mas_nao():
+    v = treino._veredito(_bloco_veredito(0.6, 0.5, 0.4, auc_ref=0.7), "o XGBoost")
+    assert v["supera_logistica"] is True and v["supera_logistica_auc"] is False
+    assert v["supera_volatilidade_auc"] is True
+    assert v["texto"] == (
+        "No top 5, o modelo 3 ficou acima do acaso e superou a regra da volatilidade (0,6000 × 0,5000) "
+        "e o XGBoost (0,6000 × 0,4000); no AUC por pregão, superou a regra da volatilidade (0,6000 × 0,5000), "
+        "mas não superou o XGBoost (0,6000 × 0,7000) neste período."
+    )
+
+
+def test_veredito_sem_superar_nenhum_criterio_na_referencia():
+    v = treino._veredito(_bloco_veredito(0.6, 0.7, 0.7, auc_vol=0.7, auc_ref=0.7), "o XGBoost")
+    assert v["supera_logistica"] is False and v["supera_volatilidade"] is False
+    assert "mas não superou a regra da volatilidade (0,6000 × 0,7000) nem o XGBoost (0,6000 × 0,7000)" in v["texto"]
+    assert "no AUC por pregão, não superou a regra da volatilidade (0,6000 × 0,7000) nem o XGBoost" in v["texto"]

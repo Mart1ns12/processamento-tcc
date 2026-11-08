@@ -39,7 +39,7 @@ O processamento tem duas frentes:
 | Fase | O que faz |
 |---|---|
 | **Fase 1: painel de fatos** | Calcula indicadores 100% confirmados (cotação, rentabilidade, comparações, risco, valuation, dividendos). **Nenhuma previsão** |
-| **Fase 2: experimento** | Regressão logística + sentimento do FinBERT estimam quais ações têm maior chance de **superar o Ibovespa no próximo pregão**. Mostrado como **"5 ações com maior chance de superar o Ibovespa (experimento)"**, com selo "em avaliação" e histórico de acertos contra o acaso |
+| **Fase 2: experimento** | XGBoost + sentimento do FinBERT estimam quais ações têm maior chance de **superar o Ibovespa no próximo pregão**. Mostrado como **"5 ações com maior chance de superar o Ibovespa (experimento)"**, com selo "em avaliação" e histórico de acertos contra o acaso |
 
 **Pergunta do TCC:** o sentimento das notícias, lido pelo FinBERT, ajuda a prever o desempenho das ações? Foco nas **notícias do dia t e da noite, até as 8h de t+1** (antes da abertura do pregão previsto). Como a maioria das notícias do Google News só tem a data (cerca de 90% por ano; só a `wordpress` tem hora em tudo, seção 7.2), não dá para isolar as publicadas depois do fechamento; esse efeito é medido num teste extra só com as notícias de hora real (seção 7.5).
 
@@ -265,7 +265,7 @@ Fonte dos dados: tabelas da seção 3. `fech` = `fechamento`; `aj` = `fechamento
 | `exposicao_dolar` | Beta contra o USDBRL (120 pregões) × variação do dólar no dia | Complementar |
 | `exposicao_petroleo` | Idem com o BRENT | Complementar |
 
-**Colunas do protocolo** (`docs/protocolo_variaveis.md`; decidido em 02/11/2026). Ficam no dataset, em rank na preparação. O **bloco A** (`posicao_fechamento`, `mom_12_1`, `liquidez_20d`, `ret_idio_5d`) foi adotado na rodada 1 e **entra na logística em produção** (ao vivo, com a configuração congelada). Os blocos B, C, D, E e o controle ficam **fora dos modelos**: só nos testes de bloco (`preparacao.BLOCOS_PROTOCOLO`).
+**Colunas do protocolo** (`docs/protocolo_variaveis.md`; decidido em 02/11/2026). Ficam no dataset, em rank na preparação. O **bloco A** (`posicao_fechamento`, `mom_12_1`, `liquidez_20d`, `ret_idio_5d`) foi adotado nas rodadas 1 e 3 e **entra no modelo em produção** (XGBoost, ao vivo, com a configuração congelada da rodada 3). Os blocos B, C, D, E e o controle ficam **fora dos modelos**: só nos testes de bloco (`preparacao.BLOCOS_PROTOCOLO`).
 
 | Variável | Cálculo | Bloco |
 |---|---|---|
@@ -305,7 +305,7 @@ O **modelo 2** (+ notícias do pregão) **saiu** em 23/10/2026 (N2-A): com ~89% 
 - O filtro é feito **no processamento**; a coleta mantém o filtro dela desligado (`ENTREGA_FILTRO_JUIZA=false`).
 
 Ordem: primeiro só as **essenciais**; depois os **complementares**, um bloco por vez, mantendo só o que melhora na validação.
-XGBoost, ponto de partida (referência de comparação, também com a logística em produção): `n_estimators=300, max_depth=3, learning_rate=0.03, subsample=0.8, colsample_bytree=0.8, min_child_weight=50, reg_lambda=5`. Grade pequena escolhida pela validação.
+XGBoost, ponto de partida: `n_estimators=300, max_depth=3, learning_rate=0.03, subsample=0.8, colsample_bytree=0.8, min_child_weight=50, reg_lambda=5`. **É o modelo em produção** (rodada 3: nenhum candidato passou na busca, então fica a referência; `docs/configuracao_final_rodada_003.json`). Sem `--configuracao`, a grade pequena é escolhida pela validação (F7).
 
 ### 7.5 Avaliação
 - **Walk-forward mensal** (treina no passado, testa no mês seguinte, avança), com **embargo de 1 pregão**.
@@ -315,12 +315,12 @@ XGBoost, ponto de partida (referência de comparação, também com a logística
 - **Corte principal: top 5** (o que vai para a tela). Avaliar também o **top 3** com as mesmas métricas, para mostrar que o resultado não depende do corte.
 - Métricas: acerto do top 5 × **faixa do acaso** (10 mil sorteios aleatórios de 5 ações por dia, faixa de 95%); retorno médio do top 5 − IBOV; **top 5 × últimos 5**; AUC geral e AUC médio por pregão; IC por bootstrap em blocos de pregão; **robustez por ano**; **análise de sensibilidade** (último ano × anteriores), sempre calculada.
 - **Teste extra "notícia depois do fechamento" (pedido em 23/10/2026; implementar na etapa 6):** recalcular as variáveis de notícias usando **só as notícias com hora real** (`precisao_hora = 'hora'`) e **só a noite** (do fechamento de t até 08:00 de t+1; `inicio_janela = "fechamento"`), e comparar com o modelo 3 na mesma validação. Mede o efeito das notícias publicadas depois do fechamento. No Google News a amostra é pequena (~9% com hora real, ~47% delas na noite). A `wordpress` tem hora real em tudo (seção 3.1), então a amostra fica concentrada em 2021, 2022 e nos meses de 2026 com essa origem: informar as contagens por ano e por origem e tratar como exploratório.
-- **Referências de comparação** (rodadas com a mesma validação): escolha ao acaso (faixa acima), regra simples só com a volatilidade (ações mais calmas primeiro) e **regressão logística** com as mesmas variáveis (com ela em produção, a terceira referência passa a ser o XGBoost de ponto de partida). O modelo em produção só "ganha" se superar as três.
+- **Referências de comparação** (rodadas com a mesma validação): escolha ao acaso (faixa acima), regra simples só com a volatilidade (ações mais calmas primeiro) e **regressão logística** com as mesmas variáveis (se uma rodada escolher a logística, a terceira referência passa a ser o XGBoost do ponto de partida; protocolo, seção 6). O XGBoost em produção só "ganha" se superar as três.
 - Diferença dentro da faixa do acaso = "ainda não mostrou vantagem sobre o acaso".
 
 ### 7.6 Previsão diária (top 5)
 - Ordenar as ações do dia pela probabilidade do modelo e pegar as 5 primeiras. Na tela: **"5 ações com maior chance de superar o Ibovespa (experimento)"**.
-- **Motivos:** contribuições do modelo em produção (logística: a parte de cada variável no logit, com o viés; XGBoost: `pred_contribs`), traduzidas em frases ("Notícias da noite com tom positivo (3 notícias)"), com efeito `ajudou`/`atrapalhou`/`neutro`.
+- **Motivos:** contribuições do XGBoost em produção (`pred_contribs`; na logística, mantida no código, a parte de cada variável no logit, com o viés). Em ação sem tom no dia, as contribuições de `noticias_dia_qtd`, `noticias_dia_tom` e `noticias_dia_extremo` somam-se num único motivo "Sem notícias", em qualquer família; só o texto muda, não as contribuições (decidido em 08/11/2026). As contribuições são traduzidas em frases ("Notícias da noite com tom positivo (3 notícias)"), com efeito `ajudou`/`atrapalhou`/`neutro`.
 - **Chance:** calculada, mas `exibir = false` até a calibração ser conferida (se o modelo diz 60%, ~60% acontecem). Quando exibida, vem ao lado da referência do acaso, 50% (`chance.referencia_acaso`); com a chance escondida, a referência também vai `null`, para a interface não mostrar "50%" por engano.
 - Gravar o top 5 do dia no momento da geração (histórico nunca recalculado depois).
 - No dia seguinte, fechar o resultado: `superou` = retorno da ação > retorno do IBOV no pregão previsto. Retorno suspeito nesse pregão (seção 6): retorno `null`, `superou` vazio, não conta como acerto, e `resultado_incompleto = true`.
@@ -329,7 +329,7 @@ XGBoost, ponto de partida (referência de comparação, também com a logística
 - **Qual modelo gera o top 5:** o **modelo 3** (com as notícias do dia e da noite, até 08:00 de t+1), porque é ele que testa a hipótese do TCC. Ele é mostrado mesmo que não supere o acaso: o selo "em avaliação" e o histórico existem para isso.
 - **Comparação ao vivo:** todo dia, gravar também (sem mostrar na tela) o top 5 do **modelo 1** (sem notícias) e o da **regra da volatilidade**. Assim, o histórico mostra, com dados de verdade e daqui para frente, se as notícias fazem diferença.
 - **Retreino mensal:** no primeiro pregão de cada mês, na própria rotina, depois da entrega e antes do top, sempre que o modelo do mês não existir e a rotina estiver em produção (`treino.teste_final.fim` preenchido). Corte = pregões antes do dia 1 do mês, menos o de embargo (o mesmo esquema do walk-forward). Metadados com `retreino` e as métricas do desenvolvimento (a validação não é refeita). Se faltar no mês, repete nos pregões seguintes (mesmo corte, mesmo modelo). A chave `treino.modelo_oficial` (R7) diz se o modelo é oficial. Os hiperparâmetros só mudam numa nova avaliação completa, nunca no retreino automático. Modelo de desenvolvimento de outra `versao_preparacao` impede o retreino (vira aviso; a rodada segue).
-- **Arquivo do modelo:** salvar em `modelos/<família>-AAAA-MM.json` (`logistica-AAAA-MM.json` com a logística em produção; JSON explícito, sem pickle), com um arquivo de metadados ao lado: `versao_preparacao`, variáveis usadas, período de treino, hiperparâmetros, métricas da validação, universo (`composicao_atual` ou histórica) e um hash do dataset. O `modelo_versao` do pacote `experimento_top` aponta para esse arquivo (nome sem o dia, como no exemplo da 8.3). O modelo 1, usado no top 5 sombra, vai em `modelos/<família>-m1-AAAA-MM.json` (F17).
+- **Arquivo do modelo:** salvar em `modelos/<família>-AAAA-MM.json` (o prefixo é `treino.familia_producao`: `xgb-AAAA-MM.json` desde a rodada 3, em JSON nativo do XGBoost; o código aceita também `logistica-AAAA-MM.json`; nunca pickle), com um arquivo de metadados ao lado: `versao_preparacao`, `familia`, variáveis usadas, período de treino, hiperparâmetros, a configuração de origem (`configuracao`: arquivo, sha256, rodadas e vencedor), métricas da validação, universo (`composicao_atual` ou histórica) e um hash do dataset. O `modelo_versao` do pacote `experimento_top` aponta para esse arquivo (nome sem o dia, como no exemplo da 8.3). O modelo 1, usado no top 5 sombra, vai em `modelos/<família>-m1-AAAA-MM.json` (F17).
 - **Antes do histórico completo:** o modelo pode ser treinado com o 1 ano atual **só para testar a rotina** (top 5 marcado com aviso "modelo provisório"; `valido_para_historico = false`). O modelo "oficial" e o histórico que vale para o TCC começam quando o histórico completo chegar.
 
 ---
@@ -568,7 +568,7 @@ Com ~1 ano de histórico, a etapa 6 é **só teste de funcionamento** (3.4): o r
 - **F14 Teste "hora real na noite" (7.5):** versão de dataset `hora_real_noite` (`precisao_hora = 'hora'` e `inicio_janela = "fechamento"`). Exploratório: a `mudanca_tom` fica quase toda vazia.
 - **F15 Bootstrap:** circular, em blocos de 5 pregões, 2000 reamostragens.
 - **F16 Calibração e chance:** ECE com 10 faixas; aprovada se ECE ≤ 0,02 com pelo menos 5000 linhas. A chance só é exibida com calibração aprovada **e** `liberar_chance: true` (decisão manual); até lá sai `valor: null`, `exibir: false`, `status: calibracao_nao_conferida` (como no exemplo da 8.3).
-- **F17 Modelos salvos:** `modelos/<família>-AAAA-MM.json` (modelo 3) e `modelos/<família>-m1-AAAA-MM.json` (modelo 1, top 5 sombra); a família é a de `treino.familia_producao` (logística em produção), cada um com `.meta.json` (colunas, período de treino, hiperparâmetros, semente, métricas, universo, sha256 do dataset, versões das bibliotecas). Antes do histórico completo: `provisorio: true`, treinados só com o desenvolvimento.
+- **F17 Modelos salvos:** `modelos/<família>-AAAA-MM.json` (modelo 3) e `modelos/<família>-m1-AAAA-MM.json` (modelo 1, top 5 sombra); a família é a de `treino.familia_producao` (`xgb` desde a rodada 3), cada um com `.meta.json` (colunas, período de treino, hiperparâmetros, configuração de origem, semente, métricas, universo, sha256 do dataset, versões das bibliotecas). Antes do histórico completo: `provisorio: true`, treinados só com o desenvolvimento.
 - **F18 Semente:** uma só, `20261023`, em tudo (XGBoost com `n_jobs=1`, sorteios, bootstrap, logística).
 - **F19 Saídas:** `saida/experimento/treino/dev-<data do dataset>/` (fora do git): `relatorio.md`, `metricas.json`, previsões e resumos diários. O treino lê só os CSV do dataset (nunca o banco).
 
@@ -697,7 +697,16 @@ Com ~1 ano de histórico, a etapa 6 é **só teste de funcionamento** (3.4): o r
 - **Busca:** a regressão logística (C = 1) venceu: ganho de AUC +0,00575 contra o XGBoost do ponto de partida, que passa a ser a terceira referência. Configuração: `docs/configuracao_final_rodada_001.json`. Relatório: `docs/busca_rodada_001.md`.
 - **Reprodução:** protocolo e busca repetidos com as mesmas entradas deram o mesmo `sha_resultado`.
 - **Comparação do TCC no desenvolvimento (exploratória, `modelo_oficial` false):** modelo 3 × modelo 1 com a logística, ganho de AUC −0,00040 (IC 95% de −0,00201 a 0,00118). Anexo: `docs/busca_rodada_001_comparacao_tcc.md`. Sensibilidade: `docs/busca_rodada_001_sensibilidade.md`.
-- **Produção ainda é XGBoost:** treino, top 5, motivos e retreino não aceitam a logística, e os motivos ainda não têm texto para as 4 colunas do bloco A. As seções 7.3, 7.4, 7.6 e 7.7 descrevem o estado atual e mudam com esse ajuste.
+- **Produção:** passou para a logística em 02/11/2026 (commit 7ccdf88, com os textos dos motivos do bloco A) e voltou ao XGBoost com a rodada 3 (acréscimo de 08/11/2026, abaixo).
+
+**Acréscimo de 08/11/2026 (resultado da rodada 3; `docs/protocolo_variaveis.md`, seção 8)**
+
+- **Dataset:** v7, `dataset-todas-2026-11-06.csv`, sha256 `c954b437c55e…` (conferência em `docs/conferencia_rodada_003.md`). Cópia congelada fora do repositório e no Google Drive do usuário (D6 fechada).
+- **Protocolo:** só o bloco A adotado; B, C, D, E e o controle reprovados. Reprodução (rodada 4) com o mesmo `sha_resultado`.
+- **Busca:** nenhum candidato aprovado, então vence a referência, o XGBoost do ponto de partida (`docs/configuracao_final_rodada_003.json`). A logística entra no TCC só como achado ("quase venceu"): ganho de 0,00482 (≤ 0,005), IC 99,5% [−0,00018; 0,00981], queda do top 5 de 0,55 ponto percentual. Comparação com a rodada 1 em `docs/comparacao_rodadas_001_003.md`.
+- **Produção:** `treino.familia_producao: "xgb"`. Os modelos `modelos/xgb-2026-06.json` e `xgb-m1-2026-06.json` são provisórios (`modelo_oficial` false), treinados de 04/01/2021 a 19/06/2026, e reproduzem exatamente as métricas da busca 003. Os modelos antigos estão em `modelos/antigos/`.
+- **Comparação do TCC no desenvolvimento (exploratória):** modelo 3 × modelo 1 com o XGBoost, ganho de AUC por pregão de +0,00051 (IC 95% de −0,00178 a 0,00287). Top 5: 0,5167 × 0,5051. Sensibilidade em `docs/busca_rodada_003_sensibilidade.md` e comparação com a rodada 1 em `docs/comparacao_sensibilidade_001_003.md`.
+- **Hashes:** a mudança da família muda `sha_parametros`, e a da chave `configuracao` nos metadados muda `sha_codigo`. Uma rodada nova com as mesmas entradas não conta como repetição da 3.
 
 ## 10. Pendências externas (não bloqueiam a implementação)
 
