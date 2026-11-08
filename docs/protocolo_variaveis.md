@@ -197,6 +197,34 @@ No recorte, o dia só entra com pelo menos 5 linhas com alvo e as duas classes; 
 
 Implementação (02/11/2026): a rotina passa a publicar a família da configuração congelada (`treino.familia_producao: "logistica"`); o modelo logístico é gravado em JSON (`logistica-AAAA-MM.json`, sem pickle), e a configuração da rodada 001 vale sem mudança.
 
+### Rodada 3 (08/11/2026): resultado, decisão e desenho da sensibilidade
+
+Registrado em 08/11/2026, **antes de rodar a sensibilidade da rodada 3**. Como o resto desta seção, é registro: não muda as seções 1 a 7.
+
+**Situação.** O dataset é a v7 (`dataset-todas-2026-11-06.csv`, sha256 `c954b437c55e…`, conferência em `docs/conferencia_rodada_003.md`). É a rodada oficial pela D5 revista. Os hashes das regras são os mesmos das rodadas 1 e 2 (`sha_regras` `e275d3d6e8f1…` no protocolo e `dd967e28c1eb…` na busca).
+- Protocolo (`docs/protocolo_rodada_003.md`): só o bloco A foi adotado, e o controle foi reprovado (igual à rodada 1).
+- Busca (`docs/busca_rodada_003.md`): nenhum candidato foi aprovado, então fica a referência, XGBoost do ponto de partida (`docs/configuracao_final_rodada_003.json`).
+- A logística reprovou nos critérios 1 (ganho 0,00482 ≤ 0,005), 2 (IC 99,5% [−0,00018; 0,00981]) e 4 (queda do top 5 de 0,55 pp). Comparação com a rodada 1 em `docs/comparacao_rodadas_001_003.md`.
+
+**Decisões do usuário (08/11/2026):**
+
+| Tema | Decisão |
+|---|---|
+| Vencedor | Segue o protocolo: a rodada 3 é a oficial e o vencedor é o XGBoost do ponto de partida. A logística entra no TCC só como achado ("quase venceu"), nunca escolhida por fora das regras |
+| Efeito da seção 6 | Top 5, motivos (`pred_contribs`), calibração e `modelos/xgb-AAAA-MM.json` voltam ao desenho original. A terceira referência volta a ser a logística. O código da família logística em produção fica no código, testado, para uma rodada futura |
+| "Sem notícias" nos motivos | No XGBoost, como já acontecia na logística, as contribuições de `noticias_dia_qtd`, `noticias_dia_tom` e `noticias_dia_extremo` de um dia sem tom são somadas num único motivo "Sem notícias". **É só o texto do motivo:** o `pred_contribs` e a previsão não mudam |
+| Reprodução | A rodada 3 do protocolo e da busca é repetida com as mesmas entradas antes de mudar `treino.familia_producao` (que entra no `sha_parametros`) |
+| Congelado (substitui a linha de 02/11) | XGBoost 3/50 da configuração final da rodada 003 e colunas de `docs/protocolo_congelado_rodada_003.json`; referências: acaso, volatilidade e logística |
+| Dataset (substitui a linha de 02/11) | Treino no sha `c954b437c55e41f20a84e91a647964cc33a1c3cf4bb60df474f3f560c81851aa`, com cópia guardada fora do repositório; o sha do dataset do teste é registrado antes de rodar |
+| Modelos antigos | Arquivados em `modelos/antigos/`, sem apagar |
+| Sensibilidade | Só com a família vencedora |
+
+**Desenho da sensibilidade da rodada 3** (exploratória; fora de `docs/protocolo_tentativas.jsonl` e da contagem de testes; IC sem ajuste por comparações múltiplas):
+- Casos a, b, c e d iguais aos da rodada 1 (tabela acima), com as mesmas regras de recorte.
+- Família XGBoost com os hiperparâmetros da configuração final 003; colunas de `docs/protocolo_congelado_rodada_003.json`; as mesmas 63 dobras e a mesma semente; só no desenvolvimento.
+- Datasets de 2026-11-06: `todas` `c954b437c55e…`, `principais` `ca7d5bd161d1…` e `hora_real_noite` `d1909b4f5a6c…`.
+- Saída em `docs/busca_rodada_003_sensibilidade.md` e `.json`.
+
 ### Checklist antes do teste final (D1 a D10)
 
 Registrado em 04/11/2026 a partir das decisões acima, para o painel (aba Experimento) ler. Não muda as seções 1 a 7. Situação: `fechada` (decisão tomada) ou `pendente`. A D2 passa a contar como fechada sozinha quando `treino.teste_final.fim` for preenchido no `parametros.yaml`.

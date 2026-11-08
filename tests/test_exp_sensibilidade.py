@@ -106,3 +106,69 @@ def test_relatorio_novo_grava_md_e_json(tmp_path):
     caminho_md, caminho_json = sens.gravar_saidas(tmp_path, "texto", {"modelo_oficial": False, "x": np.float64(0.5)})
     assert caminho_md.read_text(encoding="utf-8") == "texto"
     assert json.loads(caminho_json.read_text(encoding="utf-8")) == {"modelo_oficial": False, "x": 0.5}
+
+
+def test_analise_d_com_familia_e_hiperparametros_da_configuracao():
+    chamadas = []
+
+    def prever_falso(prep, dobras, colunas, tipo, params, hiper=None):
+        chamadas.append((list(colunas), tipo, hiper))
+        return _pred({"2025-01-02": [1, 0, 1, 0, 1]})
+
+    sens._previsao_noticias(None, [], PARAMS, prever_falso, familia="xgb", hiper={"max_depth": 3})
+    assert chamadas == [(list(preparacao.NOTICIAS_DIA), "xgb", {"max_depth": 3})]
+
+
+def test_nome_saida_por_rodada():
+    assert sens.nome_saida(3) == "busca_rodada_003_sensibilidade"
+    assert sens.NOME_SAIDA == sens.nome_saida(1)
+
+
+CONGELADO_TESTE = {"colunas_1": ["ret_1d", "beta"], "colunas_3": ["ret_1d", "noticias_dia_qtd"]}
+HIPER_TESTE = {"max_depth": 3, "n_estimators": 300}
+
+
+def _configuracao(tmp_path, **mudancas):
+    cfg = {"sha256_dataset": "abc", "familia": "xgb", "hiperparametros": HIPER_TESTE,
+           "colunas_1": ["ret_1d", "beta"], "colunas_3": ["ret_1d", "noticias_dia_qtd"]}
+    cfg.update(mudancas)
+    caminho = tmp_path / "configuracao_final_rodada_003.json"
+    caminho.write_text(json.dumps(cfg), encoding="utf-8")
+    return caminho
+
+
+def test_ler_configuracao_final_valida(tmp_path):
+    assert sens.ler_configuracao_final(_configuracao(tmp_path), "abc", CONGELADO_TESTE) == ("xgb", HIPER_TESTE)
+
+
+def test_ler_configuracao_final_de_outro_dataset_levanta_erro(tmp_path):
+    with pytest.raises(sens.ErroSensibilidade, match="outro dataset"):
+        sens.ler_configuracao_final(_configuracao(tmp_path), "outro", CONGELADO_TESTE)
+
+
+def test_ler_configuracao_final_colunas_3_diferentes_levanta_erro(tmp_path):
+    with pytest.raises(sens.ErroSensibilidade, match="colunas_3"):
+        sens.ler_configuracao_final(_configuracao(tmp_path, colunas_3=["ret_1d"]), "abc", CONGELADO_TESTE)
+
+
+def test_ler_configuracao_final_familia_fora_levanta_erro(tmp_path):
+    with pytest.raises(sens.ErroSensibilidade, match="svm"):
+        sens.ler_configuracao_final(_configuracao(tmp_path, familia="svm"), "abc", CONGELADO_TESTE)
+
+
+def test_gravar_saidas_com_nome_da_rodada(tmp_path):
+    caminho_md, caminho_json = sens.gravar_saidas(tmp_path, "x", {"x": 1}, nome="busca_rodada_003_sensibilidade")
+    assert caminho_md.name == "busca_rodada_003_sensibilidade.md" and caminho_md.exists()
+    assert caminho_json.name == "busca_rodada_003_sensibilidade.json" and caminho_json.exists()
+
+
+def test_caminhos_entrada_rodada_3_usa_congelado_e_configuracao_da_rodada():
+    congelado, configuracao = sens.caminhos_entrada(3)
+    assert congelado.name == "protocolo_congelado_rodada_003.json"
+    assert configuracao.name == "configuracao_final_rodada_003.json"
+
+
+def test_caminhos_entrada_rodada_1_sem_configuracao():
+    congelado, configuracao = sens.caminhos_entrada(1)
+    assert congelado == sens.CONGELADO_PADRAO
+    assert configuracao is None
