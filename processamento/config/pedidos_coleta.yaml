@@ -11,11 +11,11 @@ pedidos:
     parametros: {de: "2025-01", ate: "2025-07"}
 
   - id: "finbert_juiza_cvm"
-    texto: "FinBERT e juíza nos documentos novos da CVM"
-    detalhe: "Notícias ainda sem probabilidade do FinBERT ou sem papel da juíza"
+    texto: "FinBERT nos documentos novos da CVM"
+    detalhe: "Notícias ainda sem probabilidade do FinBERT (a juíza fica no pedido juiza_historico)"
     prioridade: "normal"
     checagem: "finbert_e_juiza_completos"
-    parametros: {max_aguardando: 0}
+    parametros: {max_aguardando: 0, so_finbert: true}
 
   - id: "acoes_sem_evento"
     texto: "Quantidades de ações sem evento correspondente"
@@ -59,11 +59,11 @@ pedidos:
     parametros: {tabela: "v1-balancos", coluna: "situacao", valor: "ajuste_ifrs17"}
 
   - id: "juiza_historico"
-    texto: "Juíza em todo o histórico"
-    detalhe: "Papel da juíza preenchido nas notícias antigas"
+    texto: "Juíza nas 1.343 notícias que ficaram para trás"
+    detalhe: "Fica entregue quando os nulos de papel em v1-noticias caírem abaixo de 0,1%"
     prioridade: "normal"
     checagem: "coluna_preenchida"
-    parametros: {tabela: "v1-noticias", coluna: "papel", max_pct_nulo: 5}
+    parametros: {tabela: "v1-noticias", coluna: "papel", max_pct_nulo: 0.1, estrito: true}
 
   - id: "indices_completos"
     texto: "IDIV, IFIX e SMLL completos"
@@ -71,6 +71,20 @@ pedidos:
     prioridade: "normal"
     checagem: "indices_desde"
     parametros: {indices: ["IDIV", "IFIX", "SMLL"], inicio_ate: "2019-12-30"}
+
+  - id: "raiz4_raiz55"
+    texto: "RAIZ4 virou RAIZ55 em 03/11/2026 (cotação por lote de 100; Ofício Circular B3 022/2026-VPE)"
+    detalhe: "Some a divergência other_codes da RAIZ4 e v1-mudancas_ticker passa a ter RAIZ4 → RAIZ55"
+    prioridade: "normal"
+    checagem: "divergencia_e_mudanca"
+    parametros: {tema: "other_codes", termo: "RAIZ4", antigo: "RAIZ4", novo: "RAIZ55"}
+
+  - id: "ebitda_balancos"
+    texto: "EBITDA nos balanços"
+    detalhe: "ou ebit e depreciacao_amortizacao completos nas não financeiras"
+    prioridade: "normal"
+    checagem: "colunas_existem"
+    parametros: {tabela: "v1-balancos", colunas: ["ebitda"]}
 
   # Pedidos de 04/11/2026: indicadores "indisponível" no resumo_acao por falta de dado da coleta.
   # Sem checagem automática: o diagnóstico não traz esses campos por empresa (conferência manual).

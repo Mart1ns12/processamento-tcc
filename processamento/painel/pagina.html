@@ -226,8 +226,6 @@ ul{margin:4px 0;padding-left:20px}
 @media (pointer:coarse){.ajuda-btn{width:28px;height:28px}}
 .ajuda-caixa{position:absolute;z-index:50;max-width:min(360px, calc(100vw - 24px));background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:12px 14px;box-shadow:0 8px 24px rgba(0,0,0,.18);font-size:.85rem;line-height:1.45;display:grid;gap:6px}
 .ajuda-tit{font-weight:600}
-.resumo{border-left:6px solid var(--idle)}
-.resumo.ok{border-left-color:var(--ok)} .resumo.warn{border-left-color:var(--warn)} .resumo.bad{border-left-color:var(--bad)}
 .resumo-frase{font:inherit;font-size:1.3rem;font-weight:700;text-align:left;background:none;border:0;padding:0;color:var(--ink);cursor:pointer;justify-self:start}
 .resumo.ok .resumo-frase{color:var(--ok)} .resumo.warn .resumo-frase{color:var(--warn)} .resumo.bad .resumo-frase{color:var(--bad)}
 .resumo-frase:disabled{cursor:default;opacity:1}
@@ -1700,7 +1698,11 @@ function renderHero(d) {
   sub.hidden = !rodando;
   sub.textContent = rodando ? "Rodando: " + txt(a.titulo) : "";
   const proxima = (d.visao || {}).proxima_execucao;
-  $("hero-proxima").textContent = "Próxima execução automática: " + (typeof proxima === "string" ? proxima : SEM);
+  const agendador = (d.visao || {}).agendador;
+  // Sem agendador configurado: só informativo, sem alerta.
+  $("hero-proxima").textContent = (agendador && agendador.configurado === false)
+    ? "Agendador não configurado"
+    : "Próxima execução automática: " + (typeof proxima === "string" ? proxima : SEM);
 }
 
 const CLASSE_PROGRESSO = new Map([["concluida", "ok"], ["erro", "bad"], ["pulada", "warn"], ["agora", "run"], ["espera", "idle"]]);

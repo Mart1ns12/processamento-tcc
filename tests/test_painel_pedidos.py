@@ -19,7 +19,7 @@ DOCS_REAL = RAIZ / "docs" / "diagnostico_banco.md"
 NOMES_CHECAGENS = {
     "meses_sem_poucas_noticias", "finbert_e_juiza_completos", "acoes_coerentes_com_eventos",
     "sem_linha_fora_do_calendario", "colunas_existem", "origem_nos_anos", "emissores_por_periodo",
-    "valor_distinto", "coluna_preenchida", "indices_desde",
+    "valor_distinto", "coluna_preenchida", "indices_desde", "divergencia_e_mudanca",
 }
 
 
@@ -45,11 +45,13 @@ def test_yaml_real_com_fixture_bate_com_o_gabarito():
     assert d["disponivel"] is True
     assert d["motivo"] is None
     assert d["gerado_em"] == "2026-11-03 13:09 (America/Sao_Paulo)"
-    assert [i["estado"] for i in d["itens"]] == ["pendente"] * 4 + ["entregue"] * 6 + ["sem_checagem"] * 7
-    assert d["contagem"] == {"entregue": 6, "pendente": 4, "sem_dados": 0, "sem_checagem": 7, "erro": 0}
+    assert [i["estado"] for i in d["itens"]] == (
+        ["pendente"] * 4 + ["entregue"] * 4 + ["pendente"] + ["entregue"] + ["sem_dados"] * 2
+        + ["sem_checagem"] * 7)
+    assert d["contagem"] == {"entregue": 5, "pendente": 5, "sem_dados": 2, "sem_checagem": 7, "erro": 0}
     assert [i["evidencia"] for i in d["itens"]] == [
         "Meses ainda com poucas notícias: 01/2025, 06/2025, 07/2025",
-        "6.560 sem FinBERT · 7.903 sem juíza",
+        "6.560 sem FinBERT",
         "38 linhas incoerentes com os eventos",
         "Ainda no diagnóstico: JBSS32 20/11/2020, NATU3 20/11/2020",
         "Tudo presente: qtd_on_base_atual, qtd_pn_base_atual, v1-eventos_acoes",
@@ -58,6 +60,8 @@ def test_yaml_real_com_fixture_bate_com_o_gabarito():
         "ajuste_ifrs17: 12 linhas em v1-balancos.situacao",
         "98,1% preenchida (7.903 vazias)",
         "IDIV, IFIX, SMLL desde 30/12/2019, sem lacunas.",
+        "O diagnóstico ainda não lista as mudanças de ticker (rode o diagnóstico de novo).",
+        "Tabela não encontrada na seção.",
     ] + ["sem checagem automática"] * 7
 
 
@@ -66,7 +70,7 @@ def test_yaml_real_tem_os_itens_na_ordem():
     assert [i["id"] for i in d["itens"]] == [
         "google_news_2025", "finbert_juiza_cvm", "acoes_sem_evento", "linha_sem_pregao",
         "qtd_base_preco", "cvm_2023_2025", "emissores_jbs_natura", "hapvida_ifrs17",
-        "juiza_historico", "indices_completos",
+        "juiza_historico", "indices_completos", "raiz4_raiz55", "ebitda_balancos",
         "balanco_bancos_seguradoras", "dfp_2025_santander", "balancos_assai", "balancos_bradespar",
         "balancos_tim", "emprestimos_zerados", "proventos_bdr_jbs",
     ]
@@ -75,7 +79,7 @@ def test_yaml_real_tem_os_itens_na_ordem():
     assert d["itens"][1]["prioridade"] == "normal"
 
 
-def test_registro_tem_exatamente_os_dez_nomes():
+def test_registro_tem_exatamente_os_onze_nomes():
     assert set(CHECAGENS) == NOMES_CHECAGENS
 
 
@@ -109,7 +113,7 @@ def test_docs_inexistente_vira_sem_dados_com_motivo(tmp_path):
     assert all(i["estado"] == "sem_checagem" for i in d["itens"] if not i["checagem"])
     assert {i["evidencia"] for i in com_checagem} == {
         "docs/diagnostico_banco.md não encontrado (rode o diagnóstico)"}
-    assert d["contagem"]["sem_dados"] == 10
+    assert d["contagem"]["sem_dados"] == 12
 
 
 # ---------------------------------------------------------------- regras do YAML
@@ -217,6 +221,7 @@ def test_calendario_sem_nota_nem_tabela_nunca_vira_entregue(tmp_path):
     ("valor_distinto", '{tabela: "v1-balancos", coluna: "situacao", valor: "ajuste_ifrs17"}'),
     ("coluna_preenchida", '{tabela: "v1-noticias", coluna: "papel", max_pct_nulo: 5}'),
     ("indices_desde", '{indices: ["IDIV"], inicio_ate: "2019-12-30"}'),
+    ("divergencia_e_mudanca", '{tema: "other_codes", termo: "RAIZ4", antigo: "RAIZ4", novo: "RAIZ55"}'),
 ])
 def test_checagem_com_docs_vazio_nao_levanta(tmp_path, nome, params):
     docs = tmp_path / "vazio.md"
@@ -224,3 +229,114 @@ def test_checagem_com_docs_vazio_nao_levanta(tmp_path, nome, params):
     d = avaliar_pedidos(_um_pedido(tmp_path, _pedido(extra=f'    checagem: "{nome}"\n    parametros: {params}\n')), docs)
     assert d["itens"][0]["estado"] in ("sem_dados", "erro")
     assert d["itens"][0]["estado"] != "entregue"
+
+
+# ---------------------------------------------------------------- divergencia_e_mudanca
+
+LINHA_DIV_RAIZ4 = ("| 1 | other_codes | v1-raw_b3_cadastro | "
+                   "ticker fora do other_codes da empresa: RAIZ4 (33453598000123) |\n")
+PEDIDO_RAIZ4 = ('    checagem: "divergencia_e_mudanca"\n'
+                '    parametros: {tema: "other_codes", termo: "RAIZ4", antigo: "RAIZ4", novo: "RAIZ55"}\n')
+
+
+def _docs_divergencias(tmp_path: Path, linhas_div: str = "", notas_secao9: list[str] | None = None) -> Path:
+    """Diagnóstico mínimo: tabela de divergências e a §9 Tickers e CNPJs com as notas dadas."""
+    docs = tmp_path / "diagnostico_banco.md"
+    notas = "".join(f"- {n}\n" for n in notas_secao9 or [])
+    docs.write_text(
+        "# Diagnóstico do banco da coleta (só leitura)\n- Gerado em: 2026-11-08 13:04 (America/Sao_Paulo)\n\n"
+        "## Divergências × especificação\n\n| # | Tema | Tabela | Detalhe |\n|---|---|---|---|\n"
+        + linhas_div + "\n## 9. Tickers e CNPJs\n\n" + notas, encoding="utf-8")
+    return docs
+
+
+def _item_raiz4(tmp_path: Path, docs: Path) -> dict:
+    return avaliar_pedidos(_um_pedido(tmp_path, _pedido(extra=PEDIDO_RAIZ4)), docs)["itens"][0]
+
+
+def test_divergencia_presente_sem_nota_fica_pendente(tmp_path):
+    item = _item_raiz4(tmp_path, _docs_divergencias(tmp_path, LINHA_DIV_RAIZ4))
+    assert item["estado"] == "pendente"
+    assert item["evidencia"] == "Divergência other_codes da RAIZ4 ainda no diagnóstico"
+
+
+def test_sem_divergencia_e_sem_nota_fica_sem_dados(tmp_path):
+    item = _item_raiz4(tmp_path, _docs_divergencias(tmp_path))
+    assert item["estado"] == "sem_dados"
+    assert item["evidencia"] == "O diagnóstico ainda não lista as mudanças de ticker (rode o diagnóstico de novo)."
+
+
+def test_nota_com_o_par_e_sem_divergencia_fica_entregue(tmp_path):
+    docs = _docs_divergencias(tmp_path, notas_secao9=["mudanças registradas em v1-mudancas_ticker: "
+                                                     "ELET3 → AXIA3, RAIZ4 → RAIZ55"])
+    item = _item_raiz4(tmp_path, docs)
+    assert item["estado"] == "entregue"
+    assert item["evidencia"] == "RAIZ4 → RAIZ55 em v1-mudancas_ticker e sem divergência other_codes"
+
+
+def test_nota_sem_o_par_e_sem_divergencia_fica_pendente(tmp_path):
+    docs = _docs_divergencias(tmp_path, notas_secao9=["mudanças registradas em v1-mudancas_ticker: "
+                                                     "ELET3 → AXIA3"])
+    item = _item_raiz4(tmp_path, docs)
+    assert item["estado"] == "pendente"
+    assert item["evidencia"] == "RAIZ4 → RAIZ55 não está em v1-mudancas_ticker"
+
+
+def test_nota_com_o_par_mas_divergencia_presente_fica_pendente(tmp_path):
+    docs = _docs_divergencias(tmp_path, LINHA_DIV_RAIZ4,
+                              notas_secao9=["mudanças registradas em v1-mudancas_ticker: RAIZ4 → RAIZ55"])
+    item = _item_raiz4(tmp_path, docs)
+    assert item["estado"] == "pendente"
+    assert item["evidencia"] == "Divergência other_codes da RAIZ4 ainda no diagnóstico"
+
+
+def test_sem_secao_de_divergencias_devolve_sem_dados_na_checagem():
+    resultado = CHECAGENS["divergencia_e_mudanca"]({}, [], tema="other_codes", termo="RAIZ4",
+                                                    antigo="RAIZ4", novo="RAIZ55")
+    assert resultado == (None, "Seção de divergências não encontrada no diagnóstico.")
+
+
+# ---------------------------------------------------------------- coluna_preenchida: estrito e contagem
+
+def _docs_nulos(tmp_path: Path, total: int, nulos: int, pct: str) -> Path:
+    docs = tmp_path / "diagnostico_banco.md"
+    docs.write_text(
+        "# Diagnóstico\n- Gerado em: 2026-11-08 13:04 (America/Sao_Paulo)\n\n"
+        "## Divergências × especificação\n\nNenhuma divergência encontrada.\n\n"
+        "## 16. Vazios e zeros\n\n### Colunas com nulos, textos vazios ou zeros\n\n"
+        "| tabela | coluna | total | nulos | pct_nulo | situacao | textos_vazios | zeros |\n"
+        "|---|---|---|---|---|---|---|---|\n"
+        f"| v1-noticias | papel | {total} | {nulos} | {pct} | parcial | 0 | 0 |\n", encoding="utf-8")
+    return docs
+
+
+def _estado_papel(tmp_path: Path, docs: Path, estrito: bool) -> dict:
+    flag = "true" if estrito else "false"
+    extra = ('    checagem: "coluna_preenchida"\n'
+             f'    parametros: {{tabela: "v1-noticias", coluna: "papel", max_pct_nulo: 0.1, estrito: {flag}}}\n')
+    return avaliar_pedidos(_um_pedido(tmp_path, _pedido(extra=extra)), docs)["itens"][0]
+
+
+def test_coluna_estrito_compara_pela_contagem_e_entrega(tmp_path):
+    # 6 de 10000 = 0,06%: o .md arredonda para 0.1, mas a contagem vale abaixo de 0,1%
+    item = _estado_papel(tmp_path, _docs_nulos(tmp_path, 10000, 6, "0.1"), estrito=True)
+    assert item["estado"] == "entregue"
+    assert item["evidencia"] == "99,9% preenchida (6 vazias)"
+
+
+def test_coluna_estrito_exatamente_no_limite_fica_pendente(tmp_path):
+    # 10 de 10000 = 0,1% exato: com estrito, não é "abaixo de" 0,1%
+    item = _estado_papel(tmp_path, _docs_nulos(tmp_path, 10000, 10, "0.1"), estrito=True)
+    assert item["estado"] == "pendente"
+
+
+def test_coluna_sem_estrito_aceita_o_limite_exato(tmp_path):
+    item = _estado_papel(tmp_path, _docs_nulos(tmp_path, 10000, 10, "0.1"), estrito=False)
+    assert item["estado"] == "entregue"
+
+
+def test_finbert_so_finbert_ignora_a_juiza(tmp_path):
+    bloco = _pedido(extra='    checagem: "finbert_e_juiza_completos"\n    parametros: {so_finbert: true}\n')
+    d = avaliar_pedidos(_um_pedido(tmp_path, bloco), FIXTURE)
+    assert d["itens"][0]["estado"] == "pendente"
+    assert d["itens"][0]["evidencia"] == "6.560 sem FinBERT"

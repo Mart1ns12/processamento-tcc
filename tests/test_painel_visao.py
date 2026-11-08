@@ -308,6 +308,30 @@ def test_resumo_atencao_com_os_cartoes_da_fixture():
     assert r["pontos"][0]["o_que_fazer"] == O_QUE_FAZER["saude_quantidade_acoes"]
 
 
+def test_resumo_divergencia_de_dado_nao_derruba_a_situacao(tmp_path):
+    caminho = tmp_path / "diagnostico_banco.md"
+
+    def so_contrato(tema: str) -> dict:
+        caminho.write_text(
+            "- Gerado em: 2026-11-08 08:00 (America/Sao_Paulo)\n"
+            "## Divergências × especificação\n"
+            "| # | Tema | Tabela | Detalhe |\n"
+            "|---|---|---|---|\n"
+            f"| 1 | {tema} | v1-noticias | detalhe |\n", encoding="utf-8")
+        contrato = [c for c in cartoes_saude(caminho)["cartoes"] if c["id"] == "contrato"]
+        return {"disponivel": True, "cartoes": contrato}
+
+    r = resumo(HOJE_OK, TRAVA_VAZIA, fluxo(ITEM), LT, so_contrato("noticia_sem_hora"), TESTES_OK)
+    assert r["nivel"] == "warn"
+    assert r["frase"] == "Atenção: 1 ponto"
+    assert r["pontos"] == [{"nivel": "warn", "texto": "Contrato com a coleta (1 divergência)",
+                            "alvo": "saude-c-contrato", "o_que_fazer": O_QUE_FAZER["saude_contrato"]}]
+
+    r = resumo(HOJE_OK, TRAVA_VAZIA, fluxo(ITEM), LT, so_contrato("coluna_faltando"), TESTES_OK)
+    assert r["nivel"] == "bad"
+    assert r["frase"] == "Falhou: Contrato com a coleta (1 divergência)"
+
+
 def test_resumo_falhou_com_atencao():
     fluxo_falhou = fluxo(dict(ITEM, status="falhou", n_pacotes=0, pacotes=[]))
     r = resumo(HOJE_OK, TRAVA_VAZIA, fluxo_falhou, LT, cartoes_saude(FIXTURE_DIAG), TESTES_OK)

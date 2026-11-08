@@ -25,6 +25,13 @@ RE_COBERTURA = re.compile(
 
 COLUNAS_HORA = ("total", "hora_real", "so_data_n1a", "sem_hora")
 
+# Divergências estruturais (tabela ou coluna faltando, chave diferente, valor não permitido): derrubam o contrato
+# (farol bad). Os demais temas são de dado (farol warn) e não derrubam a situação de hoje.
+TEMAS_ESTRUTURAIS = frozenset({
+    "tabela_ausente", "coluna_faltando", "coluna_extra", "chave", "indice_ausente", "duplicata_chave",
+    "valor_desconhecido", "falha_consulta", "etapa_desconhecida", "status_desconhecido",
+})
+
 
 # ---------------------------------------------------------------- auxiliares
 
@@ -110,12 +117,22 @@ def _cartao_contrato(diag: dict, linhas: list[str]) -> dict:
     if n == 0:
         return _cartao(id_, titulo, "ok", "0 divergências",
                        "Tabelas, colunas e formatos batem com a especificação.", fonte)
-    temas: list[str] = []
+    estruturais: list[str] = []
+    de_dado: list[str] = []
     for d in divergencias:
-        if d["tema"] and d["tema"] not in temas:
-            temas.append(d["tema"])
-    return _cartao(id_, titulo, "bad", _plural(n, "divergência", "divergências"),
-                   "Temas: " + ", ".join(temas) + ".", fonte)
+        tema = d.get("tema") or "sem tema"
+        lista = estruturais if tema in TEMAS_ESTRUTURAIS else de_dado
+        if tema not in lista:
+            lista.append(tema)
+    if estruturais:
+        partes = ["Estruturais: " + ", ".join(estruturais)]
+        if de_dado:
+            partes.append("de dado: " + ", ".join(de_dado))
+        return _cartao(id_, titulo, "bad", _plural(n, "divergência", "divergências"),
+                       " · ".join(partes) + ".", fonte)
+    return _cartao(id_, titulo, "warn", _plural(n, "divergência", "divergências"),
+                   "Problemas de dado (não estruturais): " + ", ".join(de_dado)
+                   + ". Não derrubam a situação de hoje.", fonte)
 
 
 def _cartao_quantidade(diag: dict, linhas: list[str]) -> dict:
@@ -219,6 +236,48 @@ def _cartao_lacunas(diag: dict, linhas: list[str]) -> dict:
     return _cartao(id_, titulo, farol, _plural(n, "lacuna", "lacunas"), " ".join(partes), fonte)
 
 
+def _faixa(valores: list[int]) -> str:
+    """Um valor inteiro em % ("100%") ou a faixa mínimo–máximo ("80–100%")."""
+    mn, mx = min(valores), max(valores)
+    return f"{mn}%" if mn == mx else f"{mn}–{mx}%"
+
+
+def _frase_origens(corpo: list[str]) -> str | None:
+    """Uma frase por origem (Google News, WordPress, cvm_ipe) da tabela por ano e origem; None se a tabela falta."""
+    tab = tabela_md(corpo, "Hora da publicação, por ano e origem (artigos distintos)")
+    if not tab:
+        return None
+    por_origem: dict[str, dict[str, tuple[int, int]]] = {}
+    for r in tab:
+        try:
+            total, hora = int(r["total"]), int(r["hora_real"])
+        except (KeyError, ValueError):
+            continue
+        if total > 0 and r.get("origem") and r.get("ano"):
+            por_origem.setdefault(r["origem"], {})[r["ano"]] = (total, hora)
+    partes: list[str] = []
+    google = por_origem.get("google_news")
+    if google:
+        anos = sorted(google)
+        ultimo, anteriores = anos[-1], anos[:-1]
+        y = round(google[ultimo][1] / google[ultimo][0] * 100)
+        if anteriores:
+            x = round(sum(google[a][1] / google[a][0] * 100 for a in anteriores) / len(anteriores))
+            partes.append(f"Google News: ~{x}% com hora real em {anteriores[0]}–{anteriores[-1]} e {y}% em {ultimo}")
+        else:
+            partes.append(f"Google News: {y}% com hora real em {ultimo}")
+    wordpress = por_origem.get("wordpress")
+    if wordpress:
+        partes.append("WordPress: " + _faixa([round(h / t * 100) for t, h in wordpress.values()]))
+    cvm = por_origem.get("cvm_ipe")
+    if cvm:
+        if all(h == 0 for _t, h in cvm.values()):
+            partes.append("cvm_ipe só tem data")
+        else:
+            partes.append("cvm_ipe: " + _faixa([round(h / t * 100) for t, h in cvm.values()]) + " com hora real")
+    return "; ".join(partes) + "." if partes else None
+
+
 def _cartao_horario(diag: dict, linhas: list[str]) -> dict:
     id_, titulo = "horario_noticias", "Horário das notícias"
     achada = _secao(linhas, "Notícias")
@@ -239,6 +298,9 @@ def _cartao_horario(diag: dict, linhas: list[str]) -> dict:
     farol = "ok" if sem <= 0.10 else "warn"
     texto = (f"Com hora real: {_pct(hr / t)} · só data (regra N1-A): {_pct(sd / t)} · "
              f"sem hora: {_pct(sh / t)}. Notícias sem hora entram na janela do dia de forma conservadora.")
+    frase = _frase_origens(corpo)
+    if frase:
+        texto += " " + frase
     return _cartao(id_, titulo, farol, f"{_pct(sem)} sem hora real", texto, f"{fonte} · {_milhar(t)} artigos")
 
 

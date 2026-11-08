@@ -607,3 +607,12 @@ def test_aba_diagnostico_ids_e_textos():
         "diagnostico",
     ]:
         assert trecho in texto, trecho
+
+
+def test_situacao_sem_barra_no_bloco_e_agendador_informativo():
+    texto = PAGINA.read_text(encoding="utf-8")
+    # A barra colorida fica só em cada item (.ponto), nunca no bloco inteiro do resumo.
+    assert ".resumo{border-left" not in texto
+    assert ".ponto.warn{border-left-color:var(--warn)} .ponto.bad{border-left-color:var(--bad)}" in texto
+    assert "\"Agendador não configurado\"" in texto
+    assert "agendador.configurado === false" in texto

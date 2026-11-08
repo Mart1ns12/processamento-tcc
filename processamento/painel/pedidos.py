@@ -25,6 +25,7 @@ MOTIVO_YAML_ILEGIVEL = "pedidos_coleta.yaml ilegível"
 RE_DATA = re.compile(r"\d{4}-\d{2}-\d{2}")
 RE_INCOERENTES = re.compile(r"^(\d+) linhas incoerentes com os eventos")
 RE_FORA_CALENDARIO = re.compile(r"linha fora do calendário[^:]*:\s*(.*)$")
+PREFIXO_MUDANCAS = "mudanças registradas em v1-mudancas_ticker:"
 
 CHECAGENS: dict[str, Callable[..., tuple[bool | None, str]]] = {}
 
@@ -88,8 +89,15 @@ def _meses_sem_poucas_noticias(diag: dict, linhas: list[str], de: str, ate: str)
 
 
 @checagem("finbert_e_juiza_completos")
-def _finbert_e_juiza_completos(diag: dict, linhas: list[str], max_aguardando: int = 0):
+def _finbert_e_juiza_completos(diag: dict, linhas: list[str], max_aguardando: int = 0, so_finbert: bool = False):
     finbert = contagem_finbert(linhas)
+    if so_finbert:
+        # A juíza fica só no pedido juiza_historico.
+        if finbert is None:
+            return None, "FinBERT sem contagem no diagnóstico."
+        if finbert["sem_prob"] <= max_aguardando:
+            return True, "FinBERT em todas as notícias."
+        return False, f"{_milhar(finbert['sem_prob'])} sem FinBERT"
     juiza = contagem_juiza(linhas)
     if finbert is None or juiza is None:
         return None, "FinBERT ou juíza sem contagem no diagnóstico."
@@ -224,7 +232,8 @@ def _valor_distinto(diag: dict, linhas: list[str], tabela: str, coluna: str, val
 
 
 @checagem("coluna_preenchida")
-def _coluna_preenchida(diag: dict, linhas: list[str], tabela: str, coluna: str, max_pct_nulo: float):
+def _coluna_preenchida(diag: dict, linhas: list[str], tabela: str, coluna: str, max_pct_nulo: float,
+                       estrito: bool = False):
     corpo = _corpo(linhas, "Vazios e zeros")
     if corpo is None:
         return None, MOTIVO_SEM_SECAO
@@ -234,10 +243,15 @@ def _coluna_preenchida(diag: dict, linhas: list[str], tabela: str, coluna: str, 
             if pct is None:
                 return None, "Percentual de nulos ilegível no diagnóstico."
             nulos = _inteiro(linha.get("nulos", ""))
+            total = _inteiro(linha.get("total", ""))
+            # Com total e nulos, compara pela contagem: o pct_nulo do .md é arredondado a uma casa.
+            pct_comparado = nulos * 100 / total if nulos is not None and total else pct
             texto = f"{100 - pct:.1f}".replace(".", ",") + "% preenchida"
             if nulos is not None:
                 texto += f" ({_milhar(nulos)} vazias)"
-            return pct <= max_pct_nulo, texto
+            if estrito:
+                return pct_comparado < max_pct_nulo, texto
+            return pct_comparado <= max_pct_nulo, texto
     if any(n.startswith("demais colunas 100% preenchidas") for n in _notas(diag, "Vazios e zeros")):
         return True, "100% preenchida"
     return None, "Coluna sem linha na tabela de nulos do diagnóstico."
@@ -279,6 +293,28 @@ def _indices_desde(diag: dict, linhas: list[str], indices: list[str], inicio_ate
         return False, "; ".join(falhas)
     desde = max(inicios, default=inicio_ate)
     return True, f"{', '.join(indices)} desde {_data_br(desde)}, sem lacunas."
+
+
+@checagem("divergencia_e_mudanca")
+def _divergencia_e_mudanca(diag: dict, linhas: list[str], tema: str, termo: str, antigo: str, novo: str):
+    if "divergencias" not in diag:
+        return None, "Seção de divergências não encontrada no diagnóstico."
+    pendente = any(d["tema"] == tema and termo in d["detalhe"] for d in diag["divergencias"])
+    nota = next((n for n in _notas(diag, "Tickers e CNPJs") if n.startswith(PREFIXO_MUDANCAS)), None)
+    par = f"{antigo} → {novo}"
+    if nota is None:
+        if pendente:
+            return False, f"Divergência {tema} da {termo} ainda no diagnóstico"
+        return None, "O diagnóstico ainda não lista as mudanças de ticker (rode o diagnóstico de novo)."
+    presente = par in [p.strip() for p in nota[len(PREFIXO_MUDANCAS):].split(",")]
+    if presente and not pendente:
+        return True, f"{par} em v1-mudancas_ticker e sem divergência {tema}"
+    faltas = []
+    if pendente:
+        faltas.append(f"Divergência {tema} da {termo} ainda no diagnóstico")
+    if not presente:
+        faltas.append(f"{par} não está em v1-mudancas_ticker")
+    return False, " · ".join(faltas)
 
 
 # ---------------------------------------------------------------- avaliação

@@ -322,6 +322,34 @@ def test_secao_tickers_tabela_de_proventos_das_classes_extintas(mapa):
     assert any("período analisado (pregões do IBOV): 2025-01-02 a 2026-10-21" in n for n in secao["notas"])
 
 
+def _ler_tickers_com_mudancas(pares):
+    """Como _ler_tickers, mas v1-mudancas_ticker devolve as linhas (antigo, novo) dadas."""
+    base = _ler_tickers(RAW_COMPLETO)
+
+    def _ler(sql):
+        if "AS ticker_antigo" in sql:
+            return pd.DataFrame({"ticker_antigo": [a for a, _ in pares], "ticker_novo": [b for _, b in pares]})
+        return base(sql)
+    return _ler
+
+
+def test_secao_tickers_nota_de_mudancas_registradas_em_ordem(mapa):
+    ler = _ler_tickers_com_mudancas([("RAIZ4", "RAIZ55"), ("ELET3", "AXIA3")])
+    secao = secao_tickers(ler, mapa, EXISTENTES_TICKERS, EXCLUSOES_FAKE)
+    assert "mudanças registradas em v1-mudancas_ticker: ELET3 → AXIA3, RAIZ4 → RAIZ55" in secao["notas"]
+
+
+def test_secao_tickers_tabela_de_mudancas_vazia_diz_nenhuma(mapa):
+    secao = secao_tickers(_ler_tickers(RAW_COMPLETO), mapa, EXISTENTES_TICKERS, EXCLUSOES_FAKE)
+    assert "mudanças registradas em v1-mudancas_ticker: nenhuma" in secao["notas"]
+
+
+def test_secao_tickers_sem_tabela_de_mudancas_nao_tem_nota(mapa):
+    existentes = EXISTENTES_TICKERS - {"v1-mudancas_ticker"}
+    secao = secao_tickers(_ler_tickers(RAW_COMPLETO), mapa, existentes, EXCLUSOES_FAKE)
+    assert not any("mudanças registradas" in n for n in secao["notas"])
+
+
 # ---------------------------------------------------------------------------
 # composicao_ibov (dentro de secao_painel): colunas, contagem e período
 # ---------------------------------------------------------------------------

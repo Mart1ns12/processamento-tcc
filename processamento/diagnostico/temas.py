@@ -880,6 +880,12 @@ def secao_tickers(ler, mapa: dict, existentes: set, exclusoes: Exclusoes | None 
         secao["divergencias"].append(div(
             "mudanca_ticker", _nome(mapa, "mudancas_ticker"), ", ".join(res_mud["so_no_outro"])))
 
+    # Mudanças registradas na tabela (antigo → novo): o painel confere os pedidos contra esta nota
+    if _existe(mapa, existentes, "mudancas_ticker"):
+        nome_mud = _nome(mapa, "mudancas_ticker")
+        pares = ", ".join(f"{a} → {b}" for a, b in sorted(mudancas.items()))
+        secao["notas"].append(f"mudanças registradas em {nome_mud}: " + (pares or "nenhuma"))
+
     # CNPJs: formato e ligação entre cadastro, balanços e ações emitidas
     for chave, tab in (("cad_cnpj", "cadastro"), ("bal_cnpj", "balancos"),
                        ("acoes_cnpj", "acoes_emitidas")):
