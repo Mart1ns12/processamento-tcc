@@ -195,6 +195,26 @@ No recorte, o dia só entra com pelo menos 5 linhas com alvo e as duas classes; 
 | Critério 5 com a recarga da WordPress | Fica como está escrito (seção 3; pregões de 2024, seção 7), apesar de a recarga de 2023 a 2025 desfazer a premissa "2023–2024 sem `wordpress`". O relatório registra a mudança de regime |
 | P/VP na rodada 3 | Fica fora (seção 2). A correção do valor de mercado (quantidade na base atual, 03/11/2026) não o traz de volta nesta rodada |
 
+**Nota da D5: esclarecimento (registrado em 08/11/2026, antes de qualquer dado novo).** Registrado antes de a coleta entregar dados novos e antes de qualquer medida sobre eles. Não muda as seções 1 a 7, nem a configuração congelada da rodada 3.
+
+**Quando dado novo antes do teste final abre uma rodada nova.** O dataset é regenerado com a `versao_preparacao` vigente. Depois é comparado com o dataset congelado da rodada oficial (hoje `c954b437c55e41f20a84e91a647964cc33a1c3cf4bb60df474f3f560c81851aa`), só no período de desenvolvimento e sem abrir o teste final. Ferramenta: `python -m processamento.experimento.medida_dados_novos`, que grava `docs/medida_dados_novos_AAAA-MM-DD.md`.
+
+| Ponto | Regra |
+|---|---|
+| Onde se compara | Nos valores que o modelo recebe: as colunas de `colunas_3` do congelado oficial, depois de `preparacao.preparar` (ranks por pregão), mais o `alvo` |
+| Célula mudada | Passou de vazia a valor (ou o contrário), ou a diferença absoluta é maior que 1e-6 |
+| Linha mudada | Pelo menos uma célula mudada, ou a linha (data, ticker) existe em só um dos dois datasets |
+| Denominador | Linhas com `alvo` do desenvolvimento no dataset congelado |
+| Decisão | Fração de linhas mudadas **maior que 1%**: nova rodada do protocolo e da busca, que passa a ser a oficial (D5). **Até 1%, inclusive:** a rodada oficial continua; o dataset congelado e os modelos não mudam; o impacto é registrado nesta seção |
+| Relato | Sempre: fração total, fração por grupo (preço e bloco A, notícias, alvo), por ano e os tickers com mais linhas mudadas. Sem arredondar na comparação com o limite |
+| Preços (D7) | A D7 passa a usar esta medida. Se o grupo de preço e alvo passar de 1%, para e pergunta antes de qualquer outra coisa, mesmo que o total não passe |
+| Teste final | O teste final usa o dataset gerado para ele. Antes de rodar, a parte de desenvolvimento desse dataset é medida contra o congelado com esta regra, e o resultado é registrado. Acima de 1%, para e pergunta. **O código do teste final não confere o sha do desenvolvimento** (só confere o CSV contra o JSON dele e a `versao_preparacao`): esta medida é obrigatória por processo |
+| Depois do teste final | Sem mudança: dado novo só como sensibilidade |
+
+A regra decide pela quantidade de dado que mudou, nunca por resultado de modelo, e a medida é feita antes de qualquer treino com o dataset novo. Consequência a conhecer: como a comparação é feita depois dos ranks, uma ação que entra ou sai do universo num pregão muda o rank das outras ações daquele dia, e todas essas linhas contam como mudadas.
+
+**Controle (08/11/2026):** com o banco igual (1.343 notícias de papel nulo, 3.192 balanços, 586.136 notícias), o dataset regenerado com a mesma data saiu **byte a byte igual** ao congelado (mesmo sha256): 0% no total e em todos os grupos. O controle não exercitou o ruído do float32 da regravação diária dos preços, porque não houve regravação desde a geração.
+
 Implementação (02/11/2026): a rotina passa a publicar a família da configuração congelada (`treino.familia_producao: "logistica"`); o modelo logístico é gravado em JSON (`logistica-AAAA-MM.json`, sem pickle), e a configuração da rodada 001 vale sem mudança.
 
 ### Rodada 3 (08/11/2026): resultado, decisão e desenho da sensibilidade
