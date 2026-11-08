@@ -399,6 +399,7 @@ def calcular_acaso(pred_ref: pd.DataFrame, params: ParametrosTreino) -> dict:
 # ---------------------------------------------------------------------------
 
 REGISTRO_TESTE_FINAL = fontes.RAIZ / "docs" / "teste_final_usado.json"
+PASTA_DOCS_PADRAO = fontes.RAIZ / "docs"
 PASTA_DATASETS_PADRAO = fontes.RAIZ / "saida" / "experimento"
 PASTA_SAIDA_PADRAO = PASTA_DATASETS_PADRAO / "treino"
 PASTA_MODELOS_PADRAO = fontes.RAIZ / "modelos"
@@ -439,6 +440,49 @@ def conferir_trava(pedido: bool, liberado: bool, fim: date | None, registro: Pat
         raise ErroTravaTesteFinal(f"o teste final já foi usado (ver {registro}); uso único")
 
 
+def caminho_medida_dados_novos(pasta_docs: Path, hoje: date) -> Path:
+    """JSON da medida de dados novos de `hoje` (nome gravado por `medida_dados_novos`: NOME_BASE + data)."""
+    return Path(pasta_docs) / f"medida_dados_novos_{hoje.isoformat()}.json"
+
+
+def conferir_medida_dados_novos(caminho: Path, sha_novo: str | None, sha_congelado: str | None) -> None:
+    """Teste final só roda com a medida de dados novos de hoje, feita sobre este dataset e contra o congelado
+    dos modelos, e com decisão de rodada oficial que não pede parar (protocolo, seção 8, nota da D5).
+
+    Recusa com ErroPreRequisito (código 2). `sha_novo` é o sha256 do dataset do teste final; `sha_congelado`, o do
+    dataset gravado nos metadados do modelo de desenvolvimento.
+    """
+    caminho = Path(caminho)
+    if not caminho.is_file():
+        raise ErroPreRequisito(
+            f"teste final recusado: falta a medida de dados novos de hoje ({caminho}); rode python -m "
+            "processamento.experimento.medida_dados_novos --congelado-csv <csv congelado> --novo-csv <csv novo> "
+            "--congelado docs/protocolo_congelado_rodada_NNN.json"
+        )
+    try:
+        medida = json.loads(caminho.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        raise ErroPreRequisito(f"teste final recusado: a medida {caminho.name} não pode ser lida ({e})") from e
+    if (medida.get("novo") or {}).get("sha256") != sha_novo:
+        raise ErroPreRequisito(
+            "teste final recusado: a medida de hoje é de outro arquivo (sha do novo diferente do dataset do teste final)"
+        )
+    if (medida.get("congelado") or {}).get("sha256") != sha_congelado:
+        raise ErroPreRequisito(
+            "teste final recusado: a medida de hoje não é contra o dataset congelado dos modelos (sha diferente)"
+        )
+    if medida.get("decisao") != "rodada_oficial_continua":
+        raise ErroPreRequisito(
+            f"teste final recusado: a medida de hoje decidiu nova_rodada ({medida.get('decisao')!r}): o teste final "
+            "não roda (protocolo, seção 8, nota da D5)"
+        )
+    if medida.get("parar_e_perguntar") is not False:
+        raise ErroPreRequisito(
+            "teste final recusado: a medida de hoje pede parar e perguntar (regra D7): o teste final não roda "
+            "(protocolo, seção 8, nota da D5)"
+        )
+
+
 def _iso(valor) -> str | None:
     """Data em AAAA-MM-DD (None e NaT viram None)."""
     if valor is None or valor is pd.NaT:
@@ -448,6 +492,11 @@ def _iso(valor) -> str | None:
 
 def _agora() -> str:
     return datetime.now(fontes.SP).isoformat(timespec="seconds")
+
+
+def _hoje() -> date:
+    """Data de hoje em São Paulo, pelo mesmo relógio de `_agora` (os testes fixam o dia mudando `_agora`)."""
+    return datetime.fromisoformat(_agora()).date()
 
 
 def _para_json(valor):
@@ -942,6 +991,13 @@ def _configuracao_congelada(pasta_modelos: Path, params: ParametrosTreino) -> di
     }
 
 
+def _sha_do_congelado(pasta_modelos: Path, params: ParametrosTreino) -> str | None:
+    """sha256 do dataset de desenvolvimento gravado no `.meta.json` do modelo 3 da família de produção."""
+    mes = params.teste_final_inicio.strftime("%Y-%m")
+    meta3 = _ler_meta(pasta_modelos, modelos.nome_modelo(mes, "3", params.familia_producao))
+    return (meta3.get("dataset") or {}).get("sha256")
+
+
 def _ler_configuracao(caminho: Path, sha256: str | None, params: ParametrosTreino) -> dict:
     """Configuração congelada pelo protocolo ou pela busca (`docs/protocolo_congelado_rodada_NNN.json`),
     para o treino de desenvolvimento (`--configuracao`).
@@ -1061,6 +1117,7 @@ def executar(
     params: ParametrosTreino | None = None,
     registro: Path | None = None,
     configuracao: Path | None = None,
+    pasta_docs: Path | None = None,
 ) -> Path:
     """Treino e avaliação; grava as saídas e devolve o caminho do relatório.
 
@@ -1069,9 +1126,12 @@ def executar(
     ou pela busca), a configuração é a dele, sem seleção. Teste final (`teste_final=True`): só com a
     trava aberta; configuração congelada dos `.meta.json`; saídas em `pasta_saida/teste-final-<data>/`
     e o registro de uso único em `registro`. A trava é conferida antes de qualquer leitura ou gravação.
+    No teste final, a medida de dados novos de hoje (`pasta_docs`) também tem de bater com o dataset e com
+    o congelado (`conferir_medida_dados_novos`), antes de treinar.
     """
     params = carregar_parametros_treino() if params is None else params
     registro = REGISTRO_TESTE_FINAL if registro is None else Path(registro)
+    pasta_docs = PASTA_DOCS_PADRAO if pasta_docs is None else Path(pasta_docs)
     conferir_trava(teste_final, params.teste_final_liberado, params.teste_final_fim, registro)
     if teste_final and configuracao is not None:
         raise ErroPreRequisito("--configuracao não vale no teste final: a configuração vem dos .meta.json")
@@ -1086,6 +1146,12 @@ def executar(
         leitor = partial(ler_desenvolvimento, params=params)
 
     lidos = {nome: None if arquivos[nome] is None else leitor(arquivos[nome]) for nome in TIPOS_DATASET}
+    if teste_final:
+        conferir_medida_dados_novos(
+            caminho_medida_dados_novos(pasta_docs, _hoje()),
+            lidos["todas"][1].get("sha256"),
+            _sha_do_congelado(Path(pasta_modelos), params),
+        )
     origem = None
     if modo == "desenvolvimento" and configuracao is not None:
         congelada = _ler_configuracao(configuracao, lidos["todas"][1].get("sha256"), params)
@@ -1130,6 +1196,8 @@ def main(argv=None, params: ParametrosTreino | None = None, registro: Path | Non
     parser.add_argument("--configuracao", type=Path, default=None,
                         help="JSON de configuração congelada (protocolo ou busca) para o desenvolvimento; "
                              "recusado no teste final")
+    parser.add_argument("--pasta-docs", type=Path, default=None,
+                        help="pasta da medida de dados novos, exigida no teste final (padrão: docs)")
     args = parser.parse_args(argv)
     try:
         caminho = executar(
@@ -1141,6 +1209,7 @@ def main(argv=None, params: ParametrosTreino | None = None, registro: Path | Non
             params=params,
             registro=registro,
             configuracao=args.configuracao,
+            pasta_docs=args.pasta_docs,
         )
     except ErroTravaTesteFinal as e:
         print(f"{e}. Nada foi gravado.")

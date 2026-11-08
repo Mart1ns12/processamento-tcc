@@ -3,23 +3,32 @@ e o teste final ponta a ponta com dados sintéticos. Nada de banco ou rede; o re
 """
 
 import json
-from datetime import date
+from datetime import date, timedelta
 
 import pandas as pd
 import pytest
 
 from fabrica_treino import dataset_sintetico, gravar_versoes, params_teste
-from processamento.experimento import dataset, treino
+from processamento.experimento import dataset, medida_dados_novos as md, modelos, treino
 from processamento.experimento.preparacao import COLUNAS_RANK
 from processamento.experimento.validacao import dobras_teste_final
 
 FIM = date(2026, 1, 20)
+HOJE = date(2026, 11, 8)
+SHA_FALSO = "f" * 64
 
 
 @pytest.fixture(autouse=True)
 def registro_isolado(tmp_path, monkeypatch):
-    """Nenhum teste deste arquivo pode tocar o registro real do teste final (docs/)."""
+    """Nenhum teste deste arquivo pode tocar o registro real do teste final nem a pasta docs/ (medida)."""
     monkeypatch.setattr(treino, "REGISTRO_TESTE_FINAL", tmp_path / "docs" / "teste_final_usado.json")
+    monkeypatch.setattr(treino, "PASTA_DOCS_PADRAO", tmp_path / "docs")
+
+
+@pytest.fixture(autouse=True)
+def hoje_fixo(monkeypatch):
+    """O dia da medida é HOJE (a trava pergunta o dia pelo mesmo relógio de `_agora`)."""
+    monkeypatch.setattr(treino, "_agora", lambda: f"{HOJE.isoformat()}T10:00:00-03:00")
 
 
 @pytest.fixture
@@ -30,6 +39,7 @@ def ambiente(tmp_path):
         "datasets": datasets,
         "saida": tmp_path / "saida",
         "modelos": tmp_path / "modelos",
+        "docs": tmp_path / "docs",
         "registro": tmp_path / "docs" / "teste_final_usado.json",
     }
 
@@ -45,6 +55,68 @@ def _argv(amb, *extra):
 
 def _params_liberado(**trocas):
     return params_teste(teste_final_fim=FIM, teste_final_liberado=True, **trocas)
+
+
+NOME_META3 = modelos.nome_modelo("2026-01", "3", "xgb")   # mês de teste_final.inicio (2026-01-02) e família xgb
+
+
+def _sha_csv(csv):
+    return json.loads(csv.with_suffix(".json").read_text(encoding="utf-8"))["sha256"]
+
+
+def _sha_todas(amb):
+    return _sha_csv(treino.localizar_datasets(amb["datasets"], None)["todas"])
+
+
+def _sha_congelado(amb):
+    """sha256 do dataset gravado no meta do modelo 3 do desenvolvimento (o que a trava confere)."""
+    meta = json.loads((amb["modelos"] / f"{NOME_META3}.meta.json").read_text(encoding="utf-8"))
+    return meta["dataset"]["sha256"]
+
+
+def _gravar_medida(pasta_docs, sha_novo, sha_congelado, dia=HOJE, **trocas):
+    """Medida de dados novos com as chaves que `medida_dados_novos` grava (JSON mínimo, rodada oficial continua)."""
+    medida = {
+        "exploratorio": True,
+        "data": dia.isoformat(),
+        "congelado": {"arquivo": "dataset-todas.csv", "sha256": sha_congelado,
+                      "protocolo": "protocolo_congelado_rodada_003.json", "rodada": 3},
+        "novo": {"arquivo": "dataset-todas.csv", "sha256": sha_novo},
+        "versao_preparacao": md.preparacao.VERSAO_PREPARACAO,
+        "decisao": "rodada_oficial_continua",
+        "parar_e_perguntar": False,
+        "limite": 0.01,
+        "tolerancia": 1e-6,
+        "fracao_total": 0.0,
+        "linhas_mudadas": 0,
+        "denominador": 1,
+        "grupos": {g: {"colunas": [], "linhas_mudadas": 0, "fracao": 0.0} for g in md.GRUPOS_NOMES},
+        "por_ano": [],
+        "top_tickers": [],
+        "contagens": {"linhas_congelado": 1, "linhas_novo": 1, "linhas_comparadas": 1,
+                      "so_congelado": 0, "so_novo": 0, "denominador": 1},
+    }
+    medida.update(trocas)
+    caminho = treino.caminho_medida_dados_novos(pasta_docs, dia)
+    caminho.parent.mkdir(parents=True, exist_ok=True)
+    caminho.write_text(json.dumps(medida, ensure_ascii=False), encoding="utf-8")
+    return caminho
+
+
+def _medida_valida(amb, dia=HOJE, sha_novo=None, sha_congelado=None, **trocas):
+    """Medida de hoje sobre o dataset do teste final e contra o congelado (os shas reais, salvo os trocados)."""
+    return _gravar_medida(
+        amb["docs"],
+        _sha_todas(amb) if sha_novo is None else sha_novo,
+        _sha_congelado(amb) if sha_congelado is None else sha_congelado,
+        dia=dia,
+        **trocas,
+    )
+
+
+def _nada_do_teste_final(amb):
+    assert not amb["registro"].exists()
+    assert list(amb["saida"].glob("teste-final-*")) == []
 
 
 def _ler_metricas(pasta):
@@ -134,9 +206,15 @@ def test_teste_final_sem_treino_de_desenvolvimento_da_erro(ambiente, capsys):
 
 
 @pytest.fixture
-def teste_final_feito(ambiente):
-    """Desenvolvimento e depois teste final com a trava aberta (fim = 2026-01-20)."""
+def dev_feito(ambiente):
+    """Só o desenvolvimento (grava os .meta.json do congelado). Sem medida de hoje, o teste final não roda."""
     treino.executar(ambiente["datasets"], ambiente["saida"], ambiente["modelos"], params=params_teste())
+
+
+@pytest.fixture
+def teste_final_feito(ambiente, dev_feito):
+    """Desenvolvimento, medida válida de hoje e depois teste final com a trava aberta (fim = 2026-01-20)."""
+    _medida_valida(ambiente)
     caminho = treino.executar(
         ambiente["datasets"], ambiente["saida"], ambiente["modelos"],
         teste_final=True, params=_params_liberado(), registro=ambiente["registro"],
@@ -185,11 +263,14 @@ def test_veneno_do_teste_ao_vivo_nao_muda_nada(tmp_path, ambiente, teste_final_f
     envenenado = _envenenar(df, df["data"] >= pd.Timestamp(FIM))  # a linha do FIM já é ao vivo
     assert (df["data"] > pd.Timestamp(FIM)).any()
     datasets = tmp_path / "envenenado"
-    gravar_versoes(datasets, envenenado)
+    csv_envenenado = gravar_versoes(datasets, envenenado)["todas"]
     registro_2 = tmp_path / "outro" / "registro.json"
+    # o dataset envenenado tem outro sha: a medida de hoje tem de ser feita sobre ele (pasta própria)
+    docs_2 = tmp_path / "docs2"
+    _gravar_medida(docs_2, _sha_csv(csv_envenenado), _sha_congelado(ambiente))
     estragado = treino.executar(
         datasets, tmp_path / "saida2", ambiente["modelos"],
-        teste_final=True, params=_params_liberado(), registro=registro_2,
+        teste_final=True, params=_params_liberado(), registro=registro_2, pasta_docs=docs_2,
     )
     original = teste_final_feito.parent
     assert (original / "previsoes.csv").read_bytes() == (estragado.parent / "previsoes.csv").read_bytes()
@@ -225,3 +306,84 @@ def test_teste_final_recusa_configuracao(ambiente, tmp_path, capsys):
     assert "--configuracao" in capsys.readouterr().out
     assert not ambiente["registro"].exists()
     assert list(ambiente["saida"].glob("teste-final-*")) == []
+
+
+# ---------------------------------------------------------------------------
+# Medida de dados novos (protocolo, seção 8, nota da D5): exigida antes do teste final
+# ---------------------------------------------------------------------------
+
+def test_sem_medida_de_hoje_o_teste_final_nao_roda(ambiente, dev_feito, capsys):
+    params = _params_liberado()
+    with pytest.raises(treino.ErroPreRequisito, match="falta a medida de dados novos de hoje"):
+        treino.executar(ambiente["datasets"], ambiente["saida"], ambiente["modelos"],
+                        teste_final=True, params=params, registro=ambiente["registro"])
+    _nada_do_teste_final(ambiente)
+
+    codigo = treino.main(_argv(ambiente, "--teste-final"), params=params, registro=ambiente["registro"])
+    assert codigo == 2
+    assert "falta a medida de dados novos de hoje" in capsys.readouterr().out
+    _nada_do_teste_final(ambiente)
+
+
+def test_medida_de_outro_dia_nao_vale(ambiente, dev_feito):
+    _medida_valida(ambiente, dia=HOJE - timedelta(days=1))
+    with pytest.raises(treino.ErroPreRequisito, match="falta a medida de dados novos de hoje"):
+        treino.executar(ambiente["datasets"], ambiente["saida"], ambiente["modelos"],
+                        teste_final=True, params=_params_liberado(), registro=ambiente["registro"])
+    _nada_do_teste_final(ambiente)
+
+
+@pytest.mark.parametrize(
+    "trocas, mensagem",
+    [
+        ({"sha_novo": SHA_FALSO}, "é de outro arquivo"),
+        ({"sha_congelado": SHA_FALSO}, "dataset congelado dos modelos"),
+        ({"decisao": "nova_rodada"}, "decidiu nova_rodada"),
+        ({"parar_e_perguntar": True}, "pede parar e perguntar"),
+    ],
+)
+def test_medida_de_hoje_que_nao_confere_recusa_e_nao_grava(ambiente, dev_feito, capsys, trocas, mensagem):
+    _medida_valida(ambiente, **trocas)
+    with pytest.raises(treino.ErroPreRequisito, match=mensagem):
+        treino.executar(ambiente["datasets"], ambiente["saida"], ambiente["modelos"],
+                        teste_final=True, params=_params_liberado(), registro=ambiente["registro"])
+    _nada_do_teste_final(ambiente)
+
+    codigo = treino.main(_argv(ambiente, "--teste-final"), params=_params_liberado(), registro=ambiente["registro"])
+    assert codigo == 2
+    assert mensagem in capsys.readouterr().out
+    _nada_do_teste_final(ambiente)
+
+
+def test_medida_ilegivel_recusa(ambiente, dev_feito):
+    caminho = treino.caminho_medida_dados_novos(ambiente["docs"], HOJE)
+    caminho.parent.mkdir(parents=True, exist_ok=True)
+    caminho.write_text("{não é json", encoding="utf-8")
+    with pytest.raises(treino.ErroPreRequisito, match="não pode ser lida"):
+        treino.executar(ambiente["datasets"], ambiente["saida"], ambiente["modelos"],
+                        teste_final=True, params=_params_liberado(), registro=ambiente["registro"])
+    _nada_do_teste_final(ambiente)
+
+
+def test_nome_da_medida_e_o_que_o_modulo_de_medida_grava(tmp_path):
+    """Se o nome mudar em `medida_dados_novos`, esta conferência quebra (a trava lê o mesmo arquivo)."""
+    assert treino.caminho_medida_dados_novos(tmp_path, HOJE) == md._caminhos_saida(tmp_path, HOJE)[1]
+
+
+def test_medida_gerada_pelo_modulo_libera_o_teste_final(ambiente, dev_feito, tmp_path):
+    """Ponta a ponta com a medida de verdade (`medida_dados_novos.executar`) sobre o mesmo CSV: passa a trava."""
+    csv = treino.localizar_datasets(ambiente["datasets"], None)["todas"]
+    meta3 = json.loads((ambiente["modelos"] / f"{NOME_META3}.meta.json").read_text(encoding="utf-8"))
+    protocolo = tmp_path / "protocolo_congelado_teste.json"
+    protocolo.write_text(json.dumps({
+        "rodada": 3,
+        "sha256_dataset": _sha_csv(csv),
+        "colunas_3": meta3["colunas"],
+        "extremo_em_rank": False,
+    }), encoding="utf-8")
+    md.executar(csv, csv, protocolo, ambiente["docs"], data=HOJE, params=params_teste())
+
+    caminho = treino.executar(ambiente["datasets"], ambiente["saida"], ambiente["modelos"],
+                              teste_final=True, params=_params_liberado(), registro=ambiente["registro"])
+    assert caminho.parent.name.startswith("teste-final-")
+    assert ambiente["registro"].exists()
