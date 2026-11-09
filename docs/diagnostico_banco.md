@@ -1,6 +1,6 @@
 # Diagnóstico do banco da coleta (só leitura)
 
-- Gerado em: 2026-11-09 12:22 (America/Sao_Paulo)
+- Gerado em: 2026-11-09 13:48 (America/Sao_Paulo)
 - Banco: tcc_scraper
 - MySQL: 8.0.46-0ubuntu0.24.04.4
 - Comando: `python -m processamento.diagnostico`
@@ -12,7 +12,6 @@
 | # | Tema | Tabela | Detalhe |
 |---|---|---|---|
 | 1 | other_codes | v1-raw_b3_cadastro | ticker fora do other_codes da empresa: RAIZ4 (33453598000123) |
-| 2 | mudanca_ticker | v1-mudancas_ticker | RAIZ55 |
 
 ## 1. Existência das tabelas
 
@@ -174,7 +173,7 @@
 | v1-noticias | 567311 | 2021-01-01 | 2026-11-09 | 88 | ticker |
 | v1-precos | 146140 | 2019-12-30 | 2026-11-09 | 89 | ticker |
 | v1-cadastro | 88 | NULL | NULL | 88 | ticker |
-| v1-mudancas_ticker | 11 | 2025-05-02 | 2026-11-03 | 11 | ticker_antigo |
+| v1-mudancas_ticker | 10 | 2025-05-02 | 2026-06-08 | 10 | ticker_antigo |
 | v1-balancos | 3342 | 2020-03-31 | 2026-09-30 | 87 | cnpj |
 | v1-acoes_emitidas | 2218 | 2020-03-31 | 2026-09-30 | 87 | cnpj |
 | v1-proventos | 8433 | 1995-12-28 | 2026-10-30 | 149 | ticker |
@@ -596,7 +595,7 @@ _(sem linhas)_
 - período analisado (pregões do IBOV): 2019-12-30 a 2026-11-09
 - v1-proventos: 3 tickers do cadastro sem linhas (informativo)
 - excluídos por decisão (config/exclusoes.yaml): CRFB3, SRNA3, STBP11, STBP3, STBP4
-- mudanças registradas em v1-mudancas_ticker: AZUL4 → AZUL3, CCRO3 → MOTV3, CPLE6 → CPLE3, ELET3 → AXIA3, ELET6 → AXIA3, EMBR3 → EMBJ3, JBSS3 → JBSS32, NTCO3 → NATU3, ODPV3 → SAUD3, PETZ3 → AUAU3, RAIZ4 → RAIZ55
+- mudanças registradas em v1-mudancas_ticker: AZUL4 → AZUL3, CCRO3 → MOTV3, CPLE6 → CPLE3, ELET3 → AXIA3, ELET6 → AXIA3, EMBR3 → EMBJ3, JBSS3 → JBSS32, NTCO3 → NATU3, ODPV3 → SAUD3, PETZ3 → AUAU3
 
 ### Comparação de conjuntos
 
@@ -605,7 +604,7 @@ _(sem linhas)_
 | cadastro × precos | CRFB3, SRNA3, STBP3 | BRENT, IBOV, IVVB11, USDBRL |
 | cadastro × noticias | — | — |
 | cadastro × proventos | AZUL3, CRFB3, SRNA3 | AXIA5, AXIA6, BBAS4, BPAC3, BPAC5, BRAP3, BRKM3, BRKM6, CMIG3, COGN11, COGN4, CPLE11, CPLE4, CPLE5, CPLE6, CSAN11, CYRE4, EGIE5, EGIE6, EMBJ4, EMBJ5, ENGI3, ENGI4, EQTL11, EQTL4, GGBR3, GOAU3, IGTI3, IGTI4, ISAE3, ITSA3, ITUB3, KLBN3, KLBN4, LREN4, PCAR4, PCAR5, PCAR6, POMO3, RADL5, RADL6, RAIL11, RAIL4, RAPT3, RENT4, SANB3, SANB4, STBP11, STBP4, SUZB5, SUZB6, TAEE3, TAEE4, UGPA4, USIM3, USIM4, USIM6, VALE4, VALE5, VBBR4, VIVT4, WEGE4, YDUQ11, YDUQ4 |
-| cadastro × mudancas (ticker_novo) | ABEV3, ALOS3, ASAI3, AURE3, AZZA3, B3SA3, BBAS3, BBDC3, BBDC4, BBSE3, BEEF3, BPAC11, BRAP4, BRAV3, BRKM5, CMIG4, CMIN3, COGN3, CPFE3, CRFB3, CSAN3, CSNA3, CVCB3, CYRE3, DIRR3, EGIE3, ENEV3, ENGI11, EQTL3, FLRY3, GGBR4, GMAT3, GOAU4, HAPV3, HYPE3, IGTI11, IRBR3, ISAE4, ITSA4, ITUB4, KLBN11, LREN3, LWSA3, MBRF3, MGLU3, MRVE3, MULT3, PCAR3, PETR3, PETR4, POMO4, PRIO3, PSSA3, RADL3, RAIL3, RAIZ4, RAPT4, RDOR3, RECV3, RENT3, SANB11, SBSP3, SLCE3, SMTO3, SRNA3, STBP3, SUZB3, TAEE11, TIMS3, TOTS3, UGPA3, USIM5, VALE3, VAMO3, VBBR3, VIVA3, VIVT3, WEGE3, YDUQ3 | RAIZ55 |
+| cadastro × mudancas (ticker_novo) | ABEV3, ALOS3, ASAI3, AURE3, AZZA3, B3SA3, BBAS3, BBDC3, BBDC4, BBSE3, BEEF3, BPAC11, BRAP4, BRAV3, BRKM5, CMIG4, CMIN3, COGN3, CPFE3, CRFB3, CSAN3, CSNA3, CVCB3, CYRE3, DIRR3, EGIE3, ENEV3, ENGI11, EQTL3, FLRY3, GGBR4, GMAT3, GOAU4, HAPV3, HYPE3, IGTI11, IRBR3, ISAE4, ITSA4, ITUB4, KLBN11, LREN3, LWSA3, MBRF3, MGLU3, MRVE3, MULT3, PCAR3, PETR3, PETR4, POMO4, PRIO3, PSSA3, RADL3, RAIL3, RAIZ4, RAPT4, RDOR3, RECV3, RENT3, SANB11, SBSP3, SLCE3, SMTO3, SRNA3, STBP3, SUZB3, TAEE11, TIMS3, TOTS3, UGPA3, USIM5, VALE3, VAMO3, VBBR3, VIVA3, VIVT3, WEGE3, YDUQ3 | — |
 | cadastro × balancos (cnpj) | — | 02916265000160, 32785497000197 |
 | cadastro × acoes_emitidas (cnpj) | — | 02916265000160, 32785497000197 |
 
@@ -780,7 +779,7 @@ _(sem linhas)_
 
 ## 16. Vazios e zeros
 
-- `v1-mudancas_ticker.data_mudanca` preenchida em 11 de 11 linhas
+- `v1-mudancas_ticker.data_mudanca` preenchida em 10 de 10 linhas
 - demais colunas 100% preenchidas
 
 ### Colunas com nulos, textos vazios ou zeros
@@ -798,7 +797,7 @@ _(sem linhas)_
 | v1-cadastro | subsetor | 88 | 1 | 1.1 | parcial | 0 | 0 |
 | v1-cadastro | unit_qtd_on | 88 | 82 | 93.2 | parcial | 0 | 0 |
 | v1-cadastro | unit_qtd_pn | 88 | 82 | 93.2 | parcial | 0 | 0 |
-| v1-mudancas_ticker | data_mudanca | 11 | 0 | 0 | cheia | 0 | 0 |
+| v1-mudancas_ticker | data_mudanca | 10 | 0 | 0 | cheia | 0 | 0 |
 | v1-balancos | receita_liquida | 3342 | 0 | 0 | cheia | 0 | 84 |
 | v1-balancos | lucro_bruto | 3342 | 322 | 9.6 | parcial | 0 | 43 |
 | v1-balancos | lucro_liquido | 3342 | 0 | 0 | cheia | 0 | 4 |
@@ -874,7 +873,7 @@ _(sem linhas)_
 
 - Composição do Ibovespa: 49 de 136 tickers sem nenhum preço em v1-precos (8 código antigo de empresa do cadastro, 41 fora do cadastro); 29 estiveram no índice em 2024 ou depois. O preço é procurado com a união das mudanças de ticker (o código antigo vale pelo atual).
 - corrigir_horas: execução mais recente 2026-10-29-coletar-175705 (status concluida), etapa concluida; iniciada em 2026-10-29 17:57, finalizada em 2026-10-29 18:01 (horário de São Paulo)
-- Cobertura do experimento (universo com a composição, motivo ok): 119026 linhas em 1709 pregões, de 2019-12-30 a 2026-11-09.
+- Cobertura do experimento (universo com a composição, motivo ok): 119823 linhas em 1709 pregões, de 2019-12-30 a 2026-11-09.
 
 ### Composição do Ibovespa: tickers sem nenhum preço em v1-precos
 
@@ -938,7 +937,7 @@ _(sem linhas)_
 | 2020 | 249 | 18249 | 72 | 73 | 76 | composicao_atual |
 | 2021 | 247 | 14989 | 59 | 61 | 62 | composicao_historica |
 | 2022 | 250 | 16419 | 65 | 66 | 66 | composicao_historica |
-| 2023 | 248 | 16693 | 66 | 67 | 69 | composicao_historica |
-| 2024 | 251 | 18005 | 70 | 71 | 75 | composicao_historica |
-| 2025 | 250 | 19058 | 75 | 76 | 77 | composicao_historica |
-| 2026 | 213 | 15541 | 70 | 73 | 76 | composicao_historica |
+| 2023 | 248 | 16941 | 67 | 68 | 70 | composicao_historica |
+| 2024 | 251 | 18256 | 71 | 72 | 76 | composicao_historica |
+| 2025 | 250 | 19308 | 76 | 77 | 78 | composicao_historica |
+| 2026 | 213 | 15589 | 70 | 73 | 77 | composicao_historica |
