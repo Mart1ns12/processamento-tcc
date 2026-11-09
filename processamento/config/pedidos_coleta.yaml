@@ -19,7 +19,7 @@ pedidos:
 
   - id: "acoes_sem_evento"
     texto: "Quantidades de ações sem evento correspondente"
-    detalhe: "AZUL3 e CNPJ 76483817000120 (2020)"
+    detalhe: "Desde 09/11/2026 (eventos depois da data_referencia): MGLU3 ref. 30/09/2020 (quantidade já depois do desdobramento 4 de 13/10/2020) e CNPJ 33376989000191 ref. 31/12/2022 (já depois do grupamento 30 antes da entrega de 21/03/2023)"
     prioridade: "normal"
     checagem: "acoes_coerentes_com_eventos"
 
@@ -80,11 +80,18 @@ pedidos:
     parametros: {tema: "other_codes", termo: "RAIZ4", antigo: "RAIZ4", novo: "RAIZ55"}
 
   - id: "ebitda_balancos"
-    texto: "EBITDA nos balanços"
-    detalhe: "ou ebit e depreciacao_amortizacao completos nas não financeiras"
+    texto: "D&A completa nos balanços das não financeiras"
+    detalhe: "A coleta completou depreciacao_amortizacao (sem coluna ebitda). Pedido: D&A da NATU3 (holding, CNPJ 32785497000197) no 3T24. Exceções explicadas pela coleta: GMAT3 1T20–3T21, AURE3 1T21–2T22, BRAV3 2T20, TIMS3 2T22, SBSP3 3T23, BRAP4 em todos (holding sem D&A). SRNA3 fica fora (tickers_excluidos)"
     prioridade: "normal"
-    checagem: "colunas_existem"
-    parametros: {tabela: "v1-balancos", colunas: ["ebitda"]}
+    checagem: "da_nao_financeiras"
+    parametros:
+      excecoes:
+        - {ticker: "GMAT3", de: "1T20", ate: "3T21"}
+        - {ticker: "AURE3", de: "1T21", ate: "2T22"}
+        - {ticker: "BRAV3", de: "2T20", ate: "2T20"}
+        - {ticker: "TIMS3", de: "2T22", ate: "2T22"}
+        - {ticker: "SBSP3", de: "3T23", ate: "3T23"}
+        - {ticker: "BRAP4"}   # sem de/ate = todos os trimestres (holding sem D&A, confirmado pela coleta em 09/11/2026)
 
   # Pedidos de 04/11/2026: indicadores "indisponível" no resumo_acao por falta de dado da coleta.
   # Sem checagem automática: o diagnóstico não traz esses campos por empresa (conferência manual).

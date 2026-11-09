@@ -136,13 +136,16 @@ def acoes_disponiveis(acoes_emitidas: pd.DataFrame, balancos: pd.DataFrame, t) -
     return acoes_emitidas[mascara].sort_values(["cnpj", "data_referencia"]).reset_index(drop=True)
 
 
-def acoes_na_data(disponiveis: pd.DataFrame, cnpj: str, data) -> tuple[float, float, str]:
+def acoes_na_data(disponiveis: pd.DataFrame, cnpj: str, data,
+                  pn_extinta_vale_zero: bool = True) -> tuple[float, float, str]:
     """Quantidades (ON, PN) da empresa na data: a mais recente ≤ data.
 
     Usa `qtd_on_base_atual`/`qtd_pn_base_atual` quando existem (quantidade na base de hoje, 03/11/2026);
     senão, `qtd_on`/`qtd_pn` (fixtures antigas). Sem linha anterior à data, usa a de menor
     data_referencia (fallback, D3). Sem linha da empresa, ou com quantidade NaN (ex.: `anulado`),
-    sai indisponível. `qtd_pn` igual a zero é válido.
+    sai indisponível. `qtd_pn` igual a zero é válido. Na base atual, PN vazia com ON preenchida vale
+    zero no valor de mercado (09/11/2026: a PN deixou de existir na troca por ON, ex.: Eletrobras, Azul,
+    Copel); com `pn_extinta_vale_zero=False` (payout de evento com provento de PN), sai indisponível.
     """
     linhas = disponiveis[disponiveis["cnpj"] == cnpj]
     if linhas.empty:
@@ -156,6 +159,8 @@ def acoes_na_data(disponiveis: pd.DataFrame, cnpj: str, data) -> tuple[float, fl
     col_on = "qtd_on_base_atual" if "qtd_on_base_atual" in linhas.columns else "qtd_on"
     col_pn = "qtd_pn_base_atual" if "qtd_pn_base_atual" in linhas.columns else "qtd_pn"
     qtd_on, qtd_pn = escolhida[col_on], escolhida[col_pn]
+    if pn_extinta_vale_zero and col_pn == "qtd_pn_base_atual" and pd.notna(qtd_on) and pd.isna(qtd_pn):
+        qtd_pn = 0.0
     if pd.isna(qtd_on) or pd.isna(qtd_pn):
         return float("nan"), float("nan"), INDISPONIVEL
     return float(qtd_on), float(qtd_pn), OK
@@ -168,7 +173,8 @@ def total_pago(ligados: pd.DataFrame, disponiveis: pd.DataFrame, cnpj: str | Non
     Entram só as linhas sem `duplicada` de classe ON ou PN (a unit fica de fora). Por evento
     (tipo, data_com): soma dos ON vezes as ações ON, mais a média dos PN que têm linha no evento
     vezes as ações PN (D2). Sem eventos: 0.0 com status ok. Sem ações disponíveis em algum evento:
-    indisponível. Sem CNPJ: indisponível.
+    indisponível. Evento com provento de PN e `qtd_pn_base_atual` vazia: indisponível (09/11/2026).
+    Sem CNPJ: indisponível.
     """
     if cnpj is None or pd.isna(cnpj):
         return float("nan"), INDISPONIVEL
@@ -186,7 +192,9 @@ def total_pago(ligados: pd.DataFrame, disponiveis: pd.DataFrame, cnpj: str | Non
     for (_, data_com), evento in linhas.groupby(["tipo", "data_com"]):
         on = evento.loc[evento["tipo_classe"] == "ON", "valor_por_acao"]
         pn = evento.loc[evento["tipo_classe"] == "PN", "valor_por_acao"]
-        qtd_on, qtd_pn, status = acoes_na_data(disponiveis, cnpj, data_com)
+        # 09/11/2026: com provento de PN no evento, PN da base vazia não vale zero (a PN existia e recebia):
+        # o payout sai indisponível em vez de subestimado. Só com proventos de ON, a PN não entra na conta.
+        qtd_on, qtd_pn, status = acoes_na_data(disponiveis, cnpj, data_com, pn_extinta_vale_zero=not len(pn))
         if status != OK:
             return float("nan"), INDISPONIVEL
         total += float(on.sum()) * qtd_on

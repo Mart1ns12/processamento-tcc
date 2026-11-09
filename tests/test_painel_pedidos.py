@@ -20,6 +20,7 @@ NOMES_CHECAGENS = {
     "meses_sem_poucas_noticias", "finbert_e_juiza_completos", "acoes_coerentes_com_eventos",
     "sem_linha_fora_do_calendario", "colunas_existem", "origem_nos_anos", "emissores_por_periodo",
     "valor_distinto", "coluna_preenchida", "indices_desde", "divergencia_e_mudanca",
+    "da_nao_financeiras",
 }
 
 
@@ -61,7 +62,7 @@ def test_yaml_real_com_fixture_bate_com_o_gabarito():
         "98,1% preenchida (7.903 vazias)",
         "IDIV, IFIX, SMLL desde 30/12/2019, sem lacunas.",
         "O diagnóstico ainda não lista as mudanças de ticker (rode o diagnóstico de novo).",
-        "Tabela não encontrada na seção.",
+        "Seção não encontrada no diagnóstico.",
     ] + ["sem checagem automática"] * 7
 
 
@@ -79,7 +80,7 @@ def test_yaml_real_tem_os_itens_na_ordem():
     assert d["itens"][1]["prioridade"] == "normal"
 
 
-def test_registro_tem_exatamente_os_onze_nomes():
+def test_registro_tem_exatamente_os_doze_nomes():
     assert set(CHECAGENS) == NOMES_CHECAGENS
 
 
@@ -222,6 +223,7 @@ def test_calendario_sem_nota_nem_tabela_nunca_vira_entregue(tmp_path):
     ("coluna_preenchida", '{tabela: "v1-noticias", coluna: "papel", max_pct_nulo: 5}'),
     ("indices_desde", '{indices: ["IDIV"], inicio_ate: "2019-12-30"}'),
     ("divergencia_e_mudanca", '{tema: "other_codes", termo: "RAIZ4", antigo: "RAIZ4", novo: "RAIZ55"}'),
+    ("da_nao_financeiras", "{excecoes: []}"),
 ])
 def test_checagem_com_docs_vazio_nao_levanta(tmp_path, nome, params):
     docs = tmp_path / "vazio.md"
@@ -340,3 +342,98 @@ def test_finbert_so_finbert_ignora_a_juiza(tmp_path):
     d = avaliar_pedidos(_um_pedido(tmp_path, bloco), FIXTURE)
     assert d["itens"][0]["estado"] == "pendente"
     assert d["itens"][0]["evidencia"] == "6.560 sem FinBERT"
+
+
+# ---------------------------------------------------------------- da_nao_financeiras
+
+EXCECOES_DA = ('    checagem: "da_nao_financeiras"\n'
+               '    parametros: {excecoes: [{ticker: "GMAT3", de: "1T20", ate: "3T21"}, '
+               '{ticker: "BRAV3", de: "2T20", ate: "2T20"}]}\n')
+
+
+def _docs_da(tmp_path: Path, tabela_linhas: str = "", notas: list[str] | None = None,
+             com_secao: bool = True) -> Path:
+    """Diagnóstico mínimo: a §4 Balanços com as notas e, se houver linhas, a tabela de D&A vazia."""
+    docs = tmp_path / "diagnostico_banco.md"
+    corpo = ""
+    if com_secao:
+        notas_md = "".join(f"- {n}\n" for n in notas or [])
+        tabela = ""
+        if tabela_linhas:
+            tabela = ("\n### D&A vazia nas não financeiras\n\n"
+                      "| ticker | cnpj | trimestre | linhas | situacao |\n|---|---|---|---|---|\n" + tabela_linhas)
+        corpo = f"## 4. Balanços (v1-balancos)\n\n{notas_md}{tabela}\n"
+    docs.write_text("# Diagnóstico do banco da coleta (só leitura)\n- Gerado em: 2026-11-09 10:00 (America/Sao_Paulo)\n\n"
+                    "## Divergências × especificação\n\nNenhuma divergência encontrada.\n\n" + corpo,
+                    encoding="utf-8")
+    return docs
+
+
+def _item_da(tmp_path: Path, docs: Path, excecoes: str = EXCECOES_DA) -> dict:
+    return avaliar_pedidos(_um_pedido(tmp_path, _pedido(extra=excecoes)), docs)["itens"][0]
+
+
+def test_da_so_com_linhas_explicadas_fica_entregue(tmp_path):
+    tabela = ("| GMAT3 | 33333333000133 | 2T20 | 3 | ok |\n"
+              "| BRAV3 | 44444444000144 | 2T20 | 1 | ok |\n"
+              "| GMAT3 | 33333333000133 | 3T21 | 1 | ok |\n")
+    item = _item_da(tmp_path, _docs_da(tmp_path, tabela))
+    assert item["estado"] == "entregue"
+    assert item["evidencia"] == "Só as exceções explicadas (3 trimestres): GMAT3 1T20–3T21, BRAV3 2T20"
+
+
+def test_da_linha_fora_das_excecoes_fica_pendente_com_a_empresa(tmp_path):
+    tabela = ("| GMAT3 | 33333333000133 | 2T20 | 3 | ok |\n"
+              "| PETR4 | 55555555000155 | 1T22 | 1 | ok |\n"
+              "| PETR4 | 55555555000155 | 2T22 | 1 | ok |\n")
+    item = _item_da(tmp_path, _docs_da(tmp_path, tabela))
+    assert item["estado"] == "pendente"
+    assert item["evidencia"] == "D&A vazia fora das exceções: PETR4 1T22–2T22 (2 trimestres)"
+
+
+def test_da_excecao_sem_periodo_vale_para_todos_os_trimestres(tmp_path):
+    # 09/11/2026: BRAP4 (holding sem D&A) é exceção em todos os trimestres.
+    excecoes = ('    checagem: "da_nao_financeiras"\n'
+                '    parametros: {excecoes: [{ticker: "BRAV3", de: "2T20", ate: "2T20"}, {ticker: "BRAP4"}]}\n')
+    tabela = ("| BRAP4 | 03847461000192 | 1T20 | 1 | ok |\n"
+              "| BRAP4 | 03847461000192 | 2T26 | 2 | individual |\n"
+              "| BRAV3 | 44444444000144 | 2T20 | 1 | ok |\n")
+    item = _item_da(tmp_path, _docs_da(tmp_path, tabela), excecoes)
+    assert item["estado"] == "entregue"
+    assert item["evidencia"] == "Só as exceções explicadas (3 trimestres): BRAV3 2T20, BRAP4 (todos)"
+
+
+def test_da_trimestre_ilegivel_nunca_e_explicado(tmp_path):
+    tabela = "| GMAT3 | 33333333000133 | ?T21 | 1 | ok |\n"
+    item = _item_da(tmp_path, _docs_da(tmp_path, tabela))
+    assert item["estado"] == "pendente"
+    assert item["evidencia"] == "D&A vazia fora das exceções: GMAT3 ?T21"
+
+
+def test_da_lista_de_empresas_limitada_a_10_com_e_mais(tmp_path):
+    tabela = "".join(f"| CMP{i:02d}3 | {i:014d} | 1T22 | 1 | ok |\n" for i in range(11))
+    item = _item_da(tmp_path, _docs_da(tmp_path, tabela))
+    assert item["estado"] == "pendente"
+    assert item["evidencia"].endswith(" e mais 1")
+    assert item["evidencia"].count(", ") == 9
+
+
+def test_da_nenhuma_entregue_com_nota_nenhuma(tmp_path):
+    docs = _docs_da(tmp_path, notas=["D&A vazia nas não financeiras: nenhuma"])
+    item = _item_da(tmp_path, docs)
+    assert item["estado"] == "entregue"
+    assert item["evidencia"] == "D&A preenchida em todas as não financeiras."
+
+
+def test_da_sem_a_secao_de_balancos_fica_sem_dados(tmp_path):
+    item = _item_da(tmp_path, _docs_da(tmp_path, com_secao=False))
+    assert item["estado"] == "sem_dados"
+    assert item["evidencia"] == "Seção não encontrada no diagnóstico."
+
+
+def test_da_excecao_com_rotulo_invalido_vira_erro(tmp_path):
+    excecoes = ('    checagem: "da_nao_financeiras"\n'
+                '    parametros: {excecoes: [{ticker: "GMAT3", de: "5T20", ate: "3T21"}]}\n')
+    tabela = "| GMAT3 | 33333333000133 | 2T20 | 3 | ok |\n"
+    item = _item_da(tmp_path, _docs_da(tmp_path, tabela), excecoes)
+    assert item["estado"] == "erro"

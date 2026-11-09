@@ -4,6 +4,7 @@ Usam tests/dados/painel/diagnostico_completo.md (fixture), a árvore raiz de fab
 e, só para leitura, o docs/diagnostico_banco.md real. Nenhum teste usa banco ou rede.
 """
 
+import re
 from pathlib import Path
 
 import pytest
@@ -342,8 +343,13 @@ def test_diagnostico_real_nenhum_cartao_idle():
 
 @pytest.mark.skipif(not REAL.is_file(), reason="docs/diagnostico_banco.md não existe neste checkout")
 def test_diagnostico_real_horario_com_frase_por_origem():
+    # Sem valores fixos: os percentuais mudam a cada recarga da coleta. Confere a frase de cada origem
+    # e que os percentuais são números entre 0 e 100.
     horario = next(c for c in cartoes_saude(REAL)["cartoes"] if c["id"] == "horario_noticias")
-
-    assert horario["texto"].endswith(
-        "Google News: ~10% com hora real em 2021–2025 e 29% em 2026; WordPress: 100%; cvm_ipe só tem data."
+    frase = re.search(
+        r"Google News: ~(\d+)% com hora real em \d{4}–\d{4} e (\d+)% em \d{4}; WordPress: (\d+)%; "
+        r"cvm_ipe só tem data\.$",
+        horario["texto"],
     )
+    assert frase is not None, horario["texto"]
+    assert all(0 <= int(p) <= 100 for p in frase.groups())

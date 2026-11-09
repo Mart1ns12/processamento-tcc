@@ -89,9 +89,9 @@ def coerencia_acoes_eventos(acoes, eventos, emissores, tolerancia: float = TOLER
     """Linhas de `v1-acoes_emitidas` (ok) cuja base atual não bate com quantidade × eventos × fator_acoes.
 
     `fator_eventos`: produto dos fatores únicos por (data_com, tipo, fator) dos eventos do mesmo CNPJ com
-    data_com depois da entrega, ignorando BONIFICACAO com `isin_emitido` preenchido e diferente de `isin`.
+    data_com depois da data_referencia (09/11/2026: a quantidade é a da data de referência, confirmado pela
+    coleta; antes era a data_entrega), ignorando BONIFICACAO com `isin_emitido` preenchido e diferente de `isin`.
     `fator_acoes`: o fator do emissor com esse CNPJ (sem linha: 1,0; mais de um distinto: a linha é pulada).
-    Linhas sem data de entrega também são puladas (a ausência já é divergência de `acoes_sem_entrega`).
     Devolve só `|razao − 1| > tolerancia`.
     """
     fatores_emissor: dict[str, set[float]] = {}
@@ -108,8 +108,8 @@ def coerencia_acoes_eventos(acoes, eventos, emissores, tolerancia: float = TOLER
             return None
         return next(iter(distintos))
 
-    def fator_eventos(cnpj, entrega) -> float:
-        sel = eventos[(eventos["cnpj"] == cnpj) & (eventos["data_com"] > entrega)]
+    def fator_eventos(cnpj, referencia) -> float:
+        sel = eventos[(eventos["cnpj"] == cnpj) & (eventos["data_com"] > referencia)]
         ignorar = (sel["tipo"] == "BONIFICACAO") & sel["isin_emitido"].notna() & (sel["isin_emitido"] != sel["isin"])
         sel = sel[~ignorar]
         return float(sel[["data_com", "tipo", "fator"]].drop_duplicates()["fator"].prod())
@@ -117,12 +117,12 @@ def coerencia_acoes_eventos(acoes, eventos, emissores, tolerancia: float = TOLER
     linhas = []
     for r in acoes[acoes["situacao"] == "ok"].to_dict("records"):
         qtd = r["qtd_on"] + r["qtd_pn"]
-        if not qtd > 0 or pd.isna(r["data_entrega"]):
+        if not qtd > 0:
             continue
         fa = fator_acoes(r["cnpj"])
         if fa is None:
             continue
-        fe = fator_eventos(r["cnpj"], r["data_entrega"])
+        fe = fator_eventos(r["cnpj"], r["data_referencia"])
         esperado = qtd * fe * fa
         base = r["qtd_on_base_atual"] + r["qtd_pn_base_atual"]
         razao = base / esperado
@@ -244,7 +244,10 @@ def secao_acoes_eventos(ler, mapa: dict, existentes: set) -> dict:
 
     anulado = acoes["situacao"] == "anulado"
     base_preenchida = acoes["qtd_on_base_atual"].notna() | acoes["qtd_pn_base_atual"].notna()
-    base_vazia = acoes["qtd_on_base_atual"].isna() | acoes["qtd_pn_base_atual"].isna()
+    # 09/11/2026: PN vazia com ON preenchida não é divergência (a PN deixou de existir na troca por ON;
+    # nas contas vale zero, `proventos.acoes_na_data`); vira só nota com a contagem.
+    base_vazia = acoes["qtd_on_base_atual"].isna()
+    so_pn_vazia = acoes["qtd_on_base_atual"].notna() & acoes["qtd_pn_base_atual"].isna()
 
     def rotulo(linha) -> str:
         return f"{linha['cnpj']} {_data_txt(linha['data_referencia'])}"
@@ -253,6 +256,13 @@ def secao_acoes_eventos(ler, mapa: dict, existentes: set) -> dict:
         secao["divergencias"].append(div("acoes_anulado_com_base", nome, f"{rotulo(linha)}: anulado com base preenchida"))
     for _, linha in acoes[~anulado & base_vazia].iterrows():
         secao["divergencias"].append(div("acoes_sem_base", nome, f"{rotulo(linha)}: base atual vazia"))
+    if (~anulado & so_pn_vazia).any():
+        pn_vazia = acoes[~anulado & so_pn_vazia]
+        por_cnpj = ", ".join(f"{c} ({n})" for c, n in pn_vazia["cnpj"].value_counts().sort_index().items())
+        secao["notas"].append(
+            f"{len(pn_vazia)} linhas com qtd_pn_base_atual vazia e qtd_on_base_atual preenchida "
+            f"(PN extinta na troca por ON; nas contas a PN vale zero): {por_cnpj}"
+        )
     for _, linha in acoes[acoes["data_entrega"].isna()].iterrows():
         secao["divergencias"].append(div("acoes_sem_entrega", nome, f"{rotulo(linha)}: sem data de entrega"))
     for _, linha in acoes[acoes["data_entrega"] < acoes["data_referencia"]].iterrows():
@@ -269,7 +279,7 @@ def secao_acoes_eventos(ler, mapa: dict, existentes: set) -> dict:
         incoerentes = coerencia_acoes_eventos(acoes, eventos, emissores)
         secao["notas"].append(
             f"{len(incoerentes)} linhas incoerentes com os eventos (base_atual ≠ quantidade × fatores posteriores "
-            "à entrega × fator_acoes, tolerância 1%; fatores arredondados como 0,000007 podem aparecer)"
+            "à data de referência × fator_acoes, tolerância 1%; fatores arredondados como 0,000007 podem aparecer)"
         )
         if len(incoerentes):
             adicionar_tabela(secao, "Linhas incoerentes com os eventos", COLUNAS_COERENCIA,

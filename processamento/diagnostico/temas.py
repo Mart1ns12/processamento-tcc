@@ -57,6 +57,7 @@ from processamento.exclusoes import Exclusoes, carregar_exclusoes
 from processamento.experimento.relatorio import pct
 from processamento.fatos.fundamentos import (
     carregar_parametros_fundamentos,
+    eh_financeiro,
     quantidade_suspeita,
     valor_de_mercado,
 )
@@ -529,6 +530,84 @@ def _sql_texto(valor) -> str:
     return "NULL" if valor is None else "'" + valor.replace("'", "''") + "'"
 
 
+def _rotulo_trimestre(tipo, fim) -> tuple[str, str]:
+    """(ano com 2 dígitos, trimestre) do balanço: DFP é 4; ITR, pelo mês de `fim` (3, 6 ou 9); o resto é '?'."""
+    d = _data(fim)
+    ano = "??" if d is None else f"{d.year % 100:02d}"
+    if tipo == "DFP":
+        return ano, "4"
+    if tipo == "ITR" and d is not None:
+        return ano, {3: "1", 6: "2", 9: "3"}.get(d.month, "?")
+    return ano, "?"
+
+
+def _da_vazia_nao_financeiras(ler, mapa: dict, existentes: set, secao: dict,
+                              exclusoes: Exclusoes | None = None) -> None:
+    """Trimestres de balanço com D&A vazia nas empresas não financeiras (financeiras e holdings delas saem).
+
+    Empresa com todos os tickers em `tickers_excluidos` (fora do universo em todas as datas) também sai
+    (09/11/2026: SRNA3).
+    """
+    excluidos = set((exclusoes if exclusoes is not None else carregar_exclusoes()).tickers_excluidos)
+    if not _existe(mapa, existentes, "cadastro"):
+        secao["notas"].append(f"D&A vazia nas não financeiras: {_pulada(mapa, 'cadastro')}")
+        return
+    T = _tab(mapa, "balancos")
+    c = lambda x: _col(mapa, "balancos", x)
+    df = ler(
+        f"SELECT {c('cnpj')} AS cnpj, {c('tipo_documento')} AS tipo_documento, "
+        f"{c('data_fim_periodo')} AS fim, {c('situacao')} AS situacao "
+        f"FROM {T} WHERE {c('depreciacao_amortizacao')} IS NULL"
+    )
+    df = df.assign(cnpj=fontes.normalizar_cnpj(df["cnpj"], "v1-balancos.cnpj"))
+
+    # Cada CNPJ aponta para os tickers do cadastro e para os do emissor (holding da Natura, por exemplo)
+    cad = fontes.ler_tabela("cadastro", ler=ler)
+    pares = list(zip(cad["ticker"], cad["cnpj"]))
+    subsetor = {texto(tk): texto(sub) for tk, sub in zip(cad["ticker"], cad["subsetor"])}
+    if _existe(mapa, existentes, "emissores_ticker"):
+        emissores = fontes.ler_emissores(ler)
+        pares += list(zip(emissores["ticker"], emissores["cnpj"]))
+    tickers_do_cnpj: dict = {}
+    for tk, cn in pares:
+        tk, cn = texto(tk), texto(cn)
+        if tk is not None and cn is not None:
+            tickers_do_cnpj.setdefault(cn, set()).add(tk)
+    params = carregar_parametros_fundamentos()
+    financeiras = {cn for cn, tks in tickers_do_cnpj.items()
+                   if any(eh_financeiro(subsetor.get(tk), params) for tk in tks)}
+
+    grupos: dict = {}
+    for cn, tipo, fim, situacao in _registros(df, ("cnpj", "tipo_documento", "fim", "situacao")):
+        ano, trimestre = _rotulo_trimestre(texto(tipo), fim)
+        g = grupos.setdefault((cn, ano, trimestre), {"linhas": 0, "situacoes": set()})
+        g["linhas"] += 1
+        if texto(situacao) is not None:
+            g["situacoes"].add(texto(situacao))
+
+    registros = []
+    for (cn, ano, trimestre), g in grupos.items():
+        if cn in financeiras:
+            continue
+        if tickers_do_cnpj.get(cn) and tickers_do_cnpj[cn] <= excluidos:
+            continue
+        ticker = ",".join(sorted(tickers_do_cnpj.get(cn, set()))) or "-"
+        registros.append((ticker, ano, trimestre, cn, g))
+    registros.sort(key=lambda r: (r[0], r[1], r[2]))
+
+    if not registros:
+        secao["notas"].append("D&A vazia nas não financeiras: nenhuma")
+        return
+    linhas = [[ticker, cn, f"{trimestre}T{ano}", g["linhas"], ",".join(sorted(g["situacoes"]))]
+              for ticker, ano, trimestre, cn, g in registros]
+    n_empresas = len({cn for _ticker, _ano, _trim, cn, _g in registros})
+    adicionar_tabela(secao, "D&A vazia nas não financeiras",
+                     ["ticker", "cnpj", "trimestre", "linhas", "situacao"], linhas)
+    secao["notas"].append(
+        f"D&A vazia nas não financeiras: {len(linhas)} trimestres de {n_empresas} empresas "
+        "(bancos, seguradoras e holdings fora: fundamentos.subsetores_financeiros; tickers_excluidos fora)")
+
+
 def secao_balancos(ler, mapa: dict, existentes: set) -> dict:
     """Seção de balanços: escala, maiores receitas, períodos e datas de entrega."""
     secao = nova_secao("Balanços (v1-balancos)")
@@ -636,6 +715,8 @@ def secao_balancos(ler, mapa: dict, existentes: set) -> dict:
     if antes_fim > 0:
         secao["divergencias"].append(
             div("data_entrega", nome, f"entrega_antes_do_fim: {antes_fim} de {total}"))
+
+    _da_vazia_nao_financeiras(ler, mapa, existentes, secao)
     return secao
 
 

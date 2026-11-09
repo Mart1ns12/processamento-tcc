@@ -691,3 +691,114 @@ def test_lista_de_periodo_invalido_limitada_a_10_com_e_mais(mapa):
     assert nota.startswith("12 linhas de balanço com período inválido")
     assert nota.count("(365 dias)") == 10
     assert nota.endswith("; e mais 2")
+
+
+# ---------------------------------------------------------------------------
+# Balanços: D&A vazia nas não financeiras (último bloco de secao_balancos)
+# ---------------------------------------------------------------------------
+
+_PERIODOS_VAZIOS = pd.DataFrame({"tipo_documento": [], "dias": [], "n": []})
+EXISTENTES_DA = {"v1-balancos", "v1-cadastro"}
+CAD_COLUNAS_DA = ["ticker", "cnpj", "empresa", "setor", "subsetor", "tipo_acao", "unit_qtd_on", "unit_qtd_pn"]
+EMI_COLUNAS_DA = ["ticker", "ordem", "ticker_negociado", "cd_cvm", "cnpj", "empresa",
+                  "vigencia_inicio", "vigencia_fim", "fator_acoes"]
+CNPJ_ABCD = "11111111000111"
+CNPJ_BBBB = "22222222000122"
+CNPJ_FINA = "33333333000133"
+CNPJ_NATU_HOLDING = "32785497000197"
+CNPJ_NATU = "61082533000124"
+
+
+def _df_da(linhas, colunas):
+    """DataFrame com as colunas pedidas; campo ausente vira nulo."""
+    return pd.DataFrame([{c: linha.get(c) for c in colunas} for linha in linhas], columns=colunas)
+
+
+def _ler_da(da_linhas, cadastro=(), emissores=()):
+    """Dublê de `ler` para a D&A: consultas de cadastro, emissor e D&A; o resto vem de `_ler_balancos`."""
+    base = _ler_balancos(_PERIODOS_VAZIOS)
+    cad = _df_da(cadastro, CAD_COLUNAS_DA)
+    emi = _df_da(emissores, EMI_COLUNAS_DA)
+    da = pd.DataFrame(da_linhas, columns=["cnpj", "tipo_documento", "fim", "situacao"])
+
+    def _ler(sql, params=None):
+        if "LEFT JOIN" in sql:
+            return pd.DataFrame({"cnpj": [], "empresa": [], "fim": [], "receita": []})
+        if "`depreciacao_amortizacao` IS NULL" in sql:
+            return da.copy()
+        if "`v1-cadastro`" in sql:
+            return cad.copy()
+        if "`v1-emissores_ticker`" in sql:
+            return emi.copy()
+        return base(sql)
+    return _ler
+
+
+def _tabela_da(secao):
+    return next((t for t in secao["tabelas"] if t["subtitulo"] == "D&A vazia nas não financeiras"), None)
+
+
+def _cad(ticker, cnpj, subsetor):
+    return {"ticker": ticker, "cnpj": cnpj, "subsetor": subsetor, "tipo_acao": "ON"}
+
+
+_CAD_ABCD = _cad("ABCD3", CNPJ_ABCD, "Energia Elétrica")
+
+
+def test_da_vazia_itr_do_trimestre_e_acumulado_viram_uma_linha(mapa):
+    da = [(CNPJ_ABCD, "ITR", date(2021, 6, 30), "ok"),
+          (CNPJ_ABCD, "ITR", date(2021, 6, 30), "reapresentado")]
+    secao = secao_balancos(_ler_da(da, cadastro=[_CAD_ABCD]), mapa, EXISTENTES_DA)
+    assert _tabela_da(secao)["colunas"] == ["ticker", "cnpj", "trimestre", "linhas", "situacao"]
+    assert _tabela_da(secao)["linhas"] == [["ABCD3", CNPJ_ABCD, "2T21", 2, "ok,reapresentado"]]
+    assert ("D&A vazia nas não financeiras: 1 trimestres de 1 empresas "
+            "(bancos, seguradoras e holdings fora: fundamentos.subsetores_financeiros; tickers_excluidos fora)"
+            ) in secao["notas"]
+    assert secao["divergencias"] == []
+
+
+def test_da_vazia_dfp_vira_quarto_trimestre(mapa):
+    da = [(CNPJ_BBBB, "DFP", date(2020, 12, 31), "ok")]
+    cadastro = [_cad("BBBB4", CNPJ_BBBB, "Comércio")]
+    secao = secao_balancos(_ler_da(da, cadastro=cadastro), mapa, EXISTENTES_DA)
+    assert _tabela_da(secao)["linhas"] == [["BBBB4", CNPJ_BBBB, "4T20", 1, "ok"]]
+
+
+def test_da_vazia_de_financeira_sai_da_lista(mapa):
+    da = [(CNPJ_FINA, "ITR", date(2021, 3, 31), "ok"), (CNPJ_ABCD, "ITR", date(2021, 3, 31), "ok")]
+    cadastro = [_cad("FINA3", CNPJ_FINA, "Intermediários Financeiros"), _CAD_ABCD]
+    secao = secao_balancos(_ler_da(da, cadastro=cadastro), mapa, EXISTENTES_DA)
+    assert _tabela_da(secao)["linhas"] == [["ABCD3", CNPJ_ABCD, "1T21", 1, "ok"]]
+    assert ("D&A vazia nas não financeiras: 1 trimestres de 1 empresas (bancos, seguradoras e holdings fora: "
+            "fundamentos.subsetores_financeiros; tickers_excluidos fora)") in secao["notas"]
+
+
+def test_da_vazia_de_empresa_com_ticker_excluido_sai_da_lista(mapa):
+    # 09/11/2026: SRNA3 está em tickers_excluidos (exclusoes.yaml real): fora da checagem de D&A.
+    cnpj_srna = "42500384000151"
+    da = [(cnpj_srna, "ITR", date(2021, 6, 30), "individual"), (CNPJ_ABCD, "ITR", date(2021, 3, 31), "ok")]
+    cadastro = [_cad("SRNA3", cnpj_srna, "Energia Elétrica"), _CAD_ABCD]
+    secao = secao_balancos(_ler_da(da, cadastro=cadastro), mapa, EXISTENTES_DA)
+    assert _tabela_da(secao)["linhas"] == [["ABCD3", CNPJ_ABCD, "1T21", 1, "ok"]]
+
+
+def test_da_vazia_cnpj_so_no_emissor_usa_o_ticker_do_emissor(mapa):
+    da = [(CNPJ_NATU_HOLDING, "ITR", date(2022, 9, 30), "ok")]
+    cadastro = [_cad("NATU3", CNPJ_NATU, "Produtos de Uso Pessoal e de Limpeza")]
+    emissores = [{"ticker": "NATU3", "ordem": 1, "cnpj": CNPJ_NATU_HOLDING,
+                  "empresa": "Natura Holding", "vigencia_inicio": "2000-01-01"}]
+    secao = secao_balancos(_ler_da(da, cadastro=cadastro, emissores=emissores),
+                           mapa, EXISTENTES_DA | {"v1-emissores_ticker"})
+    assert _tabela_da(secao)["linhas"] == [["NATU3", CNPJ_NATU_HOLDING, "3T22", 1, "ok"]]
+
+
+def test_da_vazia_sem_linhas_diz_nenhuma_e_nao_tem_tabela(mapa):
+    secao = secao_balancos(_ler_da([], cadastro=[_CAD_ABCD]), mapa, EXISTENTES_DA)
+    assert "D&A vazia nas não financeiras: nenhuma" in secao["notas"]
+    assert _tabela_da(secao) is None
+
+
+def test_da_vazia_sem_cadastro_vira_nota_de_pulada(mapa):
+    secao = secao_balancos(_ler_da([]), mapa, {"v1-balancos"})
+    assert "D&A vazia nas não financeiras: pulada: tabela ausente (`v1-cadastro`)" in secao["notas"]
+    assert _tabela_da(secao) is None

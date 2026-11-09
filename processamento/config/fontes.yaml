@@ -59,7 +59,9 @@ tabelas:
     coluna_entidade: cnpj
     valores_permitidos:
       tipo_documento: [DFP, ITR]
-      situacao: [ok, ajuste_ifrs17, reapresentado]   # 03/11/2026: todas são versões válidas e entram nas contas
+      # 03/11/2026: todas são versões válidas e entram nas contas. 09/11/2026: individual = balanço individual da
+      # controladora quando a CVM não tem o consolidado ou ele vem zerado; nas contas vale como ok.
+      situacao: [ok, ajuste_ifrs17, reapresentado, individual]
     # ebit, D&A, empréstimos, caixa e aplicações: parciais desde 22/10/2026 (como lucro_bruto);
     # sem lista de vazias conhecidas, a regra geral só acusa se voltarem a ficar 100% vazias
   acoes_emitidas:

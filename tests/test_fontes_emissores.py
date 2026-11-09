@@ -218,6 +218,17 @@ def test_8_balancos_aceita_ajuste_ifrs17(banco_teste):
     assert "ajuste_ifrs17" in set(df["situacao"])
 
 
+def test_8_balancos_aceita_individual(banco_teste):
+    # 09/11/2026: balanço individual da controladora (sem consolidado na CVM, ou consolidado zerado).
+    def _individual(df):
+        df = df.copy()
+        df.loc[0, "situacao"] = "individual"
+        return df
+
+    df = fontes.ler_tabela("balancos", ler=banco_teste(alterar={"v1-balancos": _individual}))
+    assert "individual" in set(df["situacao"])
+
+
 def test_8_balancos_situacao_fora_do_contrato_e_erro_de_leitura(banco_teste):
     def _xyz(df):
         df = df.copy()

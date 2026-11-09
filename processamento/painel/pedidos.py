@@ -26,6 +26,8 @@ RE_DATA = re.compile(r"\d{4}-\d{2}-\d{2}")
 RE_INCOERENTES = re.compile(r"^(\d+) linhas incoerentes com os eventos")
 RE_FORA_CALENDARIO = re.compile(r"linha fora do calendário[^:]*:\s*(.*)$")
 PREFIXO_MUDANCAS = "mudanças registradas em v1-mudancas_ticker:"
+RE_TRIMESTRE = re.compile(r"^([1-4])T(\d{2})$")
+MAX_EMPRESAS_LISTADAS = 10
 
 CHECAGENS: dict[str, Callable[..., tuple[bool | None, str]]] = {}
 
@@ -66,6 +68,22 @@ def _contagem(itens: list[dict]) -> dict[str, int]:
 def _indisponivel(motivo: str) -> dict:
     return {"disponivel": False, "motivo": motivo, "gerado_em": None, "itens": [],
             "contagem": _contagem([]), "fonte": FONTE}
+
+
+def _ordinal_trimestre(rotulo: str) -> int | None:
+    """'1T20' como número (ano × 4 + trimestre), para comparar; None se o rótulo não é legível (ex.: '?T21')."""
+    m = RE_TRIMESTRE.match(rotulo)
+    if m is None:
+        return None
+    return (2000 + int(m.group(2))) * 4 + int(m.group(1))
+
+
+def _resumo_pendencia(nome: str, rotulos: list[str]) -> str:
+    """'BRAV3 2T20' ou 'BRAP4 1T20–2T26 (27 trimestres)'; rótulos ilegíveis vão para o fim."""
+    ordenados = sorted(rotulos, key=lambda r: (_ordinal_trimestre(r) is None, _ordinal_trimestre(r) or 0, r))
+    if len(ordenados) == 1:
+        return f"{nome} {ordenados[0]}"
+    return f"{nome} {ordenados[0]}–{ordenados[-1]} ({len(ordenados)} trimestres)"
 
 
 # ---------------------------------------------------------------- checagens
@@ -315,6 +333,48 @@ def _divergencia_e_mudanca(diag: dict, linhas: list[str], tema: str, termo: str,
     if not presente:
         faltas.append(f"{par} não está em v1-mudancas_ticker")
     return False, " · ".join(faltas)
+
+
+@checagem("da_nao_financeiras")
+def _da_nao_financeiras(diag: dict, linhas: list[str], excecoes: list[dict]):
+    titulo = "Balanços (v1-balancos)"
+    corpo = _corpo(linhas, titulo)
+    if corpo is None:
+        return None, MOTIVO_SEM_SECAO
+    tabela = tabela_md(corpo, "D&A vazia nas não financeiras")
+    if not tabela:
+        if any(n.startswith("D&A vazia nas não financeiras: nenhuma") for n in _notas(diag, titulo)):
+            return True, "D&A preenchida em todas as não financeiras."
+        return None, MOTIVO_SEM_TABELA
+    intervalos = []
+    for exc in excecoes:
+        if "de" not in exc and "ate" not in exc:  # exceção sem período = todos os trimestres (ex.: holding sem D&A)
+            intervalos.append((exc["ticker"], float("-inf"), float("inf")))
+            continue
+        ini, fim = _ordinal_trimestre(exc["de"]), _ordinal_trimestre(exc["ate"])
+        if ini is None or fim is None:
+            raise ValueError(f"trimestre inválido na exceção de {exc['ticker']}")
+        intervalos.append((exc["ticker"], ini, fim))
+    explicadas = 0
+    pendentes: dict[str, dict] = {}
+    for linha in tabela:
+        ordem = _ordinal_trimestre(linha.get("trimestre", ""))
+        tickers = linha.get("ticker", "").split(",")
+        if ordem is not None and any(t == tk and ini <= ordem <= fim for t in tickers for tk, ini, fim in intervalos):
+            explicadas += 1
+            continue
+        ticker, cnpj = linha.get("ticker", "-"), linha.get("cnpj", "")
+        grupo = pendentes.setdefault(cnpj, {"nome": cnpj if ticker == "-" else ticker, "rotulos": []})
+        grupo["rotulos"].append(linha.get("trimestre", ""))
+    if pendentes:
+        itens = [_resumo_pendencia(g["nome"], g["rotulos"]) for g in pendentes.values()]
+        extra = len(itens) - MAX_EMPRESAS_LISTADAS
+        lista = ", ".join(itens[:MAX_EMPRESAS_LISTADAS]) + (f" e mais {extra}" if extra > 0 else "")
+        return False, "D&A vazia fora das exceções: " + lista
+    partes = [e["ticker"] + (" (todos)" if "de" not in e and "ate" not in e
+                             else f" {e['de']}" if e["de"] == e["ate"] else f" {e['de']}–{e['ate']}")
+              for e in excecoes]
+    return True, f"Só as exceções explicadas ({explicadas} trimestres): " + ", ".join(partes)
 
 
 # ---------------------------------------------------------------- avaliação

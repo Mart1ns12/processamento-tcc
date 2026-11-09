@@ -201,6 +201,53 @@ def test_acoes_na_data_sem_linhas_ou_com_quantidade_ausente():
     assert math.isnan(on) and math.isnan(pn) and status == INDISPONIVEL
 
 
+def _base_atual(on, pn) -> pd.DataFrame:
+    return pd.DataFrame({
+        "cnpj": [CNPJ["EXTI"]], "data_referencia": [pd.Timestamp("2025-03-31")],
+        "data_entrega": [pd.Timestamp("2025-05-10")], "qtd_on": [100.0], "qtd_pn": [40.0],
+        "qtd_on_base_atual": [on], "qtd_pn_base_atual": [pn], "situacao": ["ok"],
+    })
+
+
+def test_acoes_na_data_pn_vazia_com_on_na_base_atual_vale_zero():
+    # 09/11/2026: PN extinta na troca por ON (Eletrobras, Azul, Copel): a PN vazia vale zero.
+    assert acoes_na_data(_base_atual(300.0, None), CNPJ["EXTI"], "2025-05-20") == (300.0, 0.0, OK)
+
+
+def test_acoes_na_data_on_vazia_na_base_atual_continua_indisponivel():
+    for on, pn in ((None, 40.0), (None, None)):
+        q_on, q_pn, status = acoes_na_data(_base_atual(on, pn), CNPJ["EXTI"], "2025-05-20")
+        assert math.isnan(q_on) and math.isnan(q_pn) and status == INDISPONIVEL
+
+
+def _ligados_exti(classes: list[str], valores: list[float]) -> pd.DataFrame:
+    return pd.DataFrame({
+        "cnpj": [CNPJ["EXTI"]] * len(classes), "duplicada": [False] * len(classes), "tipo_classe": classes,
+        "tipo": ["DIVIDENDO"] * len(classes), "data_com": [pd.Timestamp("2025-06-02")] * len(classes),
+        "valor_por_acao": valores,
+    })
+
+
+def test_acoes_na_data_pn_vazia_sem_zero_e_indisponivel():
+    q_on, q_pn, status = acoes_na_data(_base_atual(300.0, None), CNPJ["EXTI"], "2025-05-20",
+                                       pn_extinta_vale_zero=False)
+    assert math.isnan(q_on) and math.isnan(q_pn) and status == INDISPONIVEL
+
+
+def test_total_pago_com_provento_de_pn_e_pn_vazia_na_base_atual_e_indisponivel():
+    # 09/11/2026: a PN existia e recebia; zerar subestimaria o payout histórico.
+    ligados = _ligados_exti(["ON", "PN"], [0.5, 0.7])
+    total, status = total_pago(ligados, _base_atual(300.0, None), CNPJ["EXTI"], date(2025, 3, 31), T)
+    assert math.isnan(total) and status == INDISPONIVEL
+
+
+def test_total_pago_so_com_provento_de_on_e_pn_vazia_na_base_atual_continua_ok():
+    ligados = _ligados_exti(["ON"], [0.5])
+    total, status = total_pago(ligados, _base_atual(300.0, None), CNPJ["EXTI"], date(2025, 3, 31), T)
+    assert status == OK
+    assert total == pytest.approx(150.0, rel=1e-12)  # 0,5 × 300 ON
+
+
 # total_pago (f)
 
 @pytest.mark.parametrize(

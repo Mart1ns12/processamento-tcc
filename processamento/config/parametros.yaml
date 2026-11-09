@@ -176,8 +176,8 @@ fundamentos:
   pvp_maximo_plausivel_x1000: 20.0  # P/VP × 1000 acima disto: multiplicar as ações por 1000 daria P/VP implausível, logo a quantidade não está em milhares
   # Lista manual temporária (08/11/2026): força a "quantidade de ações suspeita" (seção 6) para a empresa do ticker
   # a partir de `desde` (inclusive), até a coleta corrigir. Tirar a entrada quando a coleta corrigir. DATAS ENTRE ASPAS.
-  quantidade_suspeita_manual:
-    - {ticker: "RAIZ4", desde: "2026-11-03", motivo: "RAIZ4 virou RAIZ55 em 03/11/2026, cotada por lote de 100 (Ofício Circular B3 022/2026-VPE); quantidade de ações não acompanha o preço até a coleta corrigir"}
+  # 09/11/2026: RAIZ4 saiu (a coleta corrigiu o preço da RAIZ55 para preço por ação). Lista vazia = sem entrada ativa.
+  quantidade_suspeita_manual: []
   balanco_idade_max_meses: 15   # balanço de referência com data_fim_periodo + N meses antes de t = velho: P/L, P/VP, ROE, margens, EBITDA, endividamento e payout 12m indisponíveis (seção 6)
 # Fase 2: dataset do experimento (seção 7.3; plano da etapa 5). Volatilidade, volume e beta vêm do bloco
 # fase1 (mesma conta do painel). A ret_vs_setor sempre exclui a empresa inteira (E14): fase1.setor_excluir não vale aqui.

@@ -31,8 +31,6 @@ from processamento.fatos.precos import INDISPONIVEL, OK, resumo_precos_no_dia
 from processamento.fatos.trimestres import ESTOQUE, FLUXO, FotoBalanco
 
 NAN = math.nan
-MOTIVO_RAIZ = ("RAIZ4 virou RAIZ55 em 03/11/2026, cotada por lote de 100 (Ofício Circular B3 022/2026-VPE); "
-               "quantidade de ações não acompanha o preço até a coleta corrigir")
 CNPJ_TESTE = "11.111.111/0001-11"
 TEXTO_AVISO = ("Quantidade de ações tratada como suspeita por decisão manual (fundamentos.quantidade_suspeita_manual): "
                "RAIZ4 desde 2026-11-03 (motivo X). Valor de mercado, P/L, P/VP e payout saem indisponíveis.")
@@ -55,9 +53,10 @@ def _com_lista(valor):
     return lambda d: d["fundamentos"].__setitem__("quantidade_suspeita_manual", valor)
 
 
-def test_yaml_real_traz_a_entrada_raiz4():
+def test_yaml_real_sem_entrada_ativa():
+    # 09/11/2026: a RAIZ4 saiu da lista (a coleta corrigiu o preço da RAIZ55).
     params = carregar_parametros_fundamentos()
-    assert params.quantidade_suspeita_manual == (("RAIZ4", date(2026, 11, 3), MOTIVO_RAIZ),)
+    assert params.quantidade_suspeita_manual == ()
 
 
 def test_chave_ausente_vira_lista_vazia(tmp_path):
@@ -130,10 +129,10 @@ def test_aviso_sem_lista_e_vazio():
     assert avisos_quantidade_suspeita_manual((), date(2026, 11, 8)) == []
 
 
-def test_aviso_do_yaml_real_so_depois_de_03_11():
+def test_aviso_do_yaml_real_sem_entrada_ativa():
+    # 09/11/2026: lista real vazia (RAIZ4 saiu): nenhum aviso.
     lista = carregar_parametros_fundamentos().quantidade_suspeita_manual
-    assert len(avisos_quantidade_suspeita_manual(lista, date(2026, 11, 8))) == 1
-    assert avisos_quantidade_suspeita_manual(lista, date(2026, 11, 2)) == []
+    assert avisos_quantidade_suspeita_manual(lista, date(2026, 11, 9)) == []
 
 
 # ---------------------------------------------------------------------------

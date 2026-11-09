@@ -104,8 +104,14 @@ EVENTOS_GABARITO = pd.DataFrame({
 
 def test_coerencia_acoes_eventos_gabarito():
     df = coerencia_acoes_eventos(ACOES_GABARITO, EVENTOS_GABARITO, EMISSORES_REAIS)
-    assert len(df) == 1
-    linha = df.iloc[0]
+    assert len(df) == 2
+    # 09/11/2026 (eventos depois da data_referencia): a MGLU3 ref. 30/09/2020, entregue em 09/11/2020, já vem
+    # com a quantidade depois do desdobramento 4 de 13/10/2020, então a razão é 0,25 (pela entrega batia).
+    antes = df.iloc[0]
+    assert antes["data_referencia"] == pd.Timestamp("2020-09-30")
+    assert antes["fator_eventos"] == pytest.approx(0.42, rel=1e-9)
+    assert antes["razao"] == pytest.approx(0.25, rel=1e-6)
+    linha = df.iloc[1]
     assert linha["cnpj"] == CNPJ_MGLU3
     assert linha["data_referencia"] == pd.Timestamp("2021-06-30")
     assert linha["qtd_total"] == pytest.approx(6498926848, rel=1e-12)
@@ -206,11 +212,11 @@ def test_secao_acoes_eventos_coerencia_com_eventos(mapa, monkeypatch):
 
     assert secao["divergencias"] == []  # o anulado sem base e a linha ok com base vazia não existem aqui
     assert secao["notas"] == [
-        "1 linhas incoerentes com os eventos (base_atual ≠ quantidade × fatores posteriores à entrega × "
+        "2 linhas incoerentes com os eventos (base_atual ≠ quantidade × fatores posteriores à data de referência × "
         "fator_acoes, tolerância 1%; fatores arredondados como 0,000007 podem aparecer)"
     ]
     assert len(secao["tabelas"]) == 1
-    assert len(secao["tabelas"][0]["linhas"]) == 1
+    assert len(secao["tabelas"][0]["linhas"]) == 2
 
 
 def test_secao_acoes_eventos_divergencias_de_base_e_entrega(mapa, monkeypatch):
@@ -219,6 +225,8 @@ def test_secao_acoes_eventos_divergencias_de_base_e_entrega(mapa, monkeypatch):
         (CNPJ_HAPV3, "2024-06-30", "2024-05-15", 100, 0, 100, 0, "ok"),          # entrega antes da referência
         (CNPJ_MGLU3, "2024-09-30", None, 100, 0, None, 0, "ok"),                 # sem entrega e base vazia
         (CNPJ_MGLU3, "2024-12-31", "2025-03-26", 100, 0, 100, 0, "anulado"),     # anulado com base
+        (CNPJ_MGLU3, "2025-03-31", "2025-05-10", 100, 40, 140, None, "ok"),       # só PN vazia: nota, não divergência
+        (CNPJ_MGLU3, "2025-06-30", "2025-08-10", 100, 40, 140, None, "corrigido_escala"),
     ])
     tabelas = {"acoes_emitidas": acoes, "emissores_ticker": EMISSORES_REAIS}
     monkeypatch.setattr(fontes, "ler_tabela", lambda tabela, **_kw: tabelas[tabela].copy())
@@ -234,6 +242,26 @@ def test_secao_acoes_eventos_divergencias_de_base_e_entrega(mapa, monkeypatch):
         "acoes_sem_base",
         "acoes_sem_entrega",
     ]
+    assert [d["detalhe"] for d in secao["divergencias"] if d["tema"] == "acoes_sem_base"] == [
+        f"{CNPJ_MGLU3} 2024-09-30: base atual vazia"
+    ]
+    assert (f"2 linhas com qtd_pn_base_atual vazia e qtd_on_base_atual preenchida (PN extinta na troca por ON; "
+            f"nas contas a PN vale zero): {CNPJ_MGLU3} (2)") in secao["notas"]
+
+
+def test_coerencia_usa_eventos_posteriores_a_data_de_referencia():
+    # 09/11/2026: a quantidade é a da data de referência. Desdobramento 2 entre a referência (31/03) e a
+    # entrega (15/05): a base atual 200 bate com 100 × 2 e não é incoerente (pela entrega, daria razão 2).
+    acoes = acoes_base_de([("99999999000199", "2025-03-31", "2025-05-15", 100, 0, 200, 0, "ok")])
+    eventos = pd.DataFrame({
+        "ticker": ["ZZZZ3"], "data_com": pd.to_datetime(["2025-04-10"]), "tipo": ["DESDOBRAMENTO"],
+        "fator": [2.0], "isin": ["BRZZZZACNOR0"], "isin_emitido": ["BRZZZZACNOR0"], "cnpj": ["99999999000199"],
+    })
+    assert coerencia_acoes_eventos(acoes, eventos, EMISSORES_REAIS).empty
+    # Evento no próprio dia da referência não entra (a quantidade já é a do fim do dia).
+    eventos_no_dia = eventos.assign(data_com=pd.to_datetime(["2025-03-31"]))
+    df = coerencia_acoes_eventos(acoes, eventos_no_dia, EMISSORES_REAIS)
+    assert len(df) == 1 and df.iloc[0]["razao"] == pytest.approx(2.0, rel=1e-12)
 
 
 CAL_R = pregoes_uteis(6, "2026-04-06")
