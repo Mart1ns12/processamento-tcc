@@ -265,7 +265,7 @@ Fonte dos dados: tabelas da seção 3. `fech` = `fechamento`; `aj` = `fechamento
 | `exposicao_dolar` | Beta contra o USDBRL (120 pregões) × variação do dólar no dia | Complementar |
 | `exposicao_petroleo` | Idem com o BRENT | Complementar |
 
-**Colunas do protocolo** (`docs/protocolo_variaveis.md`; decidido em 02/11/2026). Ficam no dataset, em rank na preparação. O **bloco A** (`posicao_fechamento`, `mom_12_1`, `liquidez_20d`, `ret_idio_5d`) foi adotado nas rodadas 1 e 3 e **entra no modelo em produção** (XGBoost, ao vivo, com a configuração congelada da rodada 3). Os blocos B, C, D, E e o controle ficam **fora dos modelos**: só nos testes de bloco (`preparacao.BLOCOS_PROTOCOLO`).
+**Colunas do protocolo** (`docs/protocolo_variaveis.md`; decidido em 02/11/2026). Ficam no dataset, em rank na preparação. O **bloco A** (`posicao_fechamento`, `mom_12_1`, `liquidez_20d`, `ret_idio_5d`) foi adotado nas rodadas 1, 3 e 5 e **entra no modelo em produção** (XGBoost, ao vivo, com a configuração congelada da rodada 5). Os blocos B, C, D, E e o controle ficam **fora dos modelos**: só nos testes de bloco (`preparacao.BLOCOS_PROTOCOLO`).
 
 | Variável | Cálculo | Bloco |
 |---|---|---|
@@ -305,7 +305,7 @@ O **modelo 2** (+ notícias do pregão) **saiu** em 23/10/2026 (N2-A): com ~89% 
 - O filtro é feito **no processamento**; a coleta mantém o filtro dela desligado (`ENTREGA_FILTRO_JUIZA=false`).
 
 Ordem: primeiro só as **essenciais**; depois os **complementares**, um bloco por vez, mantendo só o que melhora na validação.
-XGBoost, ponto de partida: `n_estimators=300, max_depth=3, learning_rate=0.03, subsample=0.8, colsample_bytree=0.8, min_child_weight=50, reg_lambda=5`. **É o modelo em produção** (rodada 3: nenhum candidato passou na busca, então fica a referência; `docs/configuracao_final_rodada_003.json`). Sem `--configuracao`, a grade pequena é escolhida pela validação (F7).
+XGBoost, ponto de partida: `n_estimators=300, max_depth=3, learning_rate=0.03, subsample=0.8, colsample_bytree=0.8, min_child_weight=50, reg_lambda=5`. **É o modelo em produção** (rodada 5, reproduzida na 6: nenhum candidato passou na busca, então fica a referência; `docs/configuracao_final_rodada_005.json`, mesmos hiperparâmetros da 003). Sem `--configuracao`, a grade pequena é escolhida pela validação (F7).
 
 ### 7.5 Avaliação
 - **Walk-forward mensal** (treina no passado, testa no mês seguinte, avança), com **embargo de 1 pregão**.
@@ -707,6 +707,14 @@ Com ~1 ano de histórico, a etapa 6 é **só teste de funcionamento** (3.4): o r
 - **Produção:** `treino.familia_producao: "xgb"`. Os modelos `modelos/xgb-2026-06.json` e `xgb-m1-2026-06.json` são provisórios (`modelo_oficial` false), treinados de 04/01/2021 a 19/06/2026, e reproduzem exatamente as métricas da busca 003. Os modelos antigos estão em `modelos/antigos/`.
 - **Comparação do TCC no desenvolvimento (exploratória):** modelo 3 × modelo 1 com o XGBoost, ganho de AUC por pregão de +0,00051 (IC 95% de −0,00178 a 0,00287). Top 5: 0,5167 × 0,5051. Sensibilidade em `docs/busca_rodada_003_sensibilidade.md` e comparação com a rodada 1 em `docs/comparacao_sensibilidade_001_003.md`.
 - **Hashes:** a mudança da família muda `sha_parametros`, e a da chave `configuracao` nos metadados muda `sha_codigo`. Uma rodada nova com as mesmas entradas não conta como repetição da 3.
+
+**Acréscimo de 10/11/2026 (resultado da rodada 5; `docs/protocolo_variaveis.md`, seção 8)**
+
+- **Dataset:** v7, `dataset-todas-2026-11-09.csv`, sha256 `9f520c5fa7e9…`, gerado depois do daily de 10/11/2026 (conferência em `docs/conferencia_rodada_005.md`; medida formal contra o `c954…` em `docs/medida_dados_novos_2026-11-10.md`, 45,2% de linhas mudadas). D7 aceita: além do ruído do float32 e do pregão de 20/11/2020, o ajuste de proventos da RAIZ4 passou a usar 40% do provento nos 6 pregões após cada `data_com` de 2023–2024 (1 ação, ~0,5% das linhas, nenhum `alvo`), tratado como limitação. Cópia congelada local em `copias_congeladas\dataset_v7_rodada_005\` (D6 pendente até a cópia no Google Drive).
+- **Protocolo:** só o bloco A adotado; B, C, D, E e o controle reprovados. Reprodução (rodada 6) com o mesmo `sha_resultado`.
+- **Busca:** nenhum candidato aprovado, então vence a referência, o XGBoost do ponto de partida (`docs/configuracao_final_rodada_005.json`). A logística continua o achado "quase venceu": ganho 0,00453 (≤ 0,005), IC 99,5% [−0,00058; 0,00933]. Comparação com a rodada 3 em `docs/comparacao_rodadas_003_005.md`.
+- **Comparação do TCC no desenvolvimento (exploratória):** modelo 3 × modelo 1 com o XGBoost, ganho de AUC por pregão de +0,00046 (IC 95% de −0,00199 a 0,00286). Top 5: 0,5099 × 0,5138 (na rodada 3, 0,5167 × 0,5051: o top 5 é instável entre as rodadas, o AUC não). Sensibilidade em `docs/busca_rodada_005_sensibilidade.md` e comparação em `docs/comparacao_sensibilidade_003_005.md`.
+- **Modelos:** `modelos/xgb-2026-06.json` e `xgb-m1-2026-06.json`, provisórios (`modelo_oficial` false), treinados de 04/01/2021 a 19/06/2026 com a configuração 005; reproduzem exatamente as métricas da busca 005. Os da rodada 3 estão em `modelos/antigos/rodada_003/`.
 
 ## 10. Pendências externas (não bloqueiam a implementação)
 

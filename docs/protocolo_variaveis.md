@@ -197,7 +197,7 @@ No recorte, o dia só entra com pelo menos 5 linhas com alvo e as duas classes; 
 
 **Nota da D5: esclarecimento (registrado em 08/11/2026, antes de qualquer dado novo).** Registrado antes de a coleta entregar dados novos e antes de qualquer medida sobre eles. Não muda as seções 1 a 7, nem a configuração congelada da rodada 3.
 
-**Quando dado novo antes do teste final abre uma rodada nova.** O dataset é regenerado com a `versao_preparacao` vigente. Depois é comparado com o dataset congelado da rodada oficial (hoje `c954b437c55e41f20a84e91a647964cc33a1c3cf4bb60df474f3f560c81851aa`), só no período de desenvolvimento e sem abrir o teste final. Ferramenta: `python -m processamento.experimento.medida_dados_novos`, que grava `docs/medida_dados_novos_AAAA-MM-DD.md`.
+**Quando dado novo antes do teste final abre uma rodada nova.** O dataset é regenerado com a `versao_preparacao` vigente. Depois é comparado com o dataset congelado da rodada oficial (hoje `9f520c5fa7e91ebbb2a624a6cbb89d4caf33d8bb57ca3018be89ac43016e9928`, rodada 5, desde 10/11/2026; antes, `c954b437c55e41f20a84e91a647964cc33a1c3cf4bb60df474f3f560c81851aa`, rodada 3), só no período de desenvolvimento e sem abrir o teste final. Ferramenta: `python -m processamento.experimento.medida_dados_novos`, que grava `docs/medida_dados_novos_AAAA-MM-DD.md`.
 
 | Ponto | Regra |
 |---|---|
@@ -280,6 +280,15 @@ Registrado em 10/11/2026, **antes de rodar a sensibilidade da rodada 5**. Como o
 - Datasets de 2026-11-09: `todas` `9f520c5fa7e9…`, `principais` `bc7797c95937…` e `hora_real_noite` `ca6f9e3eff04…`.
 - Saída em `docs/busca_rodada_005_sensibilidade.md` e `.json`.
 
+**Reprodução e sensibilidade (10/11/2026):** a rodada 6 repetiu o protocolo e a busca da 5 com as mesmas entradas e reproduziu o `sha_resultado` (protocolo `614e9edc3c61…`, busca `bb2c5fe34f9e…`). Sensibilidade em `docs/busca_rodada_005_sensibilidade.md`: nenhum caso tem IC 95% do ganho das notícias acima de zero; comparação com a rodada 3 em `docs/comparacao_sensibilidade_003_005.md` (o top 5 do modelo 3 × modelo 1 troca de sinal entre as rodadas, sempre com IC contendo o zero; o AUC por pregão quase não muda).
+
+**Implementação (10/11/2026):**
+- `treino.familia_producao` continua `"xgb"`; nenhuma mudança de código.
+- Os modelos `modelos/xgb-2026-06.json` e `xgb-m1-2026-06.json` foram treinados com `--configuracao docs/configuracao_final_rodada_005.json` e são provisórios. Eles reproduzem exatamente as métricas da busca 005: AUC por pregão do modelo 3 0,516762, do modelo 1 0,516300, ECE 0,013689. Metadados: dataset `9f520c5fa7e9…`, configuração 005, rodadas de origem `{busca: 5, protocolo: 5}`.
+- Os modelos da rodada 3 foram copiados para `modelos/antigos/rodada_003/`.
+- O painel mostra "busca rodada 005 (reproduzida na 006)".
+- Cópia congelada local do dataset da rodada 5 em `C:\Users\danie\Desktop\TCC\Arquivos\copias_congeladas\dataset_v7_rodada_005\` (3 versões, os `.json` e o `SHA256SUMS.txt`). A D6 volta a `pendente` até o usuário confirmar a cópia no Google Drive.
+
 ### Checklist antes do teste final (D1 a D10)
 
 Registrado em 04/11/2026 a partir das decisões acima, para o painel (aba Experimento) ler. Não muda as seções 1 a 7. Situação: `fechada` (decisão tomada) ou `pendente`. A D2 passa a contar como fechada sozinha quando `treino.teste_final.fim` for preenchido no `parametros.yaml`.
@@ -291,7 +300,7 @@ Registrado em 04/11/2026 a partir das decisões acima, para o painel (aba Experi
 | D3 | Hipótese e medida principal: ganho de AUC por pregão do modelo 3 sobre o 1, com IC 95% acima de 0 | fechada |
 | D4 | Família, colunas e referências congeladas | fechada |
 | D5 | Dados novos antes do teste final geram nova rodada | fechada |
-| D6 | Dataset congelado com hash registrado | fechada |
+| D6 | Dataset congelado com hash registrado | pendente |
 | D7 | Conferência de preços reescritos (tolerância 1e-6) | fechada |
 | D8 | Custos definidos antes | pendente |
 | D9 | Auditoria de eventos após 23/06 | pendente |

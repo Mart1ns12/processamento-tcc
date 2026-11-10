@@ -5,8 +5,12 @@ desenvolvimento (`treino.ler_desenvolvimento`: sem o teste final e sem o embargo
 (data, ticker). Colunas comparadas: `colunas_3` do congelado mais `alvo`, com os valores que o modelo recebe (ranks por
 pregão de `preparacao.preparar`).
 
-Célula mudada: vazia de um lado e preenchida do outro, ou |novo − congelado| > 1e-6 (estritamente maior). A diferença é
-arredondada a 12 casas antes da comparação, para o ruído de ponto flutuante não decidir a fronteira de 1e-6.
+Célula mudada: nos valores preparados (ranks, o que o modelo recebe) vazia de um lado e preenchida do outro, ou
+|novo − congelado| > 1e-6 (estritamente maior); E, no valor BRUTO do CSV (antes do rank; a coluna de origem, ver
+`preparacao.COLUNA_BRUTA`), o mesmo critério. A diferença é arredondada a 12 casas antes da comparação, para o ruído de
+ponto flutuante não decidir a fronteira de 1e-6. Regra de 09/11/2026 ("rank E bruto"): o critério do bruto existe porque
+ruído do float32 em valores quase empatados perto de zero (ex.: `salto_abertura` quando a abertura é igual ao fechamento
+anterior) muda o rank sem mudar o dado (medida de 09/11/2026, protocolo seção 8, nota da D5).
 Linha mudada: alguma célula mudada, ou a chave existe em só um dos dois lados.
 
 Denominador: linhas com `alvo` preenchido no congelado. Linhas que só existem no novo, ou cujo `alvo` vazio no congelado
@@ -41,6 +45,7 @@ PASTA_DOCS_PADRAO = fontes.RAIZ / "docs"
 NOME_BASE = "medida_dados_novos"
 CHAVES = ["data", "ticker"]
 TOLERANCIA = 1e-6
+REGRA = "2026-11-09: rank E bruto"                        # versão do critério de célula mudada (antes: só o rank)
 LIMITE = 0.01                                             # acima disso a decisão muda; exatamente 1% não passa
 GRUPO_NOTICIAS = [*preparacao.NOTICIAS_DIA, preparacao.EXTREMO_RANK]
 GRUPOS_NOMES = ("preco_bloco_a", "noticias", "alvo", "preco_e_alvo")
@@ -64,14 +69,15 @@ def colunas_comparadas(congelado: dict) -> list[str]:
     return list(dict.fromkeys([*colunas, "alvo"]))
 
 
-def ler_preparado(csv: Path, params) -> tuple[pd.DataFrame, dict]:
-    """Desenvolvimento do CSV (`treino.ler_desenvolvimento`, com o JSON ao lado) e a preparação do treino.
+def ler_preparado(csv: Path, params) -> tuple[pd.DataFrame, pd.DataFrame, dict]:
+    """Desenvolvimento do CSV (`treino.ler_desenvolvimento`, com o JSON ao lado): (preparado, bruto, info).
 
+    `preparado` é `preparacao.preparar` (a preparação do treino); `bruto` é o mesmo período antes do rank, com as colunas do dataset.
     Usa `preparacao.preparar` e não `treino.preparar_dev`: esse tira as linhas sem alvo, e a regra conta essas linhas
     (uma que muda entra no numerador). Os ranks são feitos antes de qualquer filtro, então os valores são os que o modelo recebe.
     """
     df, info = treino.ler_desenvolvimento(csv, params)
-    return preparacao.preparar(df), info
+    return preparacao.preparar(df), df, info
 
 
 def _grupos(colunas: list[str]) -> dict[str, list[str]]:
@@ -91,25 +97,48 @@ def _mudou_celula(a: pd.Series, b: pd.Series) -> np.ndarray:
     return (nan_a != nan_b) | (~nan_a & ~nan_b & (diferenca > TOLERANCIA))
 
 
-def medir(df_congelado: pd.DataFrame, df_novo: pd.DataFrame, colunas: list[str]) -> dict:
+def _brutas(colunas: list[str]) -> list[str]:
+    """Coluna do dataset de cada coluna preparada (`preparacao.COLUNA_BRUTA`; as demais são iguais)."""
+    return list(dict.fromkeys(preparacao.COLUNA_BRUTA.get(c, c) for c in colunas))
+
+
+def _lado(preparado: pd.DataFrame, bruto: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
+    """Chave, valores preparados (`cols`) e brutos (`bruto__<coluna do dataset>`) de um lado. As duas fontes têm de ter as mesmas linhas."""
+    b = bruto[CHAVES + _brutas(cols)].rename(columns={c: f"bruto__{c}" for c in _brutas(cols)})
+    j = preparado[CHAVES + cols].merge(b, on=CHAVES, how="outer", indicator=True)
+    if (j["_merge"] != "both").any():
+        raise ErroMedida("preparado e bruto têm linhas diferentes")
+    return j.drop(columns="_merge")
+
+
+def medir(df_congelado: pd.DataFrame, df_novo: pd.DataFrame, colunas: list[str],
+          bruto_congelado: pd.DataFrame, bruto_novo: pd.DataFrame) -> dict:
     """Mede a mudança entre o congelado e o novo. Função pura: sem leitura nem gravação.
 
     `df_*`: linhas preparadas (uma por data × ticker) com as colunas de `colunas`, que tem de incluir `alvo`.
+    `bruto_*`: as mesmas linhas antes do rank, com as colunas de origem de `colunas` (`preparacao.COLUNA_BRUTA`).
+    Célula mudada: o critério vale no preparado E no bruto (ver o docstring do módulo).
     Denominador: linhas com `alvo` preenchido no congelado (ver o docstring do módulo). ErroMedida se faltar coluna,
     se a chave (data, ticker) se repetir ou se o congelado não tiver nenhuma linha com alvo.
     """
     if "alvo" not in colunas:
         raise ErroMedida("a medida precisa da coluna alvo")
     cols = list(dict.fromkeys(colunas))
-    for nome, df in (("congelado", df_congelado), ("novo", df_novo)):
+    brutas = _brutas(cols)
+    for nome, df, bruto in (("congelado", df_congelado, bruto_congelado), ("novo", df_novo, bruto_novo)):
         faltando = [c for c in [*CHAVES, *cols] if c not in df.columns]
         if faltando:
             raise ErroMedida(f"{nome}: faltam colunas {faltando}")
         if df.duplicated(CHAVES).any():
             raise ErroMedida(f"{nome}: chave (data, ticker) repetida")
+        faltando_bruto = [c for c in [*CHAVES, *brutas] if c not in bruto.columns]
+        if faltando_bruto:
+            raise ErroMedida(f"{nome} (bruto): faltam colunas {faltando_bruto}")
+        if bruto.duplicated(CHAVES).any():
+            raise ErroMedida(f"{nome} (bruto): chave (data, ticker) repetida")
 
-    m = df_congelado[CHAVES + cols].merge(df_novo[CHAVES + cols], on=CHAVES, how="outer",
-                                          suffixes=("_c", "_n"), indicator=True)
+    m = _lado(df_congelado, bruto_congelado, cols).merge(_lado(df_novo, bruto_novo, cols), on=CHAVES, how="outer",
+                                                         suffixes=("_c", "_n"), indicator=True)
     so_c = (m["_merge"] == "left_only").to_numpy()
     so_n = (m["_merge"] == "right_only").to_numpy()
     solo = so_c | so_n
@@ -119,7 +148,10 @@ def medir(df_congelado: pd.DataFrame, df_novo: pd.DataFrame, colunas: list[str])
     if denominador == 0:
         raise ErroMedida("o congelado não tem nenhuma linha com alvo no desenvolvimento")
 
-    mudou = {c: _mudou_celula(m[f"{c}_c"], m[f"{c}_n"]) & ambos for c in cols}
+    mudou = {}
+    for c in cols:
+        bruta = f"bruto__{preparacao.COLUNA_BRUTA.get(c, c)}"
+        mudou[c] = _mudou_celula(m[f"{c}_c"], m[f"{c}_n"]) & _mudou_celula(m[f"{bruta}_c"], m[f"{bruta}_n"]) & ambos
 
     def linhas(colunas_do_grupo: list[str]) -> np.ndarray:
         """Linhas com alguma célula mudada no grupo. Linha que existe só de um lado conta em todos os grupos."""
@@ -155,6 +187,7 @@ def medir(df_congelado: pd.DataFrame, df_novo: pd.DataFrame, colunas: list[str])
         "parar_e_perguntar": grupos["preco_e_alvo"]["fracao"] > LIMITE,
         "limite": LIMITE,
         "tolerancia": TOLERANCIA,
+        "regra": REGRA,
         "fracao_total": fracao_total,
         "linhas_mudadas": total,
         "denominador": denominador,
@@ -207,8 +240,8 @@ def executar(csv_congelado: Path, csv_novo: Path, congelado: Path, pasta_docs, *
     params = carregar_parametros_treino() if params is None else params
     _caminhos_saida(Path(pasta_docs), data)                # falha cedo se a saída já existir
     protocolo = json.loads(Path(congelado).read_text(encoding="utf-8"))
-    df_c, info_c = ler_preparado(csv_congelado, params)
-    df_n, info_n = ler_preparado(csv_novo, params)
+    df_c, bruto_c, info_c = ler_preparado(csv_congelado, params)
+    df_n, bruto_n, info_n = ler_preparado(csv_novo, params)
     if protocolo.get("sha256_dataset") != info_c["sha256"]:
         raise ErroMedida("o CSV congelado não é o dataset do protocolo congelado (sha256 diferente)")
 
@@ -219,7 +252,7 @@ def executar(csv_congelado: Path, csv_novo: Path, congelado: Path, pasta_docs, *
                       "protocolo": Path(congelado).name, "rodada": protocolo.get("rodada")},
         "novo": {"arquivo": Path(csv_novo).name, "sha256": info_n["sha256"]},
         "versao_preparacao": info_n["versao_preparacao"],
-        **medir(df_c, df_n, colunas_comparadas(protocolo)),
+        **medir(df_c, df_n, colunas_comparadas(protocolo), bruto_c, bruto_n),
     }
     return gravar_saidas(pasta_docs, _relatorio(resultado), resultado, data)
 
@@ -294,7 +327,13 @@ def _relatorio(r: dict) -> str:
         "",
         "## Regras aplicadas",
         "",
-        f"- Célula mudada: vazia de um lado e preenchida do outro, ou |novo − congelado| > {TOLERANCIA:g} (estritamente maior).",
+        f"- Célula mudada: no preparado (ranks, o que o modelo recebe), vazia de um lado e preenchida do outro, ou "
+        f"|novo − congelado| > {TOLERANCIA:g} (estritamente maior); E no bruto (valor do CSV antes do rank, coluna de origem), "
+        "o mesmo critério.",
+        f"- Regra da medida: {REGRA}.",
+        "- Motivo do critério no bruto: ruído do float32 em valores quase empatados perto de zero (ex.: `salto_abertura` "
+        "quando a abertura é igual ao fechamento anterior) muda o rank sem mudar o dado (medida de 09/11/2026, protocolo "
+        "seção 8, nota da D5).",
         "- Linha mudada: alguma célula mudada, ou a chave (data, ticker) existe em só um dos dois.",
         "- Denominador: linhas com alvo preenchido no congelado. Linhas só no novo entram no numerador, não no denominador.",
         "- Colunas: `colunas_3` do congelado mais `alvo`, com os valores que o modelo recebe (`preparacao.preparar`).",

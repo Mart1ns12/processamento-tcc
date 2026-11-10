@@ -41,8 +41,16 @@ def _somar(df: pd.DataFrame, linhas: list[int], coluna: str, delta: float = 1.0)
     return saida
 
 
+def _medir(congelado, novo, colunas=COLUNAS, bruto_congelado=None, bruto_novo=None):
+    """`medir` com os brutos. Sem brutos explícitos, o bruto de cada lado são as próprias linhas (o dado não mudou
+    além do rank); os testes da regra passam brutos diferentes."""
+    return md.medir(congelado, novo, colunas,
+                    congelado if bruto_congelado is None else bruto_congelado,
+                    novo if bruto_novo is None else bruto_novo)
+
+
 def test_iguais_nao_mudam_nada():
-    res = md.medir(_df(), _df(), COLUNAS)
+    res = _medir(_df(), _df(), COLUNAS)
     assert res["fracao_total"] == 0
     assert res["linhas_mudadas"] == 0
     assert res["decisao"] == "rodada_oficial_continua"
@@ -54,7 +62,7 @@ def test_iguais_nao_mudam_nada():
 def test_diferenca_em_ret_1d_so_conta_acima_de_1e6(delta, esperado):
     base = _df()
     novo = _com(base, 5, "ret_1d", base.loc[5, "ret_1d"] + delta)
-    res = md.medir(base, novo, COLUNAS)
+    res = _medir(base, novo, COLUNAS)
     assert res["linhas_mudadas"] == esperado
     assert res["grupos"]["preco_bloco_a"]["linhas_mudadas"] == esperado
 
@@ -63,10 +71,79 @@ def test_vazio_para_valor_em_noticia_conta_no_grupo_noticias():
     base = _df()
     base.loc[3, "noticias_dia_tom"] = np.nan
     novo = _com(base, 3, "noticias_dia_tom", 0.5)
-    res = md.medir(base, novo, COLUNAS)
+    res = _medir(base, novo, COLUNAS)
     assert res["grupos"]["noticias"]["linhas_mudadas"] == 1
     assert res["grupos"]["preco_bloco_a"]["linhas_mudadas"] == 0
     assert res["linhas_mudadas"] == 1
+
+
+def test_rank_muda_mas_bruto_muda_so_5e7_nao_conta():
+    base = _df()
+    novo = _com(base, 5, "ret_1d", base.loc[5, "ret_1d"] + 2e-6)            # rank muda (> 1e-6)
+    bruto_novo = _com(base, 5, "ret_1d", base.loc[5, "ret_1d"] + 5e-7)      # bruto muda só 5e-7
+    res = _medir(base, novo, COLUNAS, bruto_novo=bruto_novo)
+    assert res["linhas_mudadas"] == 0
+    assert res["grupos"]["preco_bloco_a"]["linhas_mudadas"] == 0
+
+
+def test_rank_e_bruto_mudando_acima_de_1e6_conta():
+    base = _df()
+    novo = _com(base, 5, "ret_1d", base.loc[5, "ret_1d"] + 2e-6)
+    bruto_novo = _com(base, 5, "ret_1d", base.loc[5, "ret_1d"] + 2e-6)
+    res = _medir(base, novo, COLUNAS, bruto_novo=bruto_novo)
+    assert res["linhas_mudadas"] == 1
+    assert res["grupos"]["preco_bloco_a"]["linhas_mudadas"] == 1
+
+
+def test_bruto_muda_mas_rank_igual_nao_conta():
+    base = _df()
+    bruto_novo = _com(base, 5, "ret_1d", base.loc[5, "ret_1d"] + 2e-6)
+    res = _medir(base, base.copy(), COLUNAS, bruto_novo=bruto_novo)
+    assert res["linhas_mudadas"] == 0
+
+
+def test_vazio_no_bruto_e_no_preparado_conta():
+    congelado = _com(_df(), 3, "noticias_dia_tom", np.nan)
+    novo = _com(_df(), 3, "noticias_dia_tom", 0.5)
+    bruto_congelado = _com(_df(), 3, "noticias_dia_tom", np.nan)
+    bruto_novo = _com(_df(), 3, "noticias_dia_tom", 0.5)
+    res = _medir(congelado, novo, COLUNAS, bruto_congelado, bruto_novo)
+    assert res["grupos"]["noticias"]["linhas_mudadas"] == 1
+    assert res["linhas_mudadas"] == 1
+
+
+def test_vazio_so_no_preparado_nao_conta():
+    congelado = _com(_df(), 3, "noticias_dia_tom", np.nan)
+    novo = _com(_df(), 3, "noticias_dia_tom", 0.5)
+    bruto = _com(_df(), 3, "noticias_dia_tom", np.nan)
+    res = _medir(congelado, novo, COLUNAS, bruto, bruto)
+    assert res["linhas_mudadas"] == 0
+
+
+def test_campo_regra_aparece_no_resultado():
+    assert _medir(_df(), _df())["regra"] == "2026-11-09: rank E bruto"
+
+
+def test_extremo_em_rank_compara_o_bruto_da_coluna_de_origem():
+    colunas = ["ret_1d", preparacao.EXTREMO_RANK, "alvo"]
+    prep = _df().rename(columns={"noticias_dia_extremo": preparacao.EXTREMO_RANK})
+    bruto = _df()
+    novo_prep = _com(prep, 5, preparacao.EXTREMO_RANK, prep.loc[5, preparacao.EXTREMO_RANK] + 2e-6)
+    assert md.medir(prep, novo_prep, colunas, bruto, bruto)["linhas_mudadas"] == 0
+    novo_bruto = _com(bruto, 5, "noticias_dia_extremo", bruto.loc[5, "noticias_dia_extremo"] + 2e-6)
+    assert md.medir(prep, novo_prep, colunas, bruto, novo_bruto)["linhas_mudadas"] == 1
+
+
+def test_bruto_sem_coluna_recusa():
+    base = _df()
+    with pytest.raises(md.ErroMedida, match="bruto"):
+        md.medir(base, base.copy(), COLUNAS, base.drop(columns=["ret_1d"]), base.copy())
+
+
+def test_bruto_com_linhas_diferentes_do_preparado_recusa():
+    base = _df()
+    with pytest.raises(md.ErroMedida, match="linhas diferentes"):
+        md.medir(base, base.copy(), COLUNAS, base, base.iloc[:-1])
 
 
 def test_linha_so_no_novo_conta_no_total_e_em_todos_os_grupos():
@@ -74,7 +151,7 @@ def test_linha_so_no_novo_conta_no_total_e_em_todos_os_grupos():
     extra = base.iloc[[0]].copy()
     extra["ticker"] = "T9999"
     novo = pd.concat([base, extra], ignore_index=True)
-    res = md.medir(base, novo, COLUNAS)
+    res = _medir(base, novo, COLUNAS)
     assert res["linhas_mudadas"] == 1
     assert all(res["grupos"][g]["linhas_mudadas"] == 1 for g in GRUPOS)
     assert res["contagens"]["so_novo"] == 1 and res["contagens"]["so_congelado"] == 0
@@ -86,7 +163,7 @@ def test_linha_so_no_congelado_conta_no_total_e_em_todos_os_grupos():
     extra = base.iloc[[0]].copy()
     extra["ticker"] = "T9999"
     congelado = pd.concat([base, extra], ignore_index=True)
-    res = md.medir(congelado, base, COLUNAS)
+    res = _medir(congelado, base, COLUNAS)
     assert res["linhas_mudadas"] == 1
     assert all(res["grupos"][g]["linhas_mudadas"] == 1 for g in GRUPOS)
     assert res["contagens"]["so_congelado"] == 1 and res["contagens"]["so_novo"] == 0
@@ -96,8 +173,8 @@ def test_linha_so_no_congelado_conta_no_total_e_em_todos_os_grupos():
 def test_linha_sem_alvo_no_congelado_fica_fora_do_denominador_mas_entra_se_mudar():
     base = _df()
     base.loc[7, "alvo"] = np.nan
-    assert md.medir(base, base.copy(), COLUNAS)["denominador"] == 199
-    res = md.medir(base, _com(base, 7, "alvo", 1.0), COLUNAS)
+    assert _medir(base, base.copy(), COLUNAS)["denominador"] == 199
+    res = _medir(base, _com(base, 7, "alvo", 1.0), COLUNAS)
     assert res["denominador"] == 199
     assert res["linhas_mudadas"] == 1
     assert res["grupos"]["alvo"]["linhas_mudadas"] == 1
@@ -106,7 +183,7 @@ def test_linha_sem_alvo_no_congelado_fica_fora_do_denominador_mas_entra_se_mudar
 
 def test_um_por_cento_exato_nao_passa():
     base = _df(200)
-    res = md.medir(base, _somar(base, [0, 1], "ret_5d"), COLUNAS)
+    res = _medir(base, _somar(base, [0, 1], "ret_5d"), COLUNAS)
     assert res["denominador"] == 200 and res["linhas_mudadas"] == 2
     assert res["fracao_total"] == 0.01
     assert res["decisao"] == "rodada_oficial_continua"
@@ -114,7 +191,7 @@ def test_um_por_cento_exato_nao_passa():
 
 def test_acima_de_um_por_cento_vira_nova_rodada():
     base = _df(200)
-    res = md.medir(base, _somar(base, [0, 1, 2], "ret_5d"), COLUNAS)
+    res = _medir(base, _somar(base, [0, 1, 2], "ret_5d"), COLUNAS)
     assert res["linhas_mudadas"] == 3
     assert res["decisao"] == "nova_rodada"
 
@@ -123,7 +200,7 @@ def test_preco_e_alvo_acima_de_um_por_cento_pede_parar_mesmo_com_total_acima():
     base = _df(200)
     novo = _somar(base, [0, 1], "ret_1d")
     novo.loc[2, "alvo"] = 1 - novo.loc[2, "alvo"]
-    res = md.medir(base, novo, COLUNAS)
+    res = _medir(base, novo, COLUNAS)
     assert res["linhas_mudadas"] == 3
     assert res["grupos"]["alvo"]["linhas_mudadas"] == 1
     assert res["grupos"]["preco_e_alvo"]["linhas_mudadas"] == 3
@@ -135,7 +212,7 @@ def test_alvo_sozinho_nao_pede_parar():
     base = _df(200)
     novo = base.copy()
     novo.loc[2, "alvo"] = 1 - novo.loc[2, "alvo"]
-    res = md.medir(base, novo, COLUNAS)
+    res = _medir(base, novo, COLUNAS)
     assert res["grupos"]["alvo"]["linhas_mudadas"] == 1
     assert res["grupos"]["preco_e_alvo"]["linhas_mudadas"] == 1
     assert res["decisao"] == "rodada_oficial_continua"
