@@ -53,8 +53,8 @@ def test_arquivo_real_carrega_os_valores_do_plano():
     params = carregar_parametros_treino()
     assert params.inicio_experimento == "2021-01-01"
     assert params.teste_final_inicio == date(2026, 6, 23)
-    assert params.teste_final_fim is None
-    assert params.teste_final_liberado is False
+    assert params.teste_final_fim == date(2026, 11, 10)   # D2, entrada em produção em 11/11/2026
+    assert params.teste_final_liberado is True
     assert params.topk == (5, 3)
     assert params.xgboost["min_child_weight"] == 50
     assert params.liberar_chance is False

@@ -302,15 +302,16 @@ def test_caso_7f_carga_completa_com_top_publicado_manda_os_dez_e_nao_grava_regis
 
 # ---------------------------------------------------------------- caso 6: CLI
 
-def test_caso_6_cli_cria_os_oito_arquivos_na_pasta_dada(banco_teste, tmp_path, modelos_dir):
-    # 7G: o CLI lê o yaml real (publicar_top_provisorio: false), então sem os dois pacotes do experimento
+def test_caso_6_cli_cria_os_dez_arquivos_na_pasta_dada(banco_teste, tmp_path, modelos_dir):
+    # 7G: o CLI lê o yaml real. Desde 10/11/2026 treino.modelo_oficial é true (produção ligada), então os dois pacotes
+    # do experimento também saem (antes, com modelo_oficial false e publicar_top_provisorio false, eram oito arquivos)
     raiz = tmp_path / "completa"
     argv = ["--data", "2025-10-22", "--completo", "--pasta", str(raiz), "--pasta-modelos", str(modelos_dir),
             "--pasta-registros", str(tmp_path / "registros")]
 
     assert main(argv, ler=banco_teste(), existe_composicao=False) == 0
 
-    assert {p.name for p in (raiz / "2025-10-22").iterdir()} == {f"{nome}.json" for nome in [*SETE, "execucao"]}
+    assert {p.name for p in (raiz / "2025-10-22").iterdir()} == {f"{nome}.json" for nome in [*ORDEM_PACOTES, "execucao"]}
 
 
 def test_caso_6_cli_recusa_a_pasta_do_envio_diario_sem_gravar(banco_teste, tmp_path, modelos_dir, monkeypatch):

@@ -125,17 +125,17 @@ def test_bloco_rotina_ausente_erra(tmp_path):
 # --- treino.modelo_oficial -------------------------------------------------------------------
 
 
-def test_modelo_oficial_real_e_falso():
-    assert carregar_parametros_treino().modelo_oficial is False
+def test_modelo_oficial_real_e_verdadeiro():
+    assert carregar_parametros_treino().modelo_oficial is True   # ligado em 10/11/2026
 
 
 def test_modelo_oficial_ausente_vira_falso(tmp_path):
-    caminho = _escrever_trocado(tmp_path, "  modelo_oficial: false", "")
+    caminho = _escrever_trocado(tmp_path, "  modelo_oficial: true", "")
     assert carregar_parametros_treino(caminho).modelo_oficial is False
 
 
 def test_modelo_oficial_texto_da_erro(tmp_path):
-    caminho = _escrever_trocado(tmp_path, "  modelo_oficial: false", '  modelo_oficial: "sim"')
+    caminho = _escrever_trocado(tmp_path, "  modelo_oficial: true", '  modelo_oficial: "sim"')
     with pytest.raises(ErroParametrosExperimento, match="treino.modelo_oficial"):
         carregar_parametros_treino(caminho)
 

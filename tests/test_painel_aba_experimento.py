@@ -212,10 +212,10 @@ def test_familia_do_vencedor():
 def test_checklist_com_o_protocolo_real():
     r = checklist(REPO, PARAMS)
     assert r["disponivel"] is True and r["motivo"] is None
-    assert r["n_fechadas"] == 6 and r["n_total"] == 10
+    assert r["n_fechadas"] == 9 and r["n_total"] == 10
     assert [i["id"] for i in r["itens"]] == [f"D{n}" for n in range(1, 11)]
     assert [i["situacao"] for i in r["itens"]] == [
-        "fechada", "pendente", "fechada", "fechada", "fechada", "pendente", "fechada", "pendente", "pendente", "fechada"]
+        "fechada", "pendente", "fechada", "fechada", "fechada", "fechada", "fechada", "fechada", "fechada", "fechada"]
     assert [i["texto"] for i in r["itens"]] == TEXTOS_CHECKLIST
 
 
@@ -225,7 +225,7 @@ def test_checklist_com_fim_do_teste_final_fecha_d2(tmp_path):
     d2 = r["itens"][1]
     assert d2 == {"id": "D2", "texto": "Data de fim do teste final: 31/03/2027", "situacao": "fechada",
                   "cumprida": True, "automatica": True}
-    assert r["n_fechadas"] == 7
+    assert r["n_fechadas"] == 10
 
 
 def test_checklist_sem_d10_marca_faltando(tmp_path):

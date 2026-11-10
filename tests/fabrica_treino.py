@@ -113,13 +113,16 @@ def gravar_versoes(pasta: Path, df: pd.DataFrame, versoes: tuple[str, ...] = VER
 def params_teste(**trocas):
     """Parâmetros do treino pequenos para teste: teste final de 2026-01-02, 20 árvores, sorteios reduzidos.
 
-    `teste_final_fim` fica None (trava ativa). Qualquer campo pode ser trocado por `**trocas`.
+    `teste_final_fim` fica None (trava ativa), `teste_final_liberado` e `modelo_oficial` False, qualquer que seja o YAML
+    real (desde 10/11/2026 a produção está ligada). Qualquer campo pode ser trocado por `**trocas`.
     """
     base = carregar_parametros_treino()
     ajustes = dict(
         treino_minimo_meses=2,
         teste_final_inicio=date(2026, 1, 2),
         teste_final_fim=None,
+        teste_final_liberado=False,
+        modelo_oficial=False,
         xgboost={**base.xgboost, "n_estimators": 20},
         grade={"max_depth": (2,)},
         acaso_sorteios=200,

@@ -287,7 +287,21 @@ Registrado em 10/11/2026, **antes de rodar a sensibilidade da rodada 5**. Como o
 - Os modelos `modelos/xgb-2026-06.json` e `xgb-m1-2026-06.json` foram treinados com `--configuracao docs/configuracao_final_rodada_005.json` e são provisórios. Eles reproduzem exatamente as métricas da busca 005: AUC por pregão do modelo 3 0,516762, do modelo 1 0,516300, ECE 0,013689. Metadados: dataset `9f520c5fa7e9…`, configuração 005, rodadas de origem `{busca: 5, protocolo: 5}`.
 - Os modelos da rodada 3 foram copiados para `modelos/antigos/rodada_003/`.
 - O painel mostra "busca rodada 005 (reproduzida na 006)".
-- Cópia congelada local do dataset da rodada 5 em `C:\Users\danie\Desktop\TCC\Arquivos\copias_congeladas\dataset_v7_rodada_005\` (3 versões, os `.json` e o `SHA256SUMS.txt`). A D6 volta a `pendente` até o usuário confirmar a cópia no Google Drive.
+- Cópia congelada local do dataset da rodada 5 em `C:\Users\danie\Desktop\TCC\Arquivos\copias_congeladas\dataset_v7_rodada_005\` (3 versões, os `.json` e o `SHA256SUMS.txt`). A cópia no Google Drive foi confirmada pelo usuário em 10/11/2026 (D6, abaixo).
+
+**Decisões do usuário (10/11/2026, antes do teste final):**
+
+| Tema | Decisão |
+|---|---|
+| Vencedor | Segue o protocolo: a rodada 5 é a oficial e o vencedor é o XGBoost do ponto de partida. A logística continua só como achado ("quase venceu") |
+| Congelado (D4; substitui a linha de 08/11) | XGBoost 3/50 da configuração final da rodada 005 (`docs/configuracao_final_rodada_005.json`, mesmos hiperparâmetros da 003) e colunas de `docs/protocolo_congelado_rodada_005.json` (as mesmas da 003); referências: acaso, volatilidade e logística |
+| Dataset e cópia congelada (D6; substitui as linhas de 08/11) | Treino no sha `9f520c5fa7e91ebbb2a624a6cbb89d4caf33d8bb57ca3018be89ac43016e9928` (`dataset-todas-2026-11-09.csv`), guardado em dois locais: a pasta local `C:\Users\danie\Desktop\TCC\Arquivos\copias_congeladas\dataset_v7_rodada_005\` (com `principais`, `hora_real_noite`, os `.json` e o `SHA256SUMS.txt`) e o Google Drive do usuário. O sha do dataset do teste final é registrado antes de rodar |
+| Entrada em produção (exceção à R11) | D0 = **11/11/2026**, e não o 1º pregão de um mês (especificação, R11), por causa do prazo do TCC (entrega em 12/11/2026). Consequências aceitas: o retreino mensal de novembro usa os pregões antes de 01/11 (sem os de 03/11 a 10/11), e o teste ao vivo terá só o pregão de 11/11 fechado até a entrega |
+| Fim do teste final (D2; substitui "Ainda não definido") | `treino.teste_final.fim: "2026-11-10"` (pregão anterior a D0). O teste final avalia as linhas com dia do alvo até 10/11/2026 (t de 23/06 a 09/11); a linha de 10/11 (alvo em 11/11) é a primeira do teste ao vivo |
+| Custos (D8; substitui a linha "Custos" de 02/11) | Sem custos de operação; os resultados medem capacidade de previsão (AUC por pregão e acerto do top 5), não rentabilidade; o retorno médio do top 5 − IBOV, quando aparece, é bruto e só descritivo. Registrado como limitação |
+| Auditoria de eventos depois de 23/06 (D9) | Feita em 10/11/2026, só retornos (`docs/auditoria_eventos_d9_2026-11-10.md`): nenhum evento novo nas ações do universo (nenhum retorno fora dos limites, nenhum desdobramento, bonificação ou grupamento; os retornos grandes são movimentos de mercado). Sem nova versão. Observação registrada como limitação: em 5 de 72 proventos do período o ajuste do preço não corresponde ao provento (0,2 a 1,0 ponto percentual no dia), o mesmo tipo de divergência da RAIZ4 |
+
+**Entrada em produção (10/11/2026):** `treino.modelo_oficial: true`; os modelos `xgb-2026-06` e `xgb-m1-2026-06` foram retreinados com a configuração 005 e `provisorio: false`, com as mesmas métricas da busca 005. `python -m processamento.producao --inicio 2026-11-11 --confirmar` arquivou os 10 `*.top.json` de teste de funcionamento em `registros/experimento/funcionamento-2026-11-10/` e gravou `docs/producao.json` (D0 = 11/11/2026, `fim` = 10/11/2026). `treino.teste_final.fim: "2026-11-10"` e `liberado: true`. O teste final ainda não foi rodado.
 
 ### Checklist antes do teste final (D1 a D10)
 
@@ -300,8 +314,8 @@ Registrado em 04/11/2026 a partir das decisões acima, para o painel (aba Experi
 | D3 | Hipótese e medida principal: ganho de AUC por pregão do modelo 3 sobre o 1, com IC 95% acima de 0 | fechada |
 | D4 | Família, colunas e referências congeladas | fechada |
 | D5 | Dados novos antes do teste final geram nova rodada | fechada |
-| D6 | Dataset congelado com hash registrado | pendente |
+| D6 | Dataset congelado com hash registrado | fechada |
 | D7 | Conferência de preços reescritos (tolerância 1e-6) | fechada |
-| D8 | Custos definidos antes | pendente |
-| D9 | Auditoria de eventos após 23/06 | pendente |
+| D8 | Custos definidos antes | fechada |
+| D9 | Auditoria de eventos após 23/06 | fechada |
 | D10 | Chance oculta até o teste ao vivo | fechada |
