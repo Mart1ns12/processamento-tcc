@@ -1,0 +1,47 @@
+{
+  "blocos_preco": [],
+  "colunas_1": [
+    "ret_1d",
+    "ret_5d",
+    "ret_20d",
+    "volatilidade_20d",
+    "beta",
+    "volume_relativo",
+    "salto_abertura",
+    "posicao_fechamento",
+    "mom_12_1",
+    "liquidez_20d",
+    "ret_idio_5d"
+  ],
+  "colunas_3": [
+    "ret_1d",
+    "ret_5d",
+    "ret_20d",
+    "volatilidade_20d",
+    "beta",
+    "volume_relativo",
+    "salto_abertura",
+    "noticias_dia_qtd",
+    "noticias_dia_tom",
+    "noticias_dia_extremo",
+    "mudanca_tom",
+    "posicao_fechamento",
+    "mom_12_1",
+    "liquidez_20d",
+    "ret_idio_5d"
+  ],
+  "colunas_3e": null,
+  "extremo_em_rank": false,
+  "hiperparametros": {
+    "colsample_bytree": 0.8,
+    "learning_rate": 0.03,
+    "max_depth": 3,
+    "min_child_weight": 50,
+    "n_estimators": 300,
+    "reg_lambda": 5,
+    "subsample": 0.8
+  },
+  "noticias_contexto": false,
+  "rodada": 6,
+  "sha256_dataset": "9f520c5fa7e91ebbb2a624a6cbb89d4caf33d8bb57ca3018be89ac43016e9928"
+}

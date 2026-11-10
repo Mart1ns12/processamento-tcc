@@ -1,6 +1,6 @@
 # Diagnóstico do banco da coleta (só leitura)
 
-- Gerado em: 2026-11-09 13:48 (America/Sao_Paulo)
+- Gerado em: 2026-11-10 11:13 (America/Sao_Paulo)
 - Banco: tcc_scraper
 - MySQL: 8.0.46-0ubuntu0.24.04.4
 - Comando: `python -m processamento.diagnostico`
@@ -164,30 +164,30 @@
 
 ## 3. Resumo das tabelas
 
-- 567311 linhas = 369218 artigos; uma linha por par artigo×ticker
+- 568743 linhas = 370254 artigos; uma linha por par artigo×ticker
 
 ### Período e entidades
 
 | tabela | linhas | inicio | fim | entidades | coluna_entidade |
 |---|---|---|---|---|---|
-| v1-noticias | 567311 | 2021-01-01 | 2026-11-09 | 88 | ticker |
-| v1-precos | 146140 | 2019-12-30 | 2026-11-09 | 89 | ticker |
+| v1-noticias | 568743 | 2021-01-01 | 2026-11-10 | 88 | ticker |
+| v1-precos | 146143 | 2019-12-30 | 2026-11-10 | 89 | ticker |
 | v1-cadastro | 88 | NULL | NULL | 88 | ticker |
 | v1-mudancas_ticker | 10 | 2025-05-02 | 2026-06-08 | 10 | ticker_antigo |
 | v1-balancos | 3342 | 2020-03-31 | 2026-09-30 | 87 | cnpj |
 | v1-acoes_emitidas | 2218 | 2020-03-31 | 2026-09-30 | 87 | cnpj |
 | v1-proventos | 8433 | 1995-12-28 | 2026-10-30 | 149 | ticker |
-| v1-indices | 6660 | 2019-12-30 | 2026-11-06 | 5 | indice |
+| v1-indices | 6664 | 2019-12-30 | 2026-11-09 | 5 | indice |
 
 ### Índices
 
 | indice | n | inicio | fim |
 |---|---|---|---|
-| CDI | 1467 | 2021-01-04 | 2026-11-05 |
-| IDIV | 1708 | 2019-12-30 | 2026-11-06 |
-| IFIX | 1708 | 2019-12-30 | 2026-11-06 |
+| CDI | 1468 | 2021-01-04 | 2026-11-06 |
+| IDIV | 1709 | 2019-12-30 | 2026-11-09 |
+| IFIX | 1709 | 2019-12-30 | 2026-11-09 |
 | IPCA | 69 | 2021-01-01 | 2026-09-01 |
-| SMLL | 1708 | 2019-12-30 | 2026-11-06 |
+| SMLL | 1709 | 2019-12-30 | 2026-11-09 |
 
 ## 4. Duplicatas
 
@@ -208,19 +208,19 @@
 
 | verificação | grupos | linhas_extras |
 |---|---|---|
-| mesma matéria (ticker, data, título) | 8140 | 9382 |
+| mesma matéria (ticker, data, título) | 8185 | 9429 |
 | mesmo link (ticker, link) | 417 | 422 |
 
 ## 5. Notícias (v1-noticias)
 
-- 208865 notícias do Google News sem hora, marcadas 'só data' pela coleta (raw_articles.published_precision = 'date'): 2021: 12316, 2022: 13940, 2023: 22580, 2024: 28303, 2025: 41993, 2026: 89733
+- 208870 notícias do Google News sem hora, marcadas 'só data' pela coleta (raw_articles.published_precision = 'date'): 2021: 12316, 2022: 13940, 2023: 22580, 2024: 28303, 2025: 41993, 2026: 89738
 - formato classificado por grupo (tamanho + últimos 6 caracteres) usando os exemplos mínimo e máximo
 
 ### Probabilidades do FinBERT
 
 | veredito | linhas |
 |---|---|
-| ok | 567311 |
+| ok | 568743 |
 | sem_prob | 0 |
 | parcial | 0 |
 | fora_intervalo | 0 |
@@ -253,7 +253,7 @@
 | 2023 | 45716 | 19422 | 42.5 | 10 | 0 | 26284 | 57.5 |
 | 2024 | 50226 | 18215 | 36.3 | 6 | 0 | 32005 | 63.7 |
 | 2025 | 64478 | 18794 | 29.1 | 4 | 0 | 45680 | 70.8 |
-| 2026 | 138791 | 46129 | 33.2 | 3 | 0 | 92659 | 66.8 |
+| 2026 | 139827 | 47160 | 33.7 | 3 | 0 | 92664 | 66.3 |
 
 ### Hora da publicação, por ano e origem (artigos distintos)
 
@@ -275,15 +275,15 @@
 | 2025 | google_news | 45794 | 3797 | 8.3 | 4 | 0 | 41993 | 91.7 |
 | 2025 | wordpress | 14997 | 14997 | 100 | 0 | 0 | 0 | 0 |
 | 2026 | cvm_ipe | 2926 | 0 | 0 | 0 | 0 | 2926 | 100 |
-| 2026 | google_news | 121352 | 31616 | 26.1 | 3 | 0 | 89733 | 73.9 |
-| 2026 | wordpress | 14513 | 14513 | 100 | 0 | 0 | 0 | 0 |
+| 2026 | google_news | 122317 | 32576 | 26.6 | 3 | 0 | 89738 | 73.4 |
+| 2026 | wordpress | 14584 | 14584 | 100 | 0 | 0 | 0 | 0 |
 
 ### Formatos de data/hora
 
 | coluna | tam | fim | n | exemplo_min | exemplo_max | classe |
 |---|---|---|---|---|---|---|
-| data_hora_publicacao | 25 | -03:00 | 288546 | 2021-01-01T07:30:57-03:00 | 2026-11-09T08:05:26-03:00 | iso_com_fuso |
-| data_hora_coleta | 25 | -03:00 | 567311 | 2026-09-07T17:38:43-03:00 | 2026-11-09T08:10:48-03:00 | iso_com_fuso |
+| data_hora_publicacao | 25 | -03:00 | 289969 | 2021-01-01T07:30:57-03:00 | 2026-11-10T08:09:01-03:00 | iso_com_fuso |
+| data_hora_coleta | 25 | -03:00 | 568743 | 2026-09-07T17:38:43-03:00 | 2026-11-10T08:11:23-03:00 | iso_com_fuso |
 
 ### Fuso: data_hora_publicacao × raw_articles.published_at
 
@@ -310,14 +310,14 @@
 | 2025 | en | 4872 | 4162 |
 | 2025 | pt | 90934 | 60316 |
 | 2026 | en | 18141 | 14923 |
-| 2026 | pt | 176874 | 123868 |
+| 2026 | pt | 178306 | 124904 |
 
 ### Modelo do FinBERT por idioma
 
 | lang | model | text_source | n |
 |---|---|---|---|
-| pt | lucas-leme/FinBERT-PT-BR | title | 288668 |
-| pt | lucas-leme/FinBERT-PT-BR | body | 246470 |
+| pt | lucas-leme/FinBERT-PT-BR | title | 289929 |
+| pt | lucas-leme/FinBERT-PT-BR | body | 246641 |
 | en | ProsusAI/finbert | title | 32162 |
 | en | ProsusAI/finbert | body | 11 |
 
@@ -325,7 +325,7 @@
 
 | ini | tam | n | exemplo_min | exemplo_max |
 |---|---|---|---|---|
-| n | 7 | 567311 | n005084 | n633971 |
+| n | 7 | 568743 | n005084 | n635695 |
 
 ## 6. Valores distintos
 
@@ -333,35 +333,35 @@
 
 | tabela | coluna | valor | n | permitido |
 |---|---|---|---|---|
-| v1-noticias | origem | google_news | 312964 | sim |
-| v1-noticias | origem | wordpress | 230458 | sim |
+| v1-noticias | origem | google_news | 314256 | sim |
+| v1-noticias | origem | wordpress | 230598 | sim |
 | v1-noticias | origem | cvm_ipe | 23889 | sim |
-| v1-noticias | papel | protagonista | 247859 | sim |
-| v1-noticias | papel | mencao | 188438 | sim |
-| v1-noticias | papel | citada_com_fato | 91874 | sim |
-| v1-noticias | papel | errada | 38766 | sim |
-| v1-noticias | papel | matriz_estrangeira | 374 | sim |
-| v1-noticias | tipo_conteudo | reportagem | 386917 | sim |
-| v1-noticias | tipo_conteudo | resumo_mercado | 95388 | sim |
-| v1-noticias | tipo_conteudo | lista | 36379 | sim |
-| v1-noticias | tipo_conteudo | outro | 20371 | sim |
-| v1-noticias | tipo_conteudo | opiniao | 11664 | sim |
-| v1-noticias | tipo_conteudo | agenda | 10224 | sim |
-| v1-noticias | tipo_conteudo | patrocinado | 4367 | sim |
-| v1-noticias | tipo_conteudo | podcast_video | 1628 | sim |
-| v1-noticias | tipo_conteudo | newsletter | 373 | sim |
-| v1-noticias | evento | outro | 174637 | sim |
-| v1-noticias | evento | operacional | 109284 | sim |
-| v1-noticias | evento | macro | 106351 | sim |
-| v1-noticias | evento | fato_relevante | 32159 | sim |
-| v1-noticias | evento | recomendacao | 30458 | sim |
-| v1-noticias | evento | resultado | 27924 | sim |
-| v1-noticias | evento | fusao_aquisicao | 20146 | sim |
-| v1-noticias | evento | juridico | 19339 | sim |
-| v1-noticias | evento | governanca | 17477 | sim |
-| v1-noticias | evento | dividendo_jcp | 15524 | sim |
-| v1-noticias | evento | regulatorio | 11119 | sim |
-| v1-noticias | evento | guidance | 2506 | sim |
+| v1-noticias | papel | protagonista | 248538 | sim |
+| v1-noticias | papel | mencao | 188853 | sim |
+| v1-noticias | papel | citada_com_fato | 92027 | sim |
+| v1-noticias | papel | errada | 38950 | sim |
+| v1-noticias | papel | matriz_estrangeira | 375 | sim |
+| v1-noticias | tipo_conteudo | reportagem | 388009 | sim |
+| v1-noticias | tipo_conteudo | resumo_mercado | 95531 | sim |
+| v1-noticias | tipo_conteudo | lista | 36437 | sim |
+| v1-noticias | tipo_conteudo | outro | 20415 | sim |
+| v1-noticias | tipo_conteudo | opiniao | 11698 | sim |
+| v1-noticias | tipo_conteudo | agenda | 10269 | sim |
+| v1-noticias | tipo_conteudo | patrocinado | 4376 | sim |
+| v1-noticias | tipo_conteudo | podcast_video | 1630 | sim |
+| v1-noticias | tipo_conteudo | newsletter | 378 | sim |
+| v1-noticias | evento | outro | 175000 | sim |
+| v1-noticias | evento | operacional | 109569 | sim |
+| v1-noticias | evento | macro | 106601 | sim |
+| v1-noticias | evento | fato_relevante | 32236 | sim |
+| v1-noticias | evento | recomendacao | 30497 | sim |
+| v1-noticias | evento | resultado | 28091 | sim |
+| v1-noticias | evento | fusao_aquisicao | 20221 | sim |
+| v1-noticias | evento | juridico | 19402 | sim |
+| v1-noticias | evento | governanca | 17494 | sim |
+| v1-noticias | evento | dividendo_jcp | 15567 | sim |
+| v1-noticias | evento | regulatorio | 11164 | sim |
+| v1-noticias | evento | guidance | 2514 | sim |
 | v1-noticias | evento | mudanca_ticker | 387 | sim |
 | v1-cadastro | tipo_acao | ON | 67 | sim |
 | v1-cadastro | tipo_acao | PN | 14 | sim |
@@ -378,10 +378,10 @@
 | v1-acoes_emitidas | situacao | corrigido_digito | 2 | sim |
 | v1-proventos | tipo | JCP | 4605 | sim |
 | v1-proventos | tipo | DIVIDENDO | 3828 | sim |
-| v1-indices | indice | IDIV | 1708 | sim |
-| v1-indices | indice | IFIX | 1708 | sim |
-| v1-indices | indice | SMLL | 1708 | sim |
-| v1-indices | indice | CDI | 1467 | sim |
+| v1-indices | indice | IDIV | 1709 | sim |
+| v1-indices | indice | IFIX | 1709 | sim |
+| v1-indices | indice | SMLL | 1709 | sim |
+| v1-indices | indice | CDI | 1468 | sim |
 | v1-indices | indice | IPCA | 69 | sim |
 
 ## 7. Preços (v1-precos)
@@ -496,10 +496,10 @@ _(sem linhas)_
 
 | ticker | linhas | com_volume | inicio | fim |
 |---|---|---|---|---|
-| BRENT | 1728 | 0 | 2019-12-30 | 2026-11-09 |
+| BRENT | 1729 | 0 | 2019-12-30 | 2026-11-10 |
 | IBOV | 1709 | 0 | 2019-12-30 | 2026-11-09 |
 | IVVB11 | 1709 | 1689 | 2019-12-30 | 2026-11-09 |
-| USDBRL | 2000 | 0 | 2019-12-30 | 2026-11-09 |
+| USDBRL | 2001 | 0 | 2019-12-30 | 2026-11-10 |
 
 ## 8. Balanços (v1-balancos)
 
@@ -775,7 +775,7 @@ _(sem linhas)_
 | 2026-08 | 330 | 13786 | 1636 |
 | 2026-09 | 196 | 10880 | 1340 |
 | 2026-10 | 244 | 18197 | 1370 |
-| 2026-11 | 82 | 5473 | 325 |
+| 2026-11 | 82 | 6337 | 395 |
 
 ## 16. Vazios e zeros
 
@@ -786,12 +786,12 @@ _(sem linhas)_
 
 | tabela | coluna | total | nulos | pct_nulo | situacao | textos_vazios | zeros |
 |---|---|---|---|---|---|---|---|
-| v1-noticias | data_hora_publicacao | 567311 | 278765 | 49.1 | parcial | 0 | 0 |
-| v1-noticias | qualidade | 567311 | 0 | 0 | cheia | 0 | 6175 |
-| v1-precos | abertura | 146140 | 485 | 0.3 | parcial | 0 | 0 |
-| v1-precos | maxima | 146140 | 1 | 0 | parcial | 0 | 0 |
-| v1-precos | minima | 146140 | 1 | 0 | parcial | 0 | 0 |
-| v1-precos | volume | 146140 | 5516 | 3.8 | parcial | 0 | 0 |
+| v1-noticias | data_hora_publicacao | 568743 | 278774 | 49 | parcial | 0 | 0 |
+| v1-noticias | qualidade | 568743 | 0 | 0 | cheia | 0 | 6186 |
+| v1-precos | abertura | 146143 | 486 | 0.3 | parcial | 0 | 0 |
+| v1-precos | maxima | 146143 | 1 | 0 | parcial | 0 | 0 |
+| v1-precos | minima | 146143 | 1 | 0 | parcial | 0 | 0 |
+| v1-precos | volume | 146143 | 5518 | 3.8 | parcial | 0 | 0 |
 | v1-cadastro | cnpj | 88 | 1 | 1.1 | parcial | 0 | 0 |
 | v1-cadastro | setor | 88 | 1 | 1.1 | parcial | 0 | 0 |
 | v1-cadastro | subsetor | 88 | 1 | 1.1 | parcial | 0 | 0 |
@@ -827,7 +827,7 @@ _(sem linhas)_
 |---|---|---|---|---|
 | coletar | concluida | 9 | 2026-10-22 21:56:25.015448 | 2026-11-05 16:53:22.462610 |
 | coletar | parcial | 1 | 2026-10-30 19:17:38.592389 | 2026-10-30 19:17:38.592389 |
-| daily | concluida | 15 | 2026-10-21 21:30:04.283650 | 2026-11-09 11:00:04.169351 |
+| daily | concluida | 16 | 2026-10-21 21:30:04.283650 | 2026-11-10 11:00:02.930002 |
 | daily | parcial | 5 | 2026-10-21 00:46:43.367434 | 2026-10-31 11:00:05.262712 |
 | etapa | concluida | 1 | 2026-10-20 14:45:13.211003 | 2026-10-20 14:45:13.211003 |
 
@@ -837,7 +837,7 @@ _(sem linhas)_
 |---|---|---|
 | cron | 0 | 1 |
 | cron | 3 | 1 |
-| cron | 11 | 15 |
+| cron | 11 | 16 |
 | cron | 19 | 1 |
 | cron | 21 | 1 |
 | manual | 23 | 1 |
@@ -848,26 +848,26 @@ _(sem linhas)_
 |---|---|---|---|
 | corrigir_horas | 1 | concluida | 2 |
 | cvm_itr_dfp | 1 | concluida | 3 |
-| precos | 1 | concluida | 21 |
-| juiza | 1 | concluida | 24 |
+| precos | 1 | concluida | 22 |
+| juiza | 1 | concluida | 25 |
 | juiza | 1 | falhou | 2 |
-| macro | 2 | concluida | 20 |
+| macro | 2 | concluida | 21 |
 | build_entrega | 2 | concluida | 8 |
-| noticias | 3 | concluida | 19 |
+| noticias | 3 | concluida | 20 |
 | b3_indices | 3 | concluida | 1 |
 | noticias | 3 | falhou | 1 |
-| ipe | 4 | concluida | 19 |
+| ipe | 4 | concluida | 20 |
 | ipe | 4 | pulada | 1 |
-| enriquecimento | 5 | concluida | 18 |
+| enriquecimento | 5 | concluida | 19 |
 | enriquecimento | 5 | falhou | 1 |
 | enriquecimento | 5 | pulada | 1 |
 | juiza | 6 | pulada | 1 |
-| cadastro | 7 | concluida | 19 |
+| cadastro | 7 | concluida | 20 |
 | cadastro | 7 | pulada | 1 |
-| entrega | 8 | concluida | 20 |
+| entrega | 8 | concluida | 21 |
 | analise | 9 | concluida | 4 |
 | analise | 9 | falhou | 3 |
-| analise | 9 | pulada | 13 |
+| analise | 9 | pulada | 14 |
 
 ## 18. Histórico novo: composição, corrigir_horas e cobertura do experimento
 

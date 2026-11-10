@@ -215,6 +215,15 @@ A regra decide pela quantidade de dado que mudou, nunca por resultado de modelo,
 
 **Controle (08/11/2026):** com o banco igual (1.343 notícias de papel nulo, 3.192 balanços, 586.136 notícias), o dataset regenerado com a mesma data saiu **byte a byte igual** ao congelado (mesmo sha256): 0% no total e em todos os grupos. O controle não exercitou o ruído do float32 da regravação diária dos preços, porque não houve regravação desde a geração.
 
+**Medida de 09/11/2026 e decisões do usuário (registradas em 09/11/2026):** a coleta remontou a entrega. As mudanças foram republicações de notícias contadas uma vez, o pregão de 20/11/2020, o IVVB11 em 24/10/2025, balanços novos e a `situacao` `individual`. A medida (`docs/medida_dados_novos_2026-11-09.md`) deu 51,4% de linhas mudadas. Por grupo: notícias 37,0%, preço e bloco A 17,4%, alvo 0,002% (2 linhas). A decisão é **nova rodada**, e a regra D7 pediu parar.
+
+| Tema | Decisão |
+|---|---|
+| D7 | **Aceito.** O preço muda pelo efeito estrutural do pregão de 20/11/2020 nas janelas de 252 pregões (`beta` 4.528 linhas e `mom_12_1` 7.693, em 2021; `ret_idio_5d` acompanha o beta) e pelo ruído do float32 no `salto_abertura`: só 72 células brutas mudaram mais que 1e-6, e o rank ampliou o ruído em valores quase empatados perto de zero (investigação na própria medida). O alvo muda em 2 linhas |
+| D5 | Haverá a **rodada 5**, que passa a ser a oficial |
+| Refinamento da regra (vale para as **próximas** medidas, a partir de 09/11/2026) | Uma célula só conta como mudada se, além do critério depois do rank, o valor **bruto** do CSV (antes do rank) também mudar: diferença absoluta maior que 1e-6, ou passagem de vazio a valor (ou o contrário). As linhas que existem em só um dos dois datasets continuam contando. O resto da nota não muda |
+| A medida de 09/11 com o refinamento | Também decide pela rodada 5. Recalculada com a regra nova, só para conferência e sem substituir a de `docs/`: 44,9% de linhas mudadas; notícias 34,6%, preço e bloco A 10,3%, alvo 2 linhas. A decisão é a mesma com ou sem o refinamento |
+
 08/11: Assaí saiu de cnpjs_sem_balanco; medida 0% nas colunas do modelo; rodada 3 continua; dataset oficial segue c954… (`docs/medida_dados_novos_2026-11-08_assai.md`).
 
 Implementação (02/11/2026): a rotina passa a publicar a família da configuração congelada (`treino.familia_producao: "logistica"`); o modelo logístico é gravado em JSON (`logistica-AAAA-MM.json`, sem pickle), e a configuração da rodada 001 vale sem mudança.
@@ -255,6 +264,21 @@ Registrado em 08/11/2026, **antes de rodar a sensibilidade da rodada 3**. Como o
 - Os modelos anteriores estão em `modelos/antigos/`.
 - O painel identifica o vencedor `referencia` como XGBoost.
 - Como `sha_parametros` e `sha_codigo` mudaram, uma rodada nova com as mesmas entradas não conta como repetição da 3.
+
+### Rodada 5 (10/11/2026): resultado e desenho da sensibilidade
+
+Registrado em 10/11/2026, **antes de rodar a sensibilidade da rodada 5**. Como o resto desta seção, é registro: não muda as seções 1 a 7.
+
+**Situação.** A rodada 5 é a oficial pela D5 (medida de 09/11/2026). O dataset é a v7 de 2026-11-09 (`dataset-todas-2026-11-09.csv`, sha256 `9f520c5fa7e91ebbb2a624a6cbb89d4caf33d8bb57ca3018be89ac43016e9928`), gerado depois do daily de 10/11/2026. Conferência e D7 aceita (ajuste de proventos da RAIZ4 com 40% do provento, regravado no daily de 10/11, tratado como limitação) em `docs/conferencia_rodada_005.md`; medida formal em `docs/medida_dados_novos_2026-11-10.md` (45,2% de linhas mudadas). Os hashes das regras são os mesmos das rodadas 1 a 4 (`sha_regras` `e275d3d6e8f1…` no protocolo e `dd967e28c1eb…` na busca).
+- Protocolo (`docs/protocolo_rodada_005.md`): só o bloco A foi adotado (ganho 0,00857, IC 99% [0,00290; 0,01389]), e o controle foi reprovado. As colunas congeladas (`docs/protocolo_congelado_rodada_005.json`) são as mesmas da rodada 3.
+- Busca (`docs/busca_rodada_005.md`): nenhum candidato foi aprovado, então fica a referência, XGBoost do ponto de partida (`docs/configuracao_final_rodada_005.json`, mesmos hiperparâmetros da 003). A logística reprovou nos critérios 1 (ganho 0,00453 ≤ 0,005) e 2 (IC 99,5% [−0,00058; 0,00933]); o top 5 dela não caiu (−0,06 pp). Comparação com a rodada 3 em `docs/comparacao_rodadas_003_005.md`.
+- Modelo 3 × modelo 1 (XGBoost, exploratório): ganho de AUC por pregão +0,00046 (IC 95% de −0,00199 a 0,00286); top 5 0,50992 × 0,51376.
+
+**Desenho da sensibilidade da rodada 5** (exploratória; fora de `docs/protocolo_tentativas.jsonl` e da contagem de testes; IC sem ajuste por comparações múltiplas):
+- Casos a, b, c e d iguais aos das rodadas 1 e 3 (tabela acima), com as mesmas regras de recorte.
+- Família XGBoost com os hiperparâmetros da configuração final 005; colunas de `docs/protocolo_congelado_rodada_005.json`; as mesmas dobras e a mesma semente; só no desenvolvimento.
+- Datasets de 2026-11-09: `todas` `9f520c5fa7e9…`, `principais` `bc7797c95937…` e `hora_real_noite` `ca6f9e3eff04…`.
+- Saída em `docs/busca_rodada_005_sensibilidade.md` e `.json`.
 
 ### Checklist antes do teste final (D1 a D10)
 
