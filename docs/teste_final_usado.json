@@ -1,0 +1,61 @@
+{
+  "usado_em": "2026-11-11T11:55:03-03:00",
+  "teste_final_inicio": "2026-06-23",
+  "teste_final_fim": "2026-11-10",
+  "n_dias": 97,
+  "sha256_dataset": "392665e0f49206b8281ee0ffb54c761dec0e4017ceb6b31494202931c06dc6b6",
+  "configuracao": {
+    "blocos_preco": [],
+    "noticias_contexto": false,
+    "hiperparametros": {
+      "colsample_bytree": 0.8,
+      "learning_rate": 0.03,
+      "max_depth": 3,
+      "min_child_weight": 50,
+      "n_estimators": 300,
+      "reg_lambda": 5,
+      "subsample": 0.8
+    },
+    "colunas_1": [
+      "ret_1d",
+      "ret_5d",
+      "ret_20d",
+      "volatilidade_20d",
+      "beta",
+      "volume_relativo",
+      "salto_abertura",
+      "posicao_fechamento",
+      "mom_12_1",
+      "liquidez_20d",
+      "ret_idio_5d"
+    ],
+    "colunas_3": [
+      "ret_1d",
+      "ret_5d",
+      "ret_20d",
+      "volatilidade_20d",
+      "beta",
+      "volume_relativo",
+      "salto_abertura",
+      "noticias_dia_qtd",
+      "noticias_dia_tom",
+      "noticias_dia_extremo",
+      "mudanca_tom",
+      "posicao_fechamento",
+      "mom_12_1",
+      "liquidez_20d",
+      "ret_idio_5d"
+    ],
+    "familia": "xgb"
+  },
+  "relatorio": "teste-final-2026-11-10/relatorio.md",
+  "resumo": {
+    "taxa_top5_modelo_3": 0.47010309278350526,
+    "vs_acaso": "dentro",
+    "acaso_top5": {
+      "media": 0.49746639175257734,
+      "p2_5": 0.4556701030927834,
+      "p97_5": 0.5402061855670102
+    }
+  }
+}

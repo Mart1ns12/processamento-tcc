@@ -310,7 +310,7 @@ Registrado em 04/11/2026 a partir das decisões acima, para o painel (aba Experi
 | Id | Decisão | Situação |
 |---|---|---|
 | D1 | Histórico desde 2021, com as lacunas como limitação | fechada |
-| D2 | Data de fim do teste final (a definir) | pendente |
+| D2 | Data de fim do teste final: 10/11/2026 (`treino.teste_final.fim`, decisão de 10/11/2026) | fechada |
 | D3 | Hipótese e medida principal: ganho de AUC por pregão do modelo 3 sobre o 1, com IC 95% acima de 0 | fechada |
 | D4 | Família, colunas e referências congeladas | fechada |
 | D5 | Dados novos antes do teste final geram nova rodada | fechada |
@@ -319,3 +319,39 @@ Registrado em 04/11/2026 a partir das decisões acima, para o painel (aba Experi
 | D8 | Custos definidos antes | fechada |
 | D9 | Auditoria de eventos após 23/06 | fechada |
 | D10 | Chance oculta até o teste ao vivo | fechada |
+
+### Teste final (uso único, 11/11/2026)
+
+Registro. Não muda as seções 1 a 7.
+
+**Antes de rodar:**
+- Dataset gerado em 11/11/2026, depois do daily que entregou o pregão de 10/11: `--ate 2026-11-10 --proximo 2026-11-11`, `versao_preparacao` 7.
+
+| Versão | Arquivo | sha256 |
+|---|---|---|
+| `todas` | `dataset-todas-2026-11-10.csv` | `392665e0f49206b8281ee0ffb54c761dec0e4017ceb6b31494202931c06dc6b6` |
+| `principais` | `dataset-principais-2026-11-10.csv` | `f1113cbf120086c620aba8820a41ceb801fe0f27f2f4de95b18b919e834ecac0` |
+| `hora_real_noite` | `dataset-hora_real_noite-2026-11-10.csv` | `ace6060b8e2745c50f2ac1d7c2ee2e1d1f0a90cfb0501bef5cd0e0a8ce379d79` |
+
+- Medida de dados novos (D5, regra "rank E bruto") contra o `9f520c5fa7e9…` da rodada 5, em `docs/medida_dados_novos_2026-11-11.md`: 4 de 94.482 linhas mudaram (0,0042%; 3 de preço e 1 de alvo, uma por ano de 2021 a 2024: BBDC3, BBDC4, BRAP4, ITUB4; notícias: nenhuma). Decisão `rodada_oficial_continua`; `parar_e_perguntar` (D7) falso. A rodada 5 continua oficial.
+- Cópia congelada (D6): `C:\Users\danie\Desktop\TCC\Arquivos\copias_congeladas\dataset_teste_final\` (3 versões, os `.json` e o `SHA256SUMS.txt`; hashes conferidos contra a origem e contra os `.json`). Cópia no Google Drive: a fazer pelo usuário.
+
+**Execução:** `python -m processamento.experimento.treino --data 2026-11-10 --teste-final`, uma única vez, em 11/11/2026 (gerado às 11:55:03), código de saída 0. Registro de uso em `docs/teste_final_usado.json`; saídas em `saida/experimento/treino/teste-final-2026-11-10/` (`relatorio.md`, `metricas.json`). Configuração congelada da rodada 005 (XGBoost, colunas com o bloco A); referências acaso, volatilidade e logística.
+
+**Período:** 23/06/2026 a 10/11/2026 (dia do alvo), 97 pregões, 6.944 linhas, 6 dobras mensais.
+
+| Modelo | AUC por pregão | Acerto no top 5 (intervalo) | Frente ao acaso |
+|---|---|---|---|
+| Modelo 3 (com notícias) | 0,5049 | 47,0% (43,3% a 50,9%) | ainda não mostrou vantagem |
+| Modelo 1 (sem notícias) | 0,5086 | 51,1% (46,4% a 56,3%) | ainda não mostrou vantagem |
+| Logística | 0,5091 | 49,9% (43,7% a 55,9%) | ainda não mostrou vantagem |
+| Volatilidade | 0,5013 | 44,9% (39,6% a 50,5%) | abaixo do acaso |
+| Acaso | 0,5 | média 49,7% (faixa 45,6% a 54,0%) | — |
+
+**Hipótese (D3): não confirmada.** Ganho de AUC por pregão do modelo 3 sobre o 1: −0,004 (intervalo −0,013 a +0,005; contém o zero). No top 5, −4,1 pp (−8,7 a +0,2). O modelo 3 supera a volatilidade (top 5 e AUC) e não supera a logística (top 5 e AUC). Calibração aprovada (ECE 0,016; Brier 0,2505); chance continua oculta (D10).
+
+**Achado exploratório (só relato):** o modelo 3 com a versão `hora_real_noite` das notícias acertou 5,8 pp a mais no top 5 que o modelo 3 (intervalo 2,1 a 9,3; AUC +0,007, intervalo −0,003 a +0,018), com 52,8% de acerto, ainda sem vantagem sobre o acaso. É comparação de sensibilidade, sem ajuste por comparações múltiplas e escolhida fora da hipótese: não muda a conclusão nem o modelo de produção.
+
+**Observações do relatório:** a seção 5 mostra "Blocos de preço: nenhum" porque no teste final não há seleção (a configuração vem congelada); as colunas do `metricas.json` incluem o bloco A. A seção 14 mostra "Modelo salvo: não encontrado" porque o teste final nunca treina nem grava modelo em `modelos/` (`modelo_salvo = None` no modo teste final).
+
+Depois do teste final, dados novos só entram como sensibilidade (D5).

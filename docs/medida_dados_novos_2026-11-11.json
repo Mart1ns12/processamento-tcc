@@ -1,0 +1,141 @@
+{
+  "exploratorio": true,
+  "data": "2026-11-11",
+  "congelado": {
+    "arquivo": "dataset-todas-2026-11-09.csv",
+    "sha256": "9f520c5fa7e91ebbb2a624a6cbb89d4caf33d8bb57ca3018be89ac43016e9928",
+    "protocolo": "protocolo_congelado_rodada_005.json",
+    "rodada": 5
+  },
+  "novo": {
+    "arquivo": "dataset-todas-2026-11-10.csv",
+    "sha256": "392665e0f49206b8281ee0ffb54c761dec0e4017ceb6b31494202931c06dc6b6"
+  },
+  "versao_preparacao": 7,
+  "decisao": "rodada_oficial_continua",
+  "parar_e_perguntar": false,
+  "limite": 0.01,
+  "tolerancia": 1e-06,
+  "regra": "2026-11-09: rank E bruto",
+  "fracao_total": 4.233610634829915e-05,
+  "linhas_mudadas": 4,
+  "denominador": 94482,
+  "grupos": {
+    "preco_bloco_a": {
+      "colunas": [
+        "ret_1d",
+        "ret_5d",
+        "ret_20d",
+        "volatilidade_20d",
+        "beta",
+        "volume_relativo",
+        "salto_abertura",
+        "posicao_fechamento",
+        "mom_12_1",
+        "liquidez_20d",
+        "ret_idio_5d"
+      ],
+      "linhas_mudadas": 3,
+      "fracao": 3.175207976122436e-05
+    },
+    "noticias": {
+      "colunas": [
+        "noticias_dia_qtd",
+        "noticias_dia_tom",
+        "noticias_dia_extremo",
+        "mudanca_tom"
+      ],
+      "linhas_mudadas": 0,
+      "fracao": 0.0
+    },
+    "alvo": {
+      "colunas": [
+        "alvo"
+      ],
+      "linhas_mudadas": 1,
+      "fracao": 1.0584026587074787e-05
+    },
+    "preco_e_alvo": {
+      "colunas": [
+        "ret_1d",
+        "ret_5d",
+        "ret_20d",
+        "volatilidade_20d",
+        "beta",
+        "volume_relativo",
+        "salto_abertura",
+        "posicao_fechamento",
+        "mom_12_1",
+        "liquidez_20d",
+        "ret_idio_5d",
+        "alvo"
+      ],
+      "linhas_mudadas": 4,
+      "fracao": 4.233610634829915e-05
+    }
+  },
+  "por_ano": [
+    {
+      "ano": 2021,
+      "denominador": 14987,
+      "linhas_mudadas": 1,
+      "fracao": 6.67244945619537e-05
+    },
+    {
+      "ano": 2022,
+      "denominador": 16419,
+      "linhas_mudadas": 1,
+      "fracao": 6.0905049028564466e-05
+    },
+    {
+      "ano": 2023,
+      "denominador": 16940,
+      "linhas_mudadas": 1,
+      "fracao": 5.90318772136954e-05
+    },
+    {
+      "ano": 2024,
+      "denominador": 18256,
+      "linhas_mudadas": 1,
+      "fracao": 5.477651183172656e-05
+    },
+    {
+      "ano": 2025,
+      "denominador": 19308,
+      "linhas_mudadas": 0,
+      "fracao": 0.0
+    },
+    {
+      "ano": 2026,
+      "denominador": 8572,
+      "linhas_mudadas": 0,
+      "fracao": 0.0
+    }
+  ],
+  "top_tickers": [
+    {
+      "ticker": "BBDC3",
+      "linhas_mudadas": 1
+    },
+    {
+      "ticker": "BBDC4",
+      "linhas_mudadas": 1
+    },
+    {
+      "ticker": "BRAP4",
+      "linhas_mudadas": 1
+    },
+    {
+      "ticker": "ITUB4",
+      "linhas_mudadas": 1
+    }
+  ],
+  "contagens": {
+    "linhas_congelado": 94485,
+    "linhas_novo": 94485,
+    "linhas_comparadas": 94485,
+    "so_congelado": 0,
+    "so_novo": 0,
+    "denominador": 94482
+  }
+}

@@ -44,7 +44,7 @@ PARAMS = {"teste_final": {"inicio": "2026-06-23", "fim": None, "liberado": False
 
 TEXTOS_CHECKLIST = [
     "Histórico desde 2021, com as lacunas como limitação",
-    "Data de fim do teste final (a definir)",
+    "Data de fim do teste final: 10/11/2026 (`treino.teste_final.fim`, decisão de 10/11/2026)",
     "Hipótese e medida principal: ganho de AUC por pregão do modelo 3 sobre o 1, com IC 95% acima de 0",
     "Família, colunas e referências congeladas",
     "Dados novos antes do teste final geram nova rodada",
@@ -212,10 +212,10 @@ def test_familia_do_vencedor():
 def test_checklist_com_o_protocolo_real():
     r = checklist(REPO, PARAMS)
     assert r["disponivel"] is True and r["motivo"] is None
-    assert r["n_fechadas"] == 9 and r["n_total"] == 10
+    assert r["n_fechadas"] == 10 and r["n_total"] == 10
     assert [i["id"] for i in r["itens"]] == [f"D{n}" for n in range(1, 11)]
     assert [i["situacao"] for i in r["itens"]] == [
-        "fechada", "pendente", "fechada", "fechada", "fechada", "fechada", "fechada", "fechada", "fechada", "fechada"]
+        "fechada", "fechada", "fechada", "fechada", "fechada", "fechada", "fechada", "fechada", "fechada", "fechada"]
     assert [i["texto"] for i in r["itens"]] == TEXTOS_CHECKLIST
 
 
