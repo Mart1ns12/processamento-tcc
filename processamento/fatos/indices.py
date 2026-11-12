@@ -148,6 +148,27 @@ def cdi_dia(indices: pd.DataFrame, t, cal: list | None = None,
     return (float(ate.iloc[-1]), OK, ate.index[-1])
 
 
+def selic_meta(indices: pd.DataFrame, t, cal: list | None = None,
+               defasagem_max: int | None = None) -> tuple[float, str, pd.Timestamp | None]:
+    """Meta da SELIC da última data ≤ t, como fração ao ano (13,75 % a.a. -> 0.1375), com status e a data usada.
+
+    Taxa-meta: só o último valor, nunca acumulada. Com `cal` e `defasagem_max`: mais de `defasagem_max`
+    pregões entre o último valor e t → indisponivel (mesma regra do `cdi_dia`).
+    """
+    s = indices[indices["indice"] == "SELIC"].dropna(subset=["valor"])
+    s = s.assign(data=pd.to_datetime(s["data"]).dt.normalize()).sort_values("data")
+    ate = s[s["data"] <= pd.Timestamp(t).normalize()]
+    if ate.empty:
+        return (np.nan, INDISPONIVEL, None)
+    ultima = ate["data"].iloc[-1]
+    if cal is not None and defasagem_max is not None:
+        idx = indice_pregoes(cal)
+        atraso = int(((idx > ultima) & (idx <= pd.Timestamp(t).normalize())).sum())
+        if atraso > defasagem_max:
+            return (np.nan, INDISPONIVEL, None)
+    return (float(ate["valor"].iloc[-1]) / 100, OK, ultima)
+
+
 def ipca_12m(indices: pd.DataFrame, t, defasagem_max_meses: int | None = None) -> tuple[float, str]:
     """IPCA acumulado nos 12 meses até K(t), inclusive (decimal).
 

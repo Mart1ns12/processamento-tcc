@@ -23,7 +23,7 @@ from processamento.fatos.fundamentos import (
     payout_por_ano,
     tabela_trimestral,
 )
-from processamento.fatos.indices import INDICES, calcular_indices, cdi_dia, ipca_12m, ipca_ate
+from processamento.fatos.indices import INDICES, calcular_indices, cdi_dia, ipca_12m, ipca_ate, selic_meta
 from processamento.fatos.precos import (
     Grade,
     ParametrosPrecos,
@@ -168,6 +168,7 @@ def montar_mercado_dia(ins: Insumos, grades: GradesDoDia, gerado_em: str, dados_
     taxa, status_cdi, data_cdi = cdi_dia(ins.indices, ins.t, ins.cal, n_max)
     ipca, status_ipca = ipca_12m(ins.indices, ins.t, m_max)
     ate = ipca_ate(ins.indices, ins.t)
+    selic, status_selic, data_selic = selic_meta(ins.indices, ins.t, ins.cal, n_max)
     indices = {
         indice: {
             janela: contrato.folha(grades.indices[janela].valor.at[ts, indice],
@@ -187,6 +188,8 @@ def montar_mercado_dia(ins: Insumos, grades: GradesDoDia, gerado_em: str, dados_
         "ipca_12m": contrato.folha(ipca, status_ipca),
         "ipca_ate": (contrato.folha_texto(ate, "ok") if ate is not None
                      else contrato.folha_texto(None, "indisponivel")),
+        "selic_meta": contrato.folha(selic, status_selic),
+        "selic_data": contrato.data_txt(data_selic),
         "indices": indices,
     }]
 

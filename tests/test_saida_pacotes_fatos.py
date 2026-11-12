@@ -134,6 +134,9 @@ def test_mercado_dia_gabarito(pacotes):
     assert m["cdi_data"] == "2025-10-21"
     _confere(m["ipca_12m"], None, STATUS_HIST)
     assert m["ipca_ate"] == {"valor": "2025-09", "status": "ok"}
+    _confere(m["selic_meta"], 0.15, "ok")          # 15% a.a. em t; o 14,75 de 22/10 (depois de t) não entra
+    assert m["selic_data"] == "2025-10-21"
+    assert "SELIC" not in m["indices"]               # taxa-meta não vira índice com d1/m1/m6/a1
     _confere(m["indices"]["CDI"]["d1"], 0.0005, "ok")
     for j in ("m1", "m6", "a1"):
         _confere(m["indices"]["CDI"][j], None, STATUS_HIST)

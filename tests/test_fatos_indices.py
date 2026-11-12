@@ -20,6 +20,7 @@ from processamento.fatos.indices import (
     ipca_12m,
     rentabilidade_cdi,
     rentabilidade_ipca,
+    selic_meta,
 )
 from processamento.fatos.precos import HIST, INDISPONIVEL, OK, ParametrosPrecos, indice_pregoes
 
@@ -132,6 +133,46 @@ def test_cdi_dia_e_a_ultima_taxa_ate_t():
 
 def test_cdi_dia_sem_linhas_fica_indisponivel():
     valor, status, data = cdi_dia(indices_de([]), date(2025, 1, 6))
+    assert pd.isna(valor)
+    assert status == INDISPONIVEL
+    assert data is None
+
+
+# SELIC: meta em % ao ano, uma linha por dia corrido (fim de semana incluso); muda só em reunião do Copom.
+SELIC = [
+    ("2025-01-03", "SELIC", 12.25),
+    ("2025-01-04", "SELIC", 12.25),   # sábado
+    ("2025-01-05", "SELIC", 12.25),   # domingo
+    ("2025-01-06", "SELIC", 13.25),
+    ("2025-01-07", "SELIC", 13.25),   # depois de t: não pode entrar
+]
+
+
+def test_selic_meta_e_o_ultimo_valor_ate_t_como_fracao_sem_acumular():
+    ind = indices_de(CDI4 + SELIC)
+    valor, status, data = selic_meta(ind, date(2025, 1, 6))
+    assert valor == pytest.approx(0.1325, abs=1e-12)   # 13,25% a.a. -> 0.1325, não um acumulado
+    assert status == OK
+    assert data == pd.Timestamp("2025-01-06")
+
+
+def test_selic_meta_nao_olha_o_futuro():
+    ind = indices_de(SELIC)
+    valor, status, data = selic_meta(ind, date(2025, 1, 5))
+    assert valor == pytest.approx(0.1225, abs=1e-12)
+    assert data == pd.Timestamp("2025-01-05")
+
+
+def test_selic_meta_velha_demais_fica_indisponivel():
+    ind = indices_de(SELIC[:1])                          # só 03/01 (sexta)
+    cal = pregoes_uteis(10, "2025-01-02")
+    assert selic_meta(ind, date(2025, 1, 10), cal, 5)[1] == OK            # 5 pregões depois: ainda vale
+    valor, status, data = selic_meta(ind, date(2025, 1, 13), cal, 5)      # 6 pregões depois
+    assert pd.isna(valor) and status == INDISPONIVEL and data is None
+
+
+def test_selic_meta_sem_linhas_fica_indisponivel():
+    valor, status, data = selic_meta(indices_de(CDI4), date(2025, 1, 6))
     assert pd.isna(valor)
     assert status == INDISPONIVEL
     assert data is None

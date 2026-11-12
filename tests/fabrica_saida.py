@@ -127,6 +127,7 @@ def exemplo(pacote: str) -> dict:
                       "unidade": "USD/barril"},
             "cdi_dia": folha(0.0006, "ok"), "cdi_data": "2025-10-21",
             "ipca_12m": folha(None, STATUS_HIST), "ipca_ate": folha_texto("2025-09", "ok"),
+            "selic_meta": folha(0.15, "ok"), "selic_data": "2025-10-21",
             "indices": {
                 "CDI": _janelas_hist(folha(0.0005, "ok")),
                 "IPCA": _janelas_hist(folha(0.0, "ok")),

@@ -384,6 +384,7 @@ ESQUEMAS: dict[str, dict] = {
         **{c: "versao" if c == "versao_contrato" else "data_hora" for c in _META_CAMPOS},
         "data_referencia": "data", "IBOV": _COTACAO, "USDBRL": _COTACAO, "BRENT": _COTACAO,
         "cdi_dia": "folha", "cdi_data": "data?", "ipca_12m": "folha", "ipca_ate": "folha_texto",
+        "selic_meta": "folha", "selic_data": "data?",
         "indices": {k: _JANELAS for k in ("CDI", "IPCA", "IDIV", "SMLL", "IFIX", "IVVB11")},
     },
     "resumo_acao": {
