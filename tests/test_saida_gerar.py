@@ -332,6 +332,25 @@ def test_caso_8_erro_na_leitura_fecha_a_execucao_como_falhou(tmp_path, modelos_d
     assert "segredo" not in (raiz / "2025-10-22" / "execucao.json").read_text(encoding="utf-8")
 
 
+def test_erro_leitura_mostra_a_mensagem_no_log_sem_credenciais(tmp_path, modelos_dir, monkeypatch, capsys):
+    monkeypatch.setenv("USER_BANCO", "usuario_secreto")
+    monkeypatch.setenv("SENHA_BANCO", "senha_secreta")
+
+    def ler_quebrado(*args, **kwargs):
+        raise fontes.ErroLeitura("v1-indices.indice: valor fora do contrato: 'SELIC' (usuario_secreto/senha_secreta)")
+
+    raiz = tmp_path / "saida"
+    argv = ["--data", "2025-10-22", "--pasta", str(raiz), "--pasta-modelos", str(modelos_dir),
+            "--pasta-registros", str(tmp_path / "registros"), "--sem-estado"]
+    assert main(argv, ler=ler_quebrado, existe_composicao=False) == 4
+    saida = capsys.readouterr().out
+    assert "falha ao ler a coleta (ErroLeitura): v1-indices.indice: valor fora do contrato: 'SELIC'" in saida
+    assert "usuario_secreto" not in saida and "senha_secreta" not in saida
+    texto = (raiz / "2025-10-22" / "execucao.json").read_text(encoding="utf-8")
+    assert _execucao(raiz / "2025-10-22")["avisos"] == ["falha ao ler a coleta (ErroLeitura)"]
+    assert "SELIC" not in texto and "secreto" not in texto and "secreta" not in texto
+
+
 @pytest.mark.parametrize("erro, codigo", [
     (fontes.ErroConfiguracao("variáveis do banco faltando"), 2),
     (fontes.ErroSomenteLeitura("sessão com escrita liberada"), 3),

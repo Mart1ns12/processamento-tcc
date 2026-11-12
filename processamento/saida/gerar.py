@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import functools
 import json
+import os
 from collections.abc import Callable
 from datetime import date, datetime
 from pathlib import Path
@@ -73,6 +74,15 @@ def _limpar_pacotes(pasta: Path, proibida: Path | None = None) -> list[str]:
             arquivo.unlink()
             apagados.append(nome)
     return apagados
+
+
+def _sem_credenciais(texto: str) -> str:
+    """Troca por *** qualquer valor das variáveis do banco (fontes.VARIAVEIS_BANCO) presente no texto."""
+    valores = sorted({v for n in fontes.VARIAVEIS_BANCO if (v := os.environ.get(n)) and len(v) >= 3}, key=len,
+                     reverse=True)
+    for v in valores:
+        texto = texto.replace(v, "***")
+    return texto
 
 
 def _aviso_pacotes_anteriores(pasta: Path, d: date) -> list[str]:
@@ -169,7 +179,9 @@ def gerar(d: date, *, ler=None, pasta_saida: Path | None = None, pasta_modelos: 
                                           [motivo, *_aviso_pacotes_anteriores(pasta, d)]))
         if isinstance(erro, ErroSaida | fontes.ErroSomenteLeitura):
             raise
-        raise ErroSaida(motivo) from erro
+        # ErroLeitura: a mensagem é nossa (tabela.coluna e valor), vai só para o log, não para o execucao.json.
+        detalhe = f": {_sem_credenciais(str(erro))}" if isinstance(erro, fontes.ErroLeitura) else ""
+        raise ErroSaida(motivo + detalhe) from erro
 
     # 2b) pasta limpa (seção 8.5): os pacotes de rodadas anteriores saem antes de gravar os desta rodada
     _limpar_pacotes(pasta, proibida=Path(pasta_estado) if pasta_estado is not None else params_saida.pasta_estado)
