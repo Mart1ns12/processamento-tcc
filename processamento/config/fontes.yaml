@@ -88,7 +88,7 @@ tabelas:
     coluna_data: data
     coluna_entidade: indice
     valores_permitidos:
-      indice: [CDI, IPCA, IDIV, SMLL, IFIX]
+      indice: [CDI, IPCA, IDIV, SMLL, IFIX, SELIC]
 auxiliares:
   raw_articles:
     nome_real: raw_articles
