@@ -326,6 +326,108 @@ ul{margin:4px 0;padding-left:20px}
 #noticias-ano{overflow-x:auto}
 .mapa-calor td.vazia{border:1px dashed var(--falha);color:var(--falha)}
 
+/* polimento visual (apresentação): só aparência; nenhum dado, regra ou comando muda aqui */
+:root{
+  --r-card:14px; --r-peq:10px;
+  --esp-1:4px; --esp-2:8px; --esp-3:12px; --esp-4:16px; --esp-5:24px; --esp-6:32px;
+  --sombra:0 1px 2px rgba(16,24,40,.05),0 2px 6px rgba(16,24,40,.06);
+  --sombra-alta:0 4px 14px rgba(16,24,40,.10);
+  --brilho:rgba(31,95,214,.035);
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --sombra:inset 0 1px 0 rgba(255,255,255,.035),0 6px 20px rgba(0,0,0,.32);
+  --sombra-alta:inset 0 1px 0 rgba(255,255,255,.05),0 10px 28px rgba(0,0,0,.45);
+  --brilho:rgba(110,168,255,.05)}}
+:root[data-theme="dark"]{
+  --sombra:inset 0 1px 0 rgba(255,255,255,.035),0 6px 20px rgba(0,0,0,.32);
+  --sombra-alta:inset 0 1px 0 rgba(255,255,255,.05),0 10px 28px rgba(0,0,0,.45);
+  --brilho:rgba(110,168,255,.05)}
+body{-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+
+/* estouro horizontal: nada passa da largura do card; tabela larga rola dentro dela; texto longo quebra */
+.card:not(.hero){grid-template-columns:minmax(0,1fr)}
+.card > *,.hero-corpo > *,.kpi > *,.aviso > *,.secao-diag > *{min-width:0}
+.tabela-rolagem,.tbl{overflow-x:auto;max-width:100%}
+td.longo{white-space:normal;min-width:16rem;overflow-wrap:anywhere}
+.motivo,.campo,.note,.why,.aviso-texto,.ponto,.fazer,.fazer-curto,.kv dd,.corpo-saude p,.secao-diag ul,.secao-diag .note,.pedido,.novid,.no,.stage,.kpi,.agendador,.top .sub{overflow-wrap:anywhere}
+details.ver-mais{border-top:0;padding-top:0;display:inline}
+.ver-mais > summary{display:inline;list-style:none;color:inherit;font-size:inherit}
+.ver-mais > summary::-webkit-details-marker{display:none}
+.ver-mais-rot{color:var(--accent);font-weight:600;margin-left:6px;white-space:nowrap;text-decoration:underline;text-underline-offset:2px}
+.ver-mais-rot::after{content:"ver mais"}
+.ver-mais[open] .ver-mais-rot::after{content:"ver menos"}
+.ver-mais[open] .ver-mais-inicio{display:none}
+.ver-mais-todo{display:block;margin-top:6px;padding:8px 10px;border-radius:8px;background:var(--track);font-family:var(--f-mono);font-size:.78rem;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--ink)}
+
+/* hierarquia e espaçamento */
+.wrap{gap:var(--esp-6)}
+[data-aba]{gap:var(--esp-5)}
+h1{font-size:1.9rem;letter-spacing:-.015em}
+h2{font-size:1.15rem;letter-spacing:-.005em}
+.card-tit,.card h3{letter-spacing:-.003em}
+.top .sub{font-size:.95rem;line-height:1.55}
+.card{border-radius:var(--r-card);padding:20px 22px;gap:var(--esp-4);box-shadow:var(--sombra);background-image:linear-gradient(180deg,var(--brilho),transparent 140px)}
+.cardhead{gap:var(--esp-2) var(--esp-4)}
+.grade-hoje,.grade-exec,.grade-coleta,.grade-exp2{gap:var(--esp-5)}
+.note{line-height:1.5}
+.lbl{font-size:.7rem;letter-spacing:.08em}
+
+/* abas: barra segmentada */
+.abas{padding:4px;gap:2px;background:var(--surface);border:1px solid var(--line);border-radius:12px;width:fit-content;max-width:100%;box-shadow:var(--sombra)}
+.aba{font-weight:500;font-size:.92rem;transition:background-color .15s,color .15s}
+.aba:hover{color:var(--txt);background:var(--sup2)}
+.aba[aria-current="page"]{font-weight:650}
+.logo-txt{font-size:1.02rem;letter-spacing:-.005em}
+
+/* indicadores de status: ponto + fundo translúcido + contorno da cor do estado */
+.pill,.selo{border:1px solid color-mix(in srgb,currentColor 30%,transparent);letter-spacing:.01em;padding:3px 10px 3px 9px;gap:6px}
+.pill:not(:has(.dot))::before,.selo::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor;flex:none}
+.selo{gap:6px}
+.pill.bad .dot,.pill.bad:not(:has(.dot))::before{box-shadow:0 0 0 3px color-mix(in srgb,currentColor 22%,transparent)}
+.dot{flex:none}
+
+/* Situação de hoje: faixa e brilho da cor do estado */
+.card.hero{--hero-cor:var(--line);border-left:4px solid var(--hero-cor);box-shadow:var(--sombra-alta);background-image:linear-gradient(120deg,color-mix(in srgb,var(--hero-cor) 9%,transparent),transparent 55%)}
+.card.hero:has(.hero-ic.ok){--hero-cor:var(--ok)}
+.card.hero:has(.hero-ic.warn){--hero-cor:var(--warn)}
+.card.hero:has(.hero-ic.bad){--hero-cor:var(--bad)}
+.card.hero:has(.hero-ic.run){--hero-cor:var(--accent)}
+.hero-ic{width:52px;height:52px;box-shadow:0 0 0 6px color-mix(in srgb,currentColor 10%,transparent)}
+.resumo-frase{font-size:1.4rem;letter-spacing:-.01em;line-height:1.3}
+.ponto{border-radius:var(--r-peq);padding:10px 12px;gap:4px;background:var(--sup2)}
+.botao-pri{box-shadow:0 1px 0 rgba(255,255,255,.12) inset,0 4px 12px color-mix(in srgb,var(--accent) 28%,transparent)}
+.botao-pri:disabled{box-shadow:none}
+
+/* cartões de resumo (KPI): valor grande, rótulo pequeno, faixa no topo pela cor do estado */
+.kpis{gap:var(--esp-3)}
+.kpi{--kpi-cor:var(--accent);position:relative;overflow:hidden;border-radius:12px;padding:16px 16px 14px;gap:8px;box-shadow:var(--sombra);background-image:linear-gradient(180deg,color-mix(in srgb,var(--kpi-cor) 7%,transparent),transparent 70%)}
+.kpi::before{content:"";position:absolute;inset:0 0 auto 0;height:3px;background:var(--kpi-cor);opacity:.9}
+.kpi:has(.preench.ok){--kpi-cor:var(--ok)}
+.kpi:has(.preench.warn){--kpi-cor:var(--warn)}
+.kpi:has(.preench.bad){--kpi-cor:var(--bad)}
+.kpi-valor{font-size:1.75rem;font-weight:600;letter-spacing:-.02em;line-height:1.15}
+.card > .kpi-valor{font-size:1.45rem}
+.mercado-num{font-size:1.85rem;font-weight:600;letter-spacing:-.02em}
+
+/* fluxo, saúde, diagnóstico, calendário: cartões internos com o mesmo acabamento */
+.no,.stage{border-radius:var(--r-peq);background:var(--sup2);transition:transform .15s ease,box-shadow .15s ease,border-color .15s ease}
+.no:hover{transform:translateY(-1px);box-shadow:var(--sombra-alta)}
+.no-topo{font-size:.92rem}
+.linha-saude,.secao-diag,.pedido,.act,.run,.lock,.aviso{border-radius:var(--r-peq);background:var(--sup2)}
+.linha-saude > summary,.secao-diag > summary{min-height:28px}
+.linha-saude .n{font-weight:600}
+.secao-diag:hover,.linha-saude:hover{border-color:color-mix(in srgb,var(--accent) 35%,var(--line))}
+.cal .d{transition:transform .12s ease}
+.cal .d:hover{transform:translateY(-1px)}
+.comando,pre,.log-arquivo{border:1px solid var(--line)}
+th{background:var(--sup2)}
+th:first-child{border-top-left-radius:8px} th:last-child{border-top-right-radius:8px}
+tbody tr:hover{background:color-mix(in srgb,var(--track) 60%,transparent)}
+.rodape{border-top:1px solid var(--line);padding-top:var(--esp-4)}
+@media (max-width:599px){.card{padding:16px}.kpi-valor{font-size:1.5rem}.resumo-frase{font-size:1.2rem}h1{font-size:1.6rem}.abas{width:100%}}
+@media (prefers-reduced-motion:reduce){.no,.cal .d,.aba{transition:none}.no:hover,.cal .d:hover{transform:none}}
+@media print{.card,.kpi,.abas{box-shadow:none;background-image:none}}
+
 /* impressão (E3): sem botões, "?" nem log; uma coluna; blocos recolhidos abertos */
 @media print{
   .ajuda-btn,.toggle,.abas,#comandos .actions,#run,#erro-rede,#ajuda-caixa{display:none!important}
@@ -773,16 +875,32 @@ function statusPill(it) {
   return selo(it.status);
 }
 
+// Texto longo (erro com SQL, caminho, lista): o começo e, recolhido, o texto inteiro ("ver mais"/"ver menos" vêm do CSS).
+const LIMITE_TEXTO = 160;
+function textoLongo(valor) {
+  const t = txt(valor);
+  if (t.length <= LIMITE_TEXTO) return document.createTextNode(t);
+  const det = criar("details", null, "ver-mais");
+  const resumo = criar("summary");
+  resumo.appendChild(criar("span", t.slice(0, LIMITE_TEXTO).trimEnd() + "…", "ver-mais-inicio"));
+  resumo.appendChild(criar("span", null, "ver-mais-rot"));
+  det.appendChild(resumo);
+  det.appendChild(criar("span", t, "ver-mais-todo"));
+  return det;
+}
+
 function campo(rotulo, valor) {
   const p = criar("p", null, "campo");
   p.appendChild(criar("strong", rotulo + ": "));
   if (valor instanceof Node) p.appendChild(valor);
-  else p.appendChild(document.createTextNode(txt(valor)));
+  else p.appendChild(textoLongo(valor));
   return p;
 }
 
 function motivo(texto) {
-  return criar("p", txt(texto), "motivo");
+  const p = criar("p", null, "motivo");
+  p.appendChild(textoLongo(texto));
+  return p;
 }
 
 // ---- ajuda ("?"): textos vêm prontos do servidor em visao.ajuda ----
@@ -1026,7 +1144,10 @@ function tabela(cabecalhos, linhas) {
     valores.forEach((v) => {
       const td = criar("td");
       if (v instanceof Node) td.appendChild(v);
-      else td.textContent = txt(v);
+      else if (txt(v).length > 60) {
+        td.className = "longo";
+        td.appendChild(textoLongo(v));
+      } else td.textContent = txt(v);
       tr.appendChild(td);
     });
     corpo.appendChild(tr);
