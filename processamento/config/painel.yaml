@@ -18,7 +18,7 @@ diagnosticos_manter: 10          # resumos guardados em logs/painel/diagnosticos
 mercado_pregoes_linha: 7         # pregões na minilinha do Ibovespa (pastas saida/AAAA-MM-DD)
 # Agendador de Tarefas do Windows (só informativo: o painel mostra a próxima execução; não cria nem confere a tarefa).
 # Ausente ou inválido = "não configurado". Dias: seg, ter, qua, qui, sex, sab, dom. HORA ENTRE ASPAS.
-# agendador:
-#   dias: ["seg", "ter", "qua", "qui", "sex"]
-#   hora: "07:55"
-#   descricao: "rotina diária (scripts/rotina_diaria.ps1)"
+agendador:
+  dias: ["seg", "ter", "qua", "qui", "sex"]
+  hora: "08:35"
+  descricao: "dia completo esperando a coleta (scripts/agendar_dia.ps1)"

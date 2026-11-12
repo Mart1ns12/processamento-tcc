@@ -119,8 +119,12 @@ def _resultado(imprimir: Callable[[str], object], chave: str, codigo: int) -> in
 
 
 def executar_dia(d: date, raiz: Path, params_painel: dict, *, rodar, imprimir=print, relogio=None,
-                 ambiente=None) -> int:
-    """Roda rotina, carga e publicador em sequência e devolve o código de saída (ver SIGNIFICADOS["dia"])."""
+                 ambiente=None, esperar: bool = False) -> int:
+    """Roda rotina, carga e publicador em sequência e devolve o código de saída (ver SIGNIFICADOS["dia"]).
+
+    `esperar` False (painel): rotina com --sem-esperar. True (agendador): a rotina espera a coleta nos
+    prazos dela (parametros.yaml: prazo e prazo_tardio).
+    """
     agora = relogio or (lambda: datetime.now(SP))
     base = dict(environ) if ambiente is None else dict(ambiente)
     raiz = Path(raiz)
@@ -134,8 +138,10 @@ def executar_dia(d: date, raiz: Path, params_painel: dict, *, rodar, imprimir=pr
     # 1. Rotina (só leitura do banco da coleta)
     inicio = agora()
     _marca(imprimir, f"etapa=rotina inicio={_hora(inicio)}")
-    codigo, linhas = rodar(
-        [sys.executable, "-m", "processamento.rotina", "--data", dia, "--sem-esperar"], raiz, base)
+    argv_rotina = [sys.executable, "-m", "processamento.rotina", "--data", dia]
+    if not esperar:
+        argv_rotina.append("--sem-esperar")
+    codigo, linhas = rodar(argv_rotina, raiz, base)
     status = status_rotina(raiz, "saida", d, inicio)
     if any(relatorios.RE_SEM_PREGAO.search(linha) for linha in linhas):
         detalhe = "dia sem pregão"
@@ -215,10 +221,12 @@ def _rodar_real(argv: list[str], cwd: Path, env: dict[str, str]) -> tuple[int, l
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Rodar o dia completo (rotina, carga e publicador).")
     parser.add_argument("--data", required=True, type=date.fromisoformat, help="data do pregão, AAAA-MM-DD")
+    parser.add_argument("--esperar", action="store_true",
+                        help="a rotina espera a coleta nos prazos dela (agendador); sem isso, --sem-esperar")
     args = parser.parse_args(argv)
     raiz = leitores.RAIZ_PADRAO
     params = leitores.ler_parametros_painel(raiz)
-    return executar_dia(args.data, raiz, params, rodar=_rodar_real)
+    return executar_dia(args.data, raiz, params, rodar=_rodar_real, esperar=args.esperar)
 
 
 if __name__ == "__main__":

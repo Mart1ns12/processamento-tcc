@@ -338,7 +338,8 @@ def test_ler_parametros_painel_real_so_leitura():
     assert p["dir_api"] == "../api-tcc"
     assert p["retorno_dia_abs"] == 0.30
     assert p["dia_atipico_ibov_amplo"] == 0.05
-    assert p["agendador"] is None  # no painel.yaml real o bloco está comentado
+    assert p["agendador"] == {"dias": ["seg", "ter", "qua", "qui", "sex"], "hora": "08:35",
+                              "descricao": "dia completo esperando a coleta (scripts/agendar_dia.ps1)"}
 
 
 def test_ler_parametros_painel_invalidos_viram_none(tmp_path):

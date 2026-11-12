@@ -209,6 +209,16 @@ def test_argv_e_cwd_fixos_sem_forcar(cenario):
         assert "--criar-tabelas" not in argv
 
 
+def test_esperar_tira_sem_esperar_da_rotina(cenario):
+    raiz, api, params = cenario
+    falso = Falso(raiz, status="ok", publicador=(0, [PUBLICOU_COMPLETO]))
+    dia.executar_dia(D, raiz, params, rodar=falso, imprimir=[].append, relogio=_relogio, ambiente=AMBIENTE,
+                     esperar=True)
+    argvs = [argv for argv, _cwd, _env in falso.chamadas]
+    assert argvs[0] == [sys.executable, "-m", "processamento.rotina", "--data", "2026-10-26"]
+    assert [a[2] for a in argvs] == ["processamento.rotina", "processamento.saida", "publicador"]
+
+
 def test_ambiente_do_publicador_nao_leva_banco_nem_proc(tmp_path):
     base = {"PATH": "p", "SENHA_BANCO": "x", "USER_BANCO": "u", "PROC_API_CHAVES": "k", "PYTHONPATH": "z",
             "IP_BANCO": "i", "SENHA_ESCRITA": "e"}
