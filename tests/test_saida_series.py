@@ -160,6 +160,49 @@ def test_gabarito_e2e_formato_compacto(atuais_banco):
     _perto(a["IPCA"]["valores"]["indice_retorno_total"], [100.0] * 4)
 
 
+def test_series_macro_brent_e_selic_no_gabarito_e_validam(banco_teste):
+    """BRENT (tipo indice) e SELIC (tipo taxa, meta anual em fração) no banco de teste (t = 2025-10-21).
+
+    USDBRL não aparece aqui: o banco de teste não tem nenhuma linha dele, então a série não nasce (ver o
+    caso sintético abaixo, com cotações).
+    """
+    ins = insumos_de_teste(banco_teste())
+    a = series_completas(ins, _multiplos(ins))
+    assert "USDBRL" not in a
+    b = a["BRENT"]
+    assert b["tipo"] == "indice" and b["nome"] == "Petróleo Brent"
+    assert b["datas"] == DATAS4
+    _perto(b["valores"]["fechamento"], [10.0] * 4)
+    _perto(b["valores"]["indice_retorno_total"], [100.0] * 4)
+    assert b["status"] == {}
+    s = a["SELIC"]
+    assert s["tipo"] == "taxa" and s["nome"] == "SELIC meta (fração ao ano)"
+    assert set(s["valores"]) == {"indice_retorno_total"}
+    assert s["datas"] == ["2025-10-20", "2025-10-21"]   # antes de 20/10 não há meta: a série começa aí
+    _perto(s["valores"]["indice_retorno_total"], [0.15, 0.15])   # 15 % a.a. em t; o 14,75 de 22/10 não entra
+    assert s["status"] == {}
+    registros, _, _ = montar_series_diarias(ins, _multiplos(ins), None, GERADO, DADOS_ATE)
+    tickers = {r["ticker"] for r in registros}
+    assert {"BRENT", "SELIC"} <= tickers
+    for r in registros:
+        contrato.validar("series_diarias", r)   # inclui BRENT e SELIC (validar_serie)
+
+
+def test_usdbrl_sintetico_lacuna_vira_null_com_status_e_base_100():
+    """USDBRL com um pregão sem cotação: fechamento e índice ficam null com status `indisponivel`, nunca 0."""
+    cal = pregoes_uteis(5, "2025-10-13")   # 13 a 17/10
+    ins = _ins_de_acoes(cal, {"AAAA3": [10.0] * 5, "USDBRL": [5.0, None, 5.1, 5.0, 4.9]},
+                        [("AAAA3", None, None, "ON")])
+    a = series_completas(ins, _multiplos(ins))
+    u = a["USDBRL"]
+    assert u["tipo"] == "indice" and u["nome"] == "Dólar (USDBRL)"
+    assert u["datas"] == [d.isoformat() for d in cal]
+    _perto(u["valores"]["fechamento"], [5.0, None, 5.1, 5.0, 4.9])
+    _perto(u["valores"]["indice_retorno_total"], [100.0, None, 102.0, 100.0, 98.0])
+    lacuna = [{"de": cal[1].isoformat(), "ate": cal[1].isoformat(), "status": "indisponivel"}]
+    assert u["status"] == {"fechamento": lacuna, "indice_retorno_total": lacuna}
+
+
 
 # ---------------------------------------------------------------- 2: validador e datas
 

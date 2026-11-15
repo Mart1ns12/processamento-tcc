@@ -61,8 +61,8 @@ def _resumo_petr4() -> dict:
     return {
         **_meta(), "data_referencia": "2025-10-21", "ticker": "PETR4",
         "cotacao": {"fechamento": folha(10.0, "ok"), "variacao_dia": folha(0.0, "ok")},
-        "variacao_preco": _janelas_hist(folha(0.0, "ok")),
-        "rentabilidade": {**_janelas_hist(folha(0.0, "ok")),
+        "variacao_preco": {**_janelas_hist(folha(0.0, "ok")), "s1": folha(None, STATUS_HIST)},
+        "rentabilidade": {**_janelas_hist(folha(0.0, "ok")), "s1": folha(None, STATUS_HIST),
                           "ibov": _janelas_hist(folha(0.0, "ok")), "setor": _janelas_nulas()},
         "volume": {"total": folha(1000.0, "ok"), "relativo": {"valor": None, "status": STATUS_HIST, "texto": None},
                    "mediana_20": folha(None, STATUS_HIST), "posicao_pct": folha(None, STATUS_HIST)},
@@ -133,7 +133,10 @@ def exemplo(pacote: str) -> dict:
                 "IPCA": _janelas_hist(folha(0.0, "ok")),
                 "IDIV": _janelas_hist(folha(0.01, "ok")),
                 "SMLL": _janelas_nulas(), "IFIX": _janelas_nulas(), "IVVB11": _janelas_nulas(),
+                "USDBRL": _janelas_nulas(), "BRENT": _janelas_hist(folha(0.0, "ok")),
             },
+            "ipca_mensal": [{"mes_ref": "2025-09", "variacao": folha(0.01, "ok")}],
+            "cdi_mensal": [{"mes_ref": "2025-09", "variacao": folha(None, STATUS_HIST)}],
         }
     if pacote == "resumo_acao":
         return _resumo_petr4()

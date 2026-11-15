@@ -98,6 +98,36 @@ def indice_cdi(indices: pd.DataFrame, cal: list) -> Grade:
                         pd.DataFrame({"CDI": status}, index=idx))
 
 
+def serie_selic_meta(indices: pd.DataFrame, cal: list, defasagem_max: int | None = None) -> Grade:
+    """Meta da SELIC em cada pregão, como fração ao ano (13,75 % a.a. → 0.1375): a regra de `selic_meta`.
+
+    Último valor com data ≤ pregão (taxa-meta: nunca acumulada). Na série `SELIC` (tipo `taxa`) este valor vai
+    em `indice_retorno_total`, que para a SELIC NÃO é índice acumulado. Antes do 1º valor: ANTES_DO_INICIO;
+    mais de `defasagem_max` pregões entre o último valor e o pregão: indisponivel.
+    """
+    idx = indice_pregoes(cal)
+    s = indices[indices["indice"] == "SELIC"].dropna(subset=["valor"])
+    datas = pd.DatetimeIndex(pd.to_datetime(s["data"].to_numpy())).normalize()
+    serie = pd.Series(s["valor"].to_numpy(float) / 100, index=datas).sort_index(kind="mergesort")
+    serie = serie[~serie.index.duplicated(keep="last")]
+    valores, status = [], []
+    for d in idx:
+        pos = serie.index.searchsorted(d, side="right")
+        if pos == 0:
+            valores.append(np.nan)
+            status.append(ANTES_DO_INICIO)
+            continue
+        ultima = serie.index[pos - 1]
+        atraso = int(idx.searchsorted(d, side="right") - idx.searchsorted(ultima, side="right"))
+        if defasagem_max is not None and atraso > defasagem_max:
+            valores.append(np.nan)
+            status.append(INDISPONIVEL)
+            continue
+        valores.append(float(serie.iloc[pos - 1]))
+        status.append(OK)
+    return montar_grade(pd.DataFrame({"SELIC": valores}, index=idx), pd.DataFrame({"SELIC": status}, index=idx))
+
+
 def _fator_ipca(meses: dict, kb, kt) -> float | None:
     """Produto de (1 + ipca_m) para os meses m em (kb, kt]; None se algum mês não é conhecido."""
     fator = 1.0

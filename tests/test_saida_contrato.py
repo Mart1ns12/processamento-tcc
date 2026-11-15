@@ -86,6 +86,21 @@ def test_validar_resumo_acao_nan_bool_e_caminho():
     c.validar("resumo_acao", exemplo("resumo_acao"))
 
 
+def test_resumo_acao_variacao_preco_exige_s1():
+    r = exemplo("resumo_acao")
+    del r["variacao_preco"]["s1"]   # campo novo (aditivo) é obrigatório no contrato
+    with pytest.raises(ErroContrato, match="s1"):
+        c.validar("resumo_acao", r)
+
+
+def test_mercado_dia_ipca_mensal_item_sem_status_falha():
+    r = exemplo("mercado_dia")
+    r["ipca_mensal"][0]["variacao"].pop("status")
+    with pytest.raises(ErroContrato, match="status"):
+        c.validar("mercado_dia", r)
+    c.validar("mercado_dia", exemplo("mercado_dia"))
+
+
 def test_validar_experimento_top_chance_e_modelo():
     c.validar("experimento_top", exemplo("experimento_top"))
     r = exemplo("experimento_top")

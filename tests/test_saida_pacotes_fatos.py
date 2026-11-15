@@ -14,6 +14,7 @@ import pandas as pd
 import pytest
 
 from fabrica_fundamentos import EXCL, _a, acoes_de, balanco_de, cadastro_fund_de, mundo
+from fabrica_precos import precos_de, pregoes_uteis
 from fabrica_saida import DADOS_ATE, GERADO, insumos_de_teste
 from processamento.fatos.fundamentos import carregar_parametros_fundamentos
 from processamento.fatos.precos import carregar_parametros_precos
@@ -145,6 +146,49 @@ def test_mercado_dia_gabarito(pacotes):
     for indice in ("SMLL", "IFIX", "IVVB11"):
         for j in JANELAS:
             _confere(m["indices"][indice][j], None, "indisponivel")
+    # USDBRL/BRENT (aditivos): mesmas janelas dos índices; d1 é a mesma conta de variacao_dia.
+    assert set(m["indices"]["USDBRL"]) == {"d1", "m1", "m6", "a1"}
+    assert set(m["indices"]["BRENT"]) == {"d1", "m1", "m6", "a1"}
+    assert m["indices"]["USDBRL"]["d1"] == m["USDBRL"]["variacao_dia"]
+    assert m["indices"]["BRENT"]["d1"] == m["BRENT"]["variacao_dia"]
+    _confere(m["indices"]["BRENT"]["d1"], 0.0, "ok")
+    # Deduzido da fixture: o calendário tem 4 pregões (16, 17, 20 e 21/10, pelo IBOV). BRENT tem cotação em
+    # todos, então m1/m6/a1 não têm base: historico_insuficiente. USDBRL não tem nenhuma linha: sem valor em t,
+    # indisponivel (a 1ª regra de `variacao` vence).
+    for j in ("m1", "m6", "a1"):
+        _confere(m["indices"]["BRENT"][j], None, STATUS_HIST)
+        _confere(m["indices"]["USDBRL"][j], None, "indisponivel")
+    # ipca_mensal: 12 meses de referência de 2024-10 a 2025-09 (ipca_ate = 2025-09), do mais antigo ao mais recente.
+    meses = [f"2024-{mm:02d}" for mm in (10, 11, 12)] + [f"2025-{mm:02d}" for mm in range(1, 10)]
+    ipca = m["ipca_mensal"]
+    assert [x["mes_ref"] for x in ipca] == meses
+    assert m["ipca_ate"]["valor"] == ipca[-1]["mes_ref"] == "2025-09"
+    # Deduzido da fixture (IPCA 0,50 % em 2025-08 e 1,00 % em 2025-09; primeiro mês conhecido 2025-08):
+    # os 10 meses antes de 2025-08 são historico_insuficiente; 2025-08 = 0.005; 2025-09 = 0.01.
+    for x in ipca[:10]:
+        _confere(x["variacao"], None, STATUS_HIST)
+    _confere(ipca[10]["variacao"], 0.005, "ok")
+    _confere(ipca[11]["variacao"], 0.01, "ok")
+    # cdi_mensal: nenhum pregão do calendário cai antes de 2025-10 (o 1º é 16/10), então os 12 meses são
+    # historico_insuficiente.
+    cdi = m["cdi_mensal"]
+    assert [x["mes_ref"] for x in cdi] == meses
+    for x in cdi:
+        _confere(x["variacao"], None, STATUS_HIST)
+
+
+def test_s1_e_variacao_de_5_pregoes_com_7_pregoes_de_historico(banco_teste):
+    """s1 = variacao com 5 pregões (base as-of, base velha 5): em 7 pregões, t vs cal[1] = 16/11 − 1."""
+    ins = insumos_de_teste(banco_teste())
+    cal7 = pregoes_uteis(7, inicio="2025-10-13")   # 13 a 17 e 20 e 21/10
+    precos7 = precos_de("PETR4", cal7, fech=[10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0])
+    precos = pd.concat([ins.precos[ins.precos["ticker"] != "PETR4"], precos7], ignore_index=True)
+    ins7 = dataclasses.replace(ins, precos=precos, cal=cal7, t=cal7[-1])
+    grades = calcular_grades(ins7, PARAMS_PRECOS, PARAMS_FUND)
+    ts = pd.Timestamp(cal7[-1])
+    for nome in ("variacao_preco.s1", "rentabilidade.s1"):
+        assert grades.precos[nome].status.at[ts, "PETR4"] == "ok"
+        assert grades.precos[nome].valor.at[ts, "PETR4"] == pytest.approx(16 / 11 - 1, rel=1e-12)
 
 
 def test_resumo_acao_petr4_gabarito(pacotes):
@@ -155,9 +199,12 @@ def test_resumo_acao_petr4_gabarito(pacotes):
     _confere(r["variacao_preco"]["d1"], 0.0, "ok")
     for j in ("m1", "m6", "a1"):
         _confere(r["variacao_preco"][j], None, STATUS_HIST)
+    # s1 (5 pregões): o cenário tem 4 pregões, então não há base de 5 pregões antes de t: historico_insuficiente.
+    _confere(r["variacao_preco"]["s1"], None, STATUS_HIST)
     _confere(r["rentabilidade"]["d1"], 0.0, "ok")
     for j in ("m1", "m6", "a1"):
         _confere(r["rentabilidade"][j], None, STATUS_HIST)
+    _confere(r["rentabilidade"]["s1"], None, STATUS_HIST)
     _confere(r["rentabilidade"]["ibov"]["d1"], 0.0, "ok")
     for j in ("m1", "m6", "a1"):
         _confere(r["rentabilidade"]["ibov"][j], None, STATUS_HIST)

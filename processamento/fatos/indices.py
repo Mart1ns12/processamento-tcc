@@ -233,3 +233,55 @@ def indices_no_dia(res: dict[str, Grade], t) -> pd.DataFrame:
             })
     df = pd.DataFrame(linhas, columns=["indice", "janela", "valor", "status"])
     return df.sort_values(["indice", "janela"]).reset_index(drop=True)
+
+
+def ipca_mensal(indices: pd.DataFrame, t, n: int = 12) -> list[tuple[str, float, str]]:
+    """IPCA de cada um dos `n` meses de referência até K(t), inclusive, do mais antigo ao mais recente.
+
+    Mês de referência (não a data de divulgação), com o mesmo K(t) de `ipca_12m`/`ipca_ate`: só meses
+    anteriores ao mês de t. (mes_ref "AAAA-MM", valor decimal, status): mês antes do 1º mês conhecido →
+    historico_insuficiente; mês sem valor depois disso → indisponivel. Sem K(t): lista vazia.
+    """
+    meses = _meses_ipca(indices)
+    kt = _k(meses, t)
+    if kt is None:
+        return []
+    primeiro = min(meses)
+    linhas = []
+    for m in pd.period_range(kt - (n - 1), kt, freq="M"):
+        v = meses.get(m)
+        if v is not None and not np.isnan(v):
+            linhas.append((str(m), v, OK))
+        elif m < primeiro:
+            linhas.append((str(m), np.nan, HIST))
+        else:
+            linhas.append((str(m), np.nan, INDISPONIVEL))
+    return linhas
+
+
+def cdi_mensal(indices: pd.DataFrame, t, cal: list, n: int = 12) -> list[tuple[str, float, str]]:
+    """CDI composto de cada um dos `n` meses completos antes do mês de t: produto de (1 + taxa) − 1.
+
+    O mês de t (incompleto) fica de fora. Entram as taxas com data no mês (e ≤ t). Mês sem pregão no `cal`
+    ou com pregão anterior à 1ª taxa → historico_insuficiente; pregão do mês sem taxa → indisponivel
+    (mesma exigência de `rentabilidade_cdi`). Do mais antigo ao mais recente.
+    """
+    ts = pd.Timestamp(t).normalize()
+    taxa = _serie_cdi(indices)
+    taxa = taxa[taxa.index <= ts]
+    idx = indice_pregoes(cal)
+    idx = idx[idx <= ts]
+    meses_idx = idx.to_period("M")
+    meses_taxa = taxa.index.to_period("M")
+    datas = set(taxa.index)
+    mes_t = ts.to_period("M")
+    linhas = []
+    for m in pd.period_range(mes_t - n, mes_t - 1, freq="M"):
+        pregoes = idx[meses_idx == m]
+        if len(pregoes) == 0 or taxa.empty or pregoes[0] < taxa.index[0]:
+            linhas.append((str(m), np.nan, HIST))
+        elif any(p not in datas for p in pregoes):
+            linhas.append((str(m), np.nan, INDISPONIVEL))
+        else:
+            linhas.append((str(m), float(np.prod(1 + taxa[meses_taxa == m].to_numpy())) - 1, OK))
+    return linhas

@@ -22,9 +22,10 @@ from processamento.fatos.series import (
     indice_setor,
     indice_setor_sem_empresa,
     rentabilidade_setor_sem_empresa,
+    serie_selic_meta,
 )
 
-CAL4 = [date(2025, 10, 16), date(2025, 10, 17), date(2025, 10, 20), date(2025, 10, 21)]
+CAL4 =[date(2025, 10, 16), date(2025, 10, 17), date(2025, 10, 20), date(2025, 10, 21)]
 CAL5 = [date(2025, 8, 29), date(2025, 9, 1), date(2025, 9, 30), date(2025, 10, 1), date(2025, 11, 3)]
 NAN = float("nan")
 
@@ -355,3 +356,24 @@ def test_setor_sem_empresa_no_dia_nao_depende_dos_dias_seguintes_caso_2e():
     col = "SETOR_SEM:AAAA3"
     assert corte.valor[col].tolist()[:3] == pytest.approx(completo.valor[col].tolist()[:3], abs=1e-12)
     assert n_corte[col].tolist() == n_completo[col].tolist()[:3]
+
+
+# --- serie_selic_meta (série SELIC da saída: taxa-meta anual em fração, nunca acumulada) -----
+
+CAL_SELIC = [date(2025, 10, 20), date(2025, 10, 21), date(2025, 10, 22), date(2025, 10, 23), date(2025, 10, 24)]
+
+
+def test_serie_selic_meta_ultimo_valor_ate_o_pregao_e_antes_do_primeiro_e_antes_do_inicio():
+    ind = indices_de([("2025-10-21", "SELIC", 15.0), ("2025-10-23", "SELIC", 14.75)])
+    g = serie_selic_meta(ind, CAL_SELIC, 5)
+    assert g.status["SELIC"].tolist() == [ANTES_DO_INICIO, OK, OK, OK, OK]
+    assert g.valor["SELIC"].iloc[1:].tolist() == pytest.approx([0.15, 0.15, 0.1475, 0.1475])
+    assert g.valor["SELIC"].iloc[0] != g.valor["SELIC"].iloc[0]   # NaN antes do 1º valor
+
+
+def test_serie_selic_meta_velha_demais_pela_defasagem_fica_indisponivel():
+    ind = indices_de([("2025-10-20", "SELIC", 15.0)])
+    g = serie_selic_meta(ind, CAL_SELIC, 2)
+    assert g.status["SELIC"].tolist() == [OK, OK, OK, INDISPONIVEL, INDISPONIVEL]
+    assert g.valor["SELIC"].iloc[:3].tolist() == pytest.approx([0.15, 0.15, 0.15])
+    assert g.valor["SELIC"].iloc[3:].isna().all()

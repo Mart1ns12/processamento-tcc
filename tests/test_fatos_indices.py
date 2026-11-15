@@ -14,10 +14,12 @@ from processamento.fatos.indices import (
     INDICES,
     calcular_indices,
     cdi_dia,
+    cdi_mensal,
     grade_de_indices,
     indices_no_dia,
     ipca_ate,
     ipca_12m,
+    ipca_mensal,
     rentabilidade_cdi,
     rentabilidade_ipca,
     selic_meta,
@@ -305,3 +307,66 @@ def test_indices_no_dia_recusa_dia_que_nao_e_pregao():
     res = calcular_indices(precos, indices_de(CDI3 + PONTOS), CAL3, _params({"d1": 1}))
     with pytest.raises(ValueError, match="não é pregão"):
         indices_no_dia(res, date(2025, 1, 4))  # sábado
+
+
+# --- ipca_mensal / cdi_mensal (saída: séries mensais do mercado_dia) ---------
+
+IPCA_MENSAL = [
+    ("2025-01-01", "IPCA", 0.5),
+    ("2025-02-01", "IPCA", 0.0),
+    ("2025-03-01", "IPCA", 0.3),
+    ("2025-05-01", "IPCA", 0.2),   # abril falta
+]
+
+
+def test_ipca_mensal_12_meses_com_historico_falha_e_meio_faltando():
+    linhas = ipca_mensal(indices_de(IPCA_MENSAL), date(2025, 6, 10), 12)
+    meses = [f"2024-{m:02d}" for m in range(6, 13)] + [f"2025-{m:02d}" for m in range(1, 6)]
+    assert [m for m, _, _ in linhas] == meses
+    for _, _, status in linhas[:7]:   # 2024-06..2024-12: antes do 1º mês conhecido
+        assert status == HIST
+    valores = {m: (v, s) for m, v, s in linhas}
+    assert valores["2025-01"][0] == pytest.approx(0.005) and valores["2025-01"][1] == OK
+    assert valores["2025-02"][0] == pytest.approx(0.0) and valores["2025-02"][1] == OK
+    assert valores["2025-03"][0] == pytest.approx(0.003) and valores["2025-03"][1] == OK
+    assert pd.isna(valores["2025-04"][0]) and valores["2025-04"][1] == INDISPONIVEL
+    assert valores["2025-05"][0] == pytest.approx(0.002) and valores["2025-05"][1] == OK
+
+
+def test_ipca_mensal_mes_de_t_nao_entra_e_k_t_e_o_ultimo_mes_anterior():
+    linhas = ipca_mensal(indices_de(IPCA_MENSAL), date(2025, 5, 31), 3)
+    assert [m for m, _, _ in linhas] == ["2025-01", "2025-02", "2025-03"]
+    assert [s for _, _, s in linhas] == [OK, OK, OK]
+    assert [v for _, v, _ in linhas] == [pytest.approx(0.005), pytest.approx(0.0), pytest.approx(0.003)]
+
+
+def test_ipca_mensal_sem_linhas_de_ipca_e_lista_vazia():
+    assert ipca_mensal(indices_de(CDI4), date(2025, 6, 10), 12) == []
+
+
+CAL_CDI_MENSAL = [
+    date(2025, 1, 30), date(2025, 1, 31), date(2025, 2, 3),
+    date(2025, 2, 4), date(2025, 3, 3), date(2025, 3, 4),
+]
+CDI_MENSAL = [
+    ("2025-01-30", "CDI", 0.05),
+    ("2025-01-31", "CDI", 0.05),
+    ("2025-02-03", "CDI", 0.04),   # 2025-02-04 falta
+    ("2025-03-03", "CDI", 0.05),
+    ("2025-03-05", "CDI", 0.05),   # depois de t: não entra
+]
+
+
+def test_cdi_mensal_composto_mes_completo_falta_pregao_e_mes_de_t_fora():
+    linhas = cdi_mensal(indices_de(CDI_MENSAL), date(2025, 3, 4), CAL_CDI_MENSAL, 3)
+    assert [m for m, _, _ in linhas] == ["2024-12", "2025-01", "2025-02"]
+    assert linhas[0][1] != linhas[0][1]   # NaN
+    assert linhas[0][2] == HIST           # sem pregão no mês de 2024-12
+    assert linhas[1] == ("2025-01", pytest.approx(1.0005 ** 2 - 1, abs=1e-12), OK)
+    assert linhas[2][0] == "2025-02" and pd.isna(linhas[2][1]) and linhas[2][2] == INDISPONIVEL
+
+
+def test_cdi_mensal_pregao_antes_da_1a_taxa_e_historico_insuficiente():
+    cal = [date(2025, 1, 29)] + CAL_CDI_MENSAL   # 2025-01-29 sem taxa, antes da 1ª taxa do CDI
+    linhas = cdi_mensal(indices_de(CDI_MENSAL), date(2025, 3, 4), cal, 3)
+    assert linhas[1][0] == "2025-01" and linhas[1][2] == HIST

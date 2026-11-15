@@ -23,7 +23,16 @@ from processamento.fatos.fundamentos import (
     payout_por_ano,
     tabela_trimestral,
 )
-from processamento.fatos.indices import INDICES, calcular_indices, cdi_dia, ipca_12m, ipca_ate, selic_meta
+from processamento.fatos.indices import (
+    INDICES,
+    calcular_indices,
+    cdi_dia,
+    cdi_mensal,
+    ipca_12m,
+    ipca_ate,
+    ipca_mensal,
+    selic_meta,
+)
 from processamento.fatos.precos import (
     Grade,
     ParametrosPrecos,
@@ -43,6 +52,8 @@ JANELAS = ("d1", "m1", "m6", "a1")
 TRIMESTRES_NO_PACOTE = 8  # S19: os 8 trimestres entregues mais recentes de cada ticker
 AVISO_DIVIDA = "Dívida líquida sem arrendamentos."
 ROTULO_EBITDA = "EBITDA (cálculo padrão CVM)"
+S1_PREGOES = 5   # s1: 5 pregões; mesma regra de d1/m1 (variacao, base as-of, base velha)
+MACROS_JANELAS = ("USDBRL", "BRENT")
 
 
 @dataclass(frozen=True)
@@ -75,13 +86,25 @@ def calcular_grades(ins: Insumos, params_precos: ParametrosPrecos, params_fund: 
                                 params_precos.base_defasagem_max_pregoes,
                                 params_precos.eventos_retorno_suspeito)
     return GradesDoDia(
-        precos=calcular_precos(ins.precos, ins.cadastro, ins.cal, ins.exclusoes, params_precos),
+        precos={**calcular_precos(ins.precos, ins.cadastro, ins.cal, ins.exclusoes, params_precos),
+                **_grades_s1(ins, params_precos)},
         indices=calcular_indices(ins.precos, ins.indices, ins.cal, params_precos),
         fundamentos=calcular_fundamentos_no_dia(
             ins.t, ins.cal, dados_fundamentos(ins), ins.exclusoes, params_fund, params_precos.setor_excluir,
             fora_do_setor_preco=frozenset(fora),
         ),
     )
+
+
+def _grades_s1(ins: Insumos, params_precos: ParametrosPrecos) -> dict[str, Grade]:
+    """variacao_preco.s1 (fechamento) e rentabilidade.s1 (fechamento_ajustado): as contas de d1/m1 com 5 pregões."""
+    tickers = tickers_do_painel(ins.cadastro, ins.exclusoes)
+    n_max = params_precos.base_defasagem_max_pregoes
+    return {
+        "variacao_preco.s1": variacao(grade_de_precos(ins.precos, ins.cal, "fechamento", tickers), S1_PREGOES, n_max),
+        "rentabilidade.s1": variacao(grade_de_precos(ins.precos, ins.cal, "fechamento_ajustado", tickers),
+                                     S1_PREGOES, n_max),
+    }
 
 
 # ---------------------------------------------------------------- auxiliares
@@ -160,7 +183,7 @@ def _cotacao_de_indice(ins: Insumos, ticker: str, unidade: str, defasagem_max: i
 
 def montar_mercado_dia(ins: Insumos, grades: GradesDoDia, gerado_em: str, dados_ate: str,
                        params_precos: ParametrosPrecos | None = None) -> list[dict]:
-    """Um registro (seção 4.2): cotações de t, CDI, IPCA e % dos índices por janela."""
+    """Um registro (seção 4.2): cotações de t, CDI, IPCA e % dos índices por janela; USDBRL/BRENT e meses de IPCA/CDI."""
     params_precos = carregar_parametros_precos() if params_precos is None else params_precos
     n_max = params_precos.base_defasagem_max_pregoes
     m_max = params_precos.ipca_defasagem_max_meses
@@ -177,6 +200,10 @@ def montar_mercado_dia(ins: Insumos, grades: GradesDoDia, gerado_em: str, dados_
         }
         for indice in INDICES
     }
+    g_macro = grade_de_precos(ins.precos, ins.cal, "fechamento", list(MACROS_JANELAS))
+    var_macro = {j: variacao(g_macro, params_precos.janelas[j], n_max) for j in JANELAS}
+    for tk in MACROS_JANELAS:   # d1 = variacao_dia de USDBRL/BRENT (mesma conta)
+        indices[tk] = {j: contrato.folha(var_macro[j].valor.at[ts, tk], var_macro[j].status.at[ts, tk]) for j in JANELAS}
     return [{
         **contrato.meta(gerado_em, dados_ate),
         "data_referencia": contrato.data_txt(ins.t),
@@ -191,6 +218,8 @@ def montar_mercado_dia(ins: Insumos, grades: GradesDoDia, gerado_em: str, dados_
         "selic_meta": contrato.folha(selic, status_selic),
         "selic_data": contrato.data_txt(data_selic),
         "indices": indices,
+        "ipca_mensal": [{"mes_ref": m, "variacao": contrato.folha(v, st)} for m, v, st in ipca_mensal(ins.indices, ins.t)],
+        "cdi_mensal": [{"mes_ref": m, "variacao": contrato.folha(v, st)} for m, v, st in cdi_mensal(ins.indices, ins.t, ins.cal)],
     }]
 
 
@@ -214,7 +243,7 @@ def _bool_de(celulas: dict, ticker: str, indicador: str) -> bool:
 
 def montar_resumo_acao(ins: Insumos, grades: GradesDoDia, params_fund: ParametrosFundamentos,
                        gerado_em: str, dados_ate: str) -> list[dict]:
-    """Um registro por ticker do painel em t (seção 4.3). Nomes internos: ver `_celulas_do_dia`."""
+    """Um registro por ticker do painel em t (seção 4.3); `variacao_preco.s1` e `rentabilidade.s1` (5 pregões). Nomes internos: ver `_celulas_do_dia`."""
     ts = _ts(ins)
     celulas = _celulas_do_dia(ins, grades)
     dados = dados_fundamentos(ins)
@@ -241,9 +270,11 @@ def montar_resumo_acao(ins: Insumos, grades: GradesDoDia, params_fund: Parametro
                 "fechamento": _folha_celula(celulas, ticker, "cotacao.fechamento"),
                 "variacao_dia": _folha_celula(celulas, ticker, "cotacao.variacao_dia"),
             },
-            "variacao_preco": _janelas(celulas, ticker, "variacao_preco"),
+            "variacao_preco": {**_janelas(celulas, ticker, "variacao_preco"),
+                               "s1": _folha_celula(celulas, ticker, "variacao_preco.s1")},
             "rentabilidade": {
                 **_janelas(celulas, ticker, "rentabilidade"),
+                "s1": _folha_celula(celulas, ticker, "rentabilidade.s1"),
                 "ibov": _janelas(celulas, ticker, "rentabilidade.ibov"),
                 "setor": _janelas(celulas, ticker, "rentabilidade.setor"),
             },

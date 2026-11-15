@@ -40,12 +40,14 @@ from processamento.fatos.series import (
     indice_ipca,
     indice_pontos,
     indice_setor_sem_empresa,
+    serie_selic_meta,
 )
 from processamento.saida import contrato
 from processamento.saida.insumos import Insumos
 
 JANELA_PREGOES = 253  # 252 variações: o gráfico de 1 ano bate com rentabilidade.a1
 ETFS = ("IVVB11",)
+MACROS = (("USDBRL", "Dólar (USDBRL)"), ("BRENT", "Petróleo Brent"))  # séries de v1-precos, fora do cadastro
 INDICES_PONTOS = ("IDIV", "SMLL", "IFIX")
 _MANTEM = (OK, LUCRO_NEGATIVO)  # status com valor numérico no contrato (P/L com prejuízo, decisão da etapa 4)
 
@@ -173,6 +175,8 @@ def series_completas(ins: Insumos, multiplos: dict[str, Grade],
     `multiplos`: `fatos.multiplos.multiplos_diarios` (chaves "pl", "pvp", "dividend_yield").
     As grades são calculadas no histórico inteiro e o corte da janela é feito por último.
     Séries `SETOR_SEM:<ticker>` (DS10) no lugar das `SETOR:<nome>`: o setor sem a própria empresa.
+    USDBRL e BRENT (tipo `indice`, de v1-precos) e SELIC (tipo `taxa`): na SELIC, `indice_retorno_total` é a
+    meta anual em fração, não um índice acumulado.
     """
     params_precos = carregar_parametros_precos() if params_precos is None else params_precos
     cal, t = ins.cal, ins.t
@@ -243,6 +247,18 @@ def series_completas(ins: Insumos, multiplos: dict[str, Grade],
         }
         nome = f"{setor_de.get(tk)} sem {nomes.get(tk, tk)}"
         guarda(_serie(col, "setor_sem_empresa", nome, campos, datas_pregao, ini, t))
+
+    # Séries novas (aditivas): USDBRL e BRENT (v1-precos, tipo "indice") e SELIC (v1-indices, tipo "taxa").
+    # Grades próprias: não entram nas grades das ações (setor, suspeitos), que ficam como estavam.
+    macros = [tk for tk, _ in MACROS]
+    g_macro_fech = _cotacao(grade_de_precos(ins.precos, cal, "fechamento", macros))
+    base_macro = indice_base_100(grade_de_precos(ins.precos, cal, "fechamento_ajustado", macros))
+    for tk, nome in MACROS:
+        campos = {"fechamento": _coluna(g_macro_fech, tk), "indice_retorno_total": _coluna(base_macro, tk)}
+        guarda(_serie(tk, "indice", nome, campos, datas_pregao, ini, t))
+    selic = serie_selic_meta(ins.indices, cal, params_precos.base_defasagem_max_pregoes)
+    guarda(_serie("SELIC", "taxa", "SELIC meta (fração ao ano)", {"indice_retorno_total": _coluna(selic, "SELIC")},
+                  datas_pregao, ini, t))
 
     return res
 

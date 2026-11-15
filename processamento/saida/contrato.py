@@ -39,6 +39,8 @@ CHAVES = {"acoes": ["ticker"], "mercado_dia": ["data_referencia"], "resumo_acao"
           "experimento_top": ["data_referencia"], "experimento_historico": ["data_referencia"],
           "execucao": ["data_referencia", "rodada"]}
 QUANDO_MUDA = ("acoes", "fundamentos_trimestrais", "proventos", "series_diarias")
+# Séries USDBRL e BRENT (tipo indice) e SELIC (tipo taxa). Na SELIC, `indice_retorno_total` contém a META anual
+# como fração (0.1375 = 13,75 % a.a.), não um índice acumulado.
 CAMPOS_SERIE = {"acao": ("fechamento", "indice_retorno_total", "volume", "pl", "pvp", "dividend_yield"),
                 "etf": ("fechamento", "indice_retorno_total", "volume"), "indice": ("fechamento", "indice_retorno_total"),
                 "taxa": ("indice_retorno_total",),
@@ -335,6 +337,8 @@ def _checar(spec: object, valor: object, caminho: str) -> None:
 
 _COTACAO = {"fechamento": "folha", "variacao_dia": "folha", "unidade": "texto"}
 _JANELAS = {"d1": "folha", "m1": "folha", "m6": "folha", "a1": "folha"}
+_JANELAS_S1 = {**_JANELAS, "s1": "folha"}
+_MES = {"mes_ref": "texto", "variacao": "folha"}   # ipca_mensal / cdi_mensal: "AAAA-MM" + folha
 _ANO = ("folha+", {"ano": "inteiro"})
 _SETOR = ("folha+", {"setor": "folha"})
 _TEXTO = ("folha+", {"texto": "texto?"})
@@ -385,14 +389,15 @@ ESQUEMAS: dict[str, dict] = {
         "data_referencia": "data", "IBOV": _COTACAO, "USDBRL": _COTACAO, "BRENT": _COTACAO,
         "cdi_dia": "folha", "cdi_data": "data?", "ipca_12m": "folha", "ipca_ate": "folha_texto",
         "selic_meta": "folha", "selic_data": "data?",
-        "indices": {k: _JANELAS for k in ("CDI", "IPCA", "IDIV", "SMLL", "IFIX", "IVVB11")},
+        "indices": {k: _JANELAS for k in ("CDI", "IPCA", "IDIV", "SMLL", "IFIX", "IVVB11", "USDBRL", "BRENT")},
+        "ipca_mensal": ("lista", _MES), "cdi_mensal": ("lista", _MES),
     },
     "resumo_acao": {
         **{c: "versao" if c == "versao_contrato" else "data_hora" for c in _META_CAMPOS},
         "data_referencia": "data", "ticker": "texto",
         "cotacao": {"fechamento": "folha", "variacao_dia": "folha"},
-        "variacao_preco": _JANELAS,
-        "rentabilidade": {**_JANELAS, "ibov": _JANELAS, "setor": _JANELAS},
+        "variacao_preco": _JANELAS_S1,
+        "rentabilidade": {**_JANELAS_S1, "ibov": _JANELAS, "setor": _JANELAS},
         "volume": {"total": "folha", "relativo": _TEXTO, "mediana_20": "folha", "posicao_pct": "folha"},
         "volatilidade_20d": ("folha+", {"texto": "texto?", "posicao_pct": "folha"}),
         "beta": _TEXTO,
