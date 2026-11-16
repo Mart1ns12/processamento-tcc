@@ -1,0 +1,426 @@
+{
+  "pacote": {
+    "versao_contrato": "1.0",
+    "gerado_em": "2026-11-13T08:35:14-03:00",
+    "dados_ate": "2026-11-13T08:00:00-03:00",
+    "data_referencia": "2026-11-13",
+    "pregao_previsto": "2026-11-13",
+    "pregao_base": "2026-11-12",
+    "valido_para_historico": true,
+    "modelo_versao": "xgb-2026-11",
+    "modelo_provisorio": false,
+    "universo": "composicao_historica",
+    "n_candidatas": 70,
+    "selo": "em_avaliacao",
+    "titulo": "5 ações com maior chance de superar o Ibovespa (experimento)",
+    "aviso_fixo": "Não constitui recomendação de investimento.",
+    "avisos": [],
+    "ranking": [
+      {
+        "posicao": 1,
+        "ticker": "VIVT3",
+        "chance": {
+          "valor": null,
+          "referencia_acaso": null,
+          "exibir": false,
+          "status": "calibracao_nao_conferida"
+        },
+        "motivos": [
+          {
+            "fator": "posicao_fechamento",
+            "valor": 0.0551178500734404,
+            "efeito": "ajudou",
+            "texto": "Fechou em 6% da faixa entre a mínima e a máxima do último pregão"
+          },
+          {
+            "fator": "ret_idio_5d",
+            "valor": 0.061305390181269695,
+            "efeito": "ajudou",
+            "texto": "6,1% acima do esperado pelo Ibovespa nos últimos 5 pregões"
+          },
+          {
+            "fator": "ret_20d",
+            "valor": 0.08426879240384011,
+            "efeito": "ajudou",
+            "texto": "Subiu 8,4% nos últimos 20 pregões (acima da média das ações)"
+          }
+        ],
+        "noticias_usadas": []
+      },
+      {
+        "posicao": 2,
+        "ticker": "CPLE3",
+        "chance": {
+          "valor": null,
+          "referencia_acaso": null,
+          "exibir": false,
+          "status": "calibracao_nao_conferida"
+        },
+        "motivos": [
+          {
+            "fator": "mudanca_tom",
+            "valor": 0.7118740202788587,
+            "efeito": "ajudou",
+            "texto": "Tom das notícias melhor que o habitual da empresa"
+          },
+          {
+            "fator": "noticias_dia_qtd",
+            "valor": 34.0,
+            "efeito": "ajudou",
+            "texto": "34 notícias no último pregão e na noite"
+          },
+          {
+            "fator": "mom_12_1",
+            "valor": 0.39416689743872246,
+            "efeito": "ajudou",
+            "texto": "Subiu 39,4% em 12 meses, sem contar o último mês (acima da média das ações)"
+          }
+        ],
+        "noticias_usadas": [
+          "n644205",
+          "n644210",
+          "n644182",
+          "n644208",
+          "n644179",
+          "n644188",
+          "n643542",
+          "n644192",
+          "n645927",
+          "n644185",
+          "n644193",
+          "n644180",
+          "n644187",
+          "n644211",
+          "n644189",
+          "n644200",
+          "n644190",
+          "n644201",
+          "n644204",
+          "n644209",
+          "n644203",
+          "n644207",
+          "n644198",
+          "n644191",
+          "n644183",
+          "n644202",
+          "n644184",
+          "n644206",
+          "n644186",
+          "n644199",
+          "n644195",
+          "n645932",
+          "n644178",
+          "n644197"
+        ]
+      },
+      {
+        "posicao": 3,
+        "ticker": "CMIG4",
+        "chance": {
+          "valor": null,
+          "referencia_acaso": null,
+          "exibir": false,
+          "status": "calibracao_nao_conferida"
+        },
+        "motivos": [
+          {
+            "fator": "mudanca_tom",
+            "valor": 0.5189499034626702,
+            "efeito": "ajudou",
+            "texto": "Tom das notícias melhor que o habitual da empresa"
+          },
+          {
+            "fator": "posicao_fechamento",
+            "valor": 0.48148108902358044,
+            "efeito": "ajudou",
+            "texto": "Fechou em 48% da faixa entre a mínima e a máxima do último pregão"
+          },
+          {
+            "fator": "noticias_dia_extremo",
+            "valor": 0.9096355885267258,
+            "efeito": "atrapalhou",
+            "texto": "Notícia de tom mais forte: positiva (0,91)"
+          }
+        ],
+        "noticias_usadas": [
+          "n645963",
+          "n644134",
+          "n645928",
+          "n644116",
+          "n644130",
+          "n644120",
+          "n644135",
+          "n644131",
+          "n644115",
+          "n644112",
+          "n644133",
+          "n644113",
+          "n644118",
+          "n644129",
+          "n644122",
+          "n644119",
+          "n644121",
+          "n644126",
+          "n644132",
+          "n644125",
+          "n644123",
+          "n645932",
+          "n644136"
+        ]
+      },
+      {
+        "posicao": 4,
+        "ticker": "ALOS3",
+        "chance": {
+          "valor": null,
+          "referencia_acaso": null,
+          "exibir": false,
+          "status": "calibracao_nao_conferida"
+        },
+        "motivos": [
+          {
+            "fator": "posicao_fechamento",
+            "valor": 0.22807049832019383,
+            "efeito": "ajudou",
+            "texto": "Fechou em 23% da faixa entre a mínima e a máxima do último pregão"
+          },
+          {
+            "fator": "mudanca_tom",
+            "valor": 0.19970381344751556,
+            "efeito": "ajudou",
+            "texto": "Tom das notícias melhor que o habitual da empresa"
+          },
+          {
+            "fator": "mom_12_1",
+            "valor": 0.5011496921307592,
+            "efeito": "ajudou",
+            "texto": "Subiu 50,1% em 12 meses, sem contar o último mês (acima da média das ações)"
+          }
+        ],
+        "noticias_usadas": [
+          "n643514",
+          "n643516"
+        ]
+      },
+      {
+        "posicao": 5,
+        "ticker": "AZZA3",
+        "chance": {
+          "valor": null,
+          "referencia_acaso": null,
+          "exibir": false,
+          "status": "calibracao_nao_conferida"
+        },
+        "motivos": [
+          {
+            "fator": "mudanca_tom",
+            "valor": 0.22831700919365341,
+            "efeito": "ajudou",
+            "texto": "Tom das notícias melhor que o habitual da empresa"
+          },
+          {
+            "fator": "ret_idio_5d",
+            "valor": 0.1464138077042437,
+            "efeito": "ajudou",
+            "texto": "14,6% acima do esperado pelo Ibovespa nos últimos 5 pregões"
+          },
+          {
+            "fator": "posicao_fechamento",
+            "valor": 0.3127572565579818,
+            "efeito": "ajudou",
+            "texto": "Fechou em 31% da faixa entre a mínima e a máxima do último pregão"
+          }
+        ],
+        "noticias_usadas": [
+          "n643572",
+          "n643570",
+          "n643587",
+          "n643589",
+          "n643584",
+          "n645942",
+          "n643571",
+          "n643588",
+          "n643582",
+          "n645906",
+          "n643575",
+          "n643591",
+          "n643581",
+          "n643580",
+          "n643586",
+          "n643585",
+          "n643590",
+          "n643578",
+          "n645909",
+          "n643579",
+          "n645894",
+          "n643573",
+          "n645950",
+          "n645891",
+          "n645936"
+        ]
+      }
+    ]
+  },
+  "interno": {
+    "modelo_arquivo": "xgb-2026-11.json",
+    "modelo_m1_arquivo": "xgb-m1-2026-11.json",
+    "sombra_modelo_1": [
+      "VIVT3",
+      "TIMS3",
+      "ABEV3",
+      "SBSP3",
+      "BBSE3"
+    ],
+    "sombra_volatilidade": [
+      "BRAP4",
+      "KLBN11",
+      "TIMS3",
+      "VIVT3",
+      "PSSA3"
+    ],
+    "candidatos": [
+      "ABEV3",
+      "ALOS3",
+      "ASAI3",
+      "AURE3",
+      "AXIA3",
+      "AZZA3",
+      "B3SA3",
+      "BBAS3",
+      "BBDC3",
+      "BBDC4",
+      "BBSE3",
+      "BEEF3",
+      "BPAC11",
+      "BRAP4",
+      "BRAV3",
+      "CMIG4",
+      "CMIN3",
+      "COGN3",
+      "CPFE3",
+      "CPLE3",
+      "CSAN3",
+      "CSNA3",
+      "CYRE3",
+      "DIRR3",
+      "EGIE3",
+      "EMBJ3",
+      "ENEV3",
+      "ENGI11",
+      "EQTL3",
+      "FLRY3",
+      "GGBR4",
+      "GOAU4",
+      "HAPV3",
+      "HYPE3",
+      "IGTI11",
+      "ISAE4",
+      "ITSA4",
+      "ITUB4",
+      "KLBN11",
+      "LREN3",
+      "MBRF3",
+      "MGLU3",
+      "MOTV3",
+      "MRVE3",
+      "MULT3",
+      "NATU3",
+      "PETR3",
+      "PETR4",
+      "POMO4",
+      "PRIO3",
+      "PSSA3",
+      "RADL3",
+      "RAIL3",
+      "RDOR3",
+      "RENT3",
+      "SANB11",
+      "SBSP3",
+      "SUZB3",
+      "TAEE11",
+      "TIMS3",
+      "TOTS3",
+      "UGPA3",
+      "USIM5",
+      "VALE3",
+      "VAMO3",
+      "VBBR3",
+      "VIVA3",
+      "VIVT3",
+      "WEGE3",
+      "YDUQ3"
+    ],
+    "probabilidades": {
+      "ABEV3": 0.5038512945175171,
+      "ALOS3": 0.5150049924850464,
+      "ASAI3": 0.48879551887512207,
+      "AURE3": 0.4597412347793579,
+      "AXIA3": 0.49548014998435974,
+      "AZZA3": 0.514945924282074,
+      "B3SA3": 0.4750336706638336,
+      "BBAS3": 0.48725900053977966,
+      "BBDC3": 0.4501219689846039,
+      "BBDC4": 0.45237264037132263,
+      "BBSE3": 0.4975135624408722,
+      "BEEF3": 0.4495084881782532,
+      "BPAC11": 0.4777739644050598,
+      "BRAP4": 0.49452129006385803,
+      "BRAV3": 0.4719277322292328,
+      "CMIG4": 0.516512393951416,
+      "CMIN3": 0.4721280038356781,
+      "COGN3": 0.47140851616859436,
+      "CPFE3": 0.47929996252059937,
+      "CPLE3": 0.517555832862854,
+      "CSAN3": 0.4411924481391907,
+      "CSNA3": 0.4547960162162781,
+      "CYRE3": 0.5023521184921265,
+      "DIRR3": 0.4743354916572571,
+      "EGIE3": 0.4904046654701233,
+      "EMBJ3": 0.5142289400100708,
+      "ENEV3": 0.45293936133384705,
+      "ENGI11": 0.4868350028991699,
+      "EQTL3": 0.5002564787864685,
+      "FLRY3": 0.49084925651550293,
+      "GGBR4": 0.512177050113678,
+      "GOAU4": 0.49706459045410156,
+      "HAPV3": 0.45401322841644287,
+      "HYPE3": 0.4770653247833252,
+      "IGTI11": 0.4926151931285858,
+      "ISAE4": 0.5048316121101379,
+      "ITSA4": 0.46509623527526855,
+      "ITUB4": 0.48487409949302673,
+      "KLBN11": 0.508182168006897,
+      "LREN3": 0.46966901421546936,
+      "MBRF3": 0.4888913035392761,
+      "MGLU3": 0.48048165440559387,
+      "MOTV3": 0.4646391272544861,
+      "MRVE3": 0.49215808510780334,
+      "MULT3": 0.4858158230781555,
+      "NATU3": 0.44495055079460144,
+      "PETR3": 0.5074555277824402,
+      "PETR4": 0.4634086787700653,
+      "POMO4": 0.4621853530406952,
+      "PRIO3": 0.4860301911830902,
+      "PSSA3": 0.48288747668266296,
+      "RADL3": 0.464301198720932,
+      "RAIL3": 0.5007065534591675,
+      "RDOR3": 0.4590677320957184,
+      "RENT3": 0.4669158458709717,
+      "SANB11": 0.5135470628738403,
+      "SBSP3": 0.5082747340202332,
+      "SUZB3": 0.46939653158187866,
+      "TAEE11": 0.4984009861946106,
+      "TIMS3": 0.5104998350143433,
+      "TOTS3": 0.47086814045906067,
+      "UGPA3": 0.49433448910713196,
+      "USIM5": 0.5003740787506104,
+      "VALE3": 0.48940035700798035,
+      "VAMO3": 0.44963768124580383,
+      "VBBR3": 0.5003589391708374,
+      "VIVA3": 0.4608902335166931,
+      "VIVT3": 0.5488376021385193,
+      "WEGE3": 0.49680230021476746,
+      "YDUQ3": 0.49383166432380676
+    }
+  }
+}

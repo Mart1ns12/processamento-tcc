@@ -1,0 +1,152 @@
+{
+  "data_referencia": "2026-11-12",
+  "pregao_base": "2026-11-11",
+  "valido_para_historico": true,
+  "fechado_em": "2026-11-13T08:35:14-03:00",
+  "ranking": [
+    "ENGI11",
+    "BPAC11",
+    "BBDC4",
+    "BBDC3",
+    "BRAP4"
+  ],
+  "resultado": [
+    {
+      "ticker": "ENGI11",
+      "retorno": {
+        "valor": 0.0021145796613477597,
+        "status": "ok"
+      },
+      "retorno_ibov": {
+        "valor": -0.0042775775892131,
+        "status": "ok"
+      },
+      "superou": true
+    },
+    {
+      "ticker": "BPAC11",
+      "retorno": {
+        "valor": -0.03235033688310396,
+        "status": "ok"
+      },
+      "retorno_ibov": {
+        "valor": -0.0042775775892131,
+        "status": "ok"
+      },
+      "superou": false
+    },
+    {
+      "ticker": "BBDC4",
+      "retorno": {
+        "valor": -0.0006978526821408426,
+        "status": "ok"
+      },
+      "retorno_ibov": {
+        "valor": -0.0042775775892131,
+        "status": "ok"
+      },
+      "superou": true
+    },
+    {
+      "ticker": "BBDC3",
+      "retorno": {
+        "valor": 0.0,
+        "status": "ok"
+      },
+      "retorno_ibov": {
+        "valor": -0.0042775775892131,
+        "status": "ok"
+      },
+      "superou": true
+    },
+    {
+      "ticker": "BRAP4",
+      "retorno": {
+        "valor": -0.01430689056451373,
+        "status": "ok"
+      },
+      "retorno_ibov": {
+        "valor": -0.0042775775892131,
+        "status": "ok"
+      },
+      "superou": false
+    }
+  ],
+  "acertos_dia": 3,
+  "acertos_top3": 2,
+  "resultado_incompleto": false,
+  "alvos_candidatos": {
+    "ABEV3": 0.0,
+    "ALOS3": 0.0,
+    "ASAI3": 0.0,
+    "AURE3": 1.0,
+    "AXIA3": 0.0,
+    "AZZA3": 1.0,
+    "B3SA3": 1.0,
+    "BBAS3": 0.0,
+    "BBDC3": 1.0,
+    "BBDC4": 1.0,
+    "BBSE3": 0.0,
+    "BEEF3": 1.0,
+    "BPAC11": 0.0,
+    "BRAP4": 0.0,
+    "BRAV3": 1.0,
+    "CMIG4": 0.0,
+    "CMIN3": 0.0,
+    "COGN3": 1.0,
+    "CPFE3": 1.0,
+    "CPLE3": 0.0,
+    "CSAN3": 0.0,
+    "CSNA3": 0.0,
+    "CYRE3": 0.0,
+    "DIRR3": 0.0,
+    "EGIE3": 0.0,
+    "EMBJ3": 0.0,
+    "ENEV3": 0.0,
+    "ENGI11": 1.0,
+    "EQTL3": 0.0,
+    "FLRY3": 0.0,
+    "GGBR4": 0.0,
+    "GOAU4": 0.0,
+    "HAPV3": 1.0,
+    "HYPE3": 0.0,
+    "IGTI11": 0.0,
+    "ISAE4": 0.0,
+    "ITSA4": 1.0,
+    "ITUB4": 1.0,
+    "KLBN11": 1.0,
+    "LREN3": 0.0,
+    "MBRF3": 1.0,
+    "MGLU3": 0.0,
+    "MOTV3": 0.0,
+    "MRVE3": 0.0,
+    "MULT3": 0.0,
+    "NATU3": 0.0,
+    "PETR3": 1.0,
+    "PETR4": 1.0,
+    "POMO4": 1.0,
+    "PRIO3": 1.0,
+    "PSSA3": 1.0,
+    "RADL3": 0.0,
+    "RAIL3": 0.0,
+    "RDOR3": 1.0,
+    "RENT3": 0.0,
+    "SANB11": 1.0,
+    "SBSP3": 0.0,
+    "SUZB3": 1.0,
+    "TAEE11": 1.0,
+    "TIMS3": 0.0,
+    "TOTS3": 0.0,
+    "UGPA3": 1.0,
+    "USIM5": 0.0,
+    "VALE3": 0.0,
+    "VAMO3": 0.0,
+    "VBBR3": 1.0,
+    "VIVA3": 0.0,
+    "VIVT3": 0.0,
+    "WEGE3": 1.0,
+    "YDUQ3": 0.0
+  },
+  "acertos_sombra_modelo_1": 2,
+  "acertos_sombra_volatilidade": 2
+}
