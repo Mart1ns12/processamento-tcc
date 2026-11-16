@@ -72,7 +72,8 @@ tabelas:
     coluna_data: data_referencia
     coluna_entidade: cnpj
     valores_permitidos:
-      situacao: [ok, corrigido_escala, corrigido_digito, anulado]
+      # 16/11/2026: suspeito (Raízen 2026-06-30, base preenchida) = quantidade indisponível no período, como anulado
+      situacao: [ok, corrigido_escala, corrigido_digito, anulado, suspeito]
   proventos:
     nome_real: v1-proventos
     chave: [ticker, tipo, data_com]

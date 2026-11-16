@@ -110,6 +110,32 @@ def test_anulado_dá_quantidade_indisponivel():
     assert math.isnan(qtd_on) and math.isnan(qtd_pn)
 
 
+# suspeito (16/11/2026): base preenchida, mas indisponível só no período dele, como o anulado
+_LINHAS_SUSPEITO = ACOES_HAPV3_LINHAS + [
+    (CNPJ_HAPV3, "2021-09-30", "2021-11-10", 3891569750, 0, 259437983, 0, "suspeito"),
+]
+
+
+def test_suspeito_dá_quantidade_indisponivel_mesmo_com_base_preenchida():
+    acoes = acoes_base_de(_LINHAS_SUSPEITO)
+    qtd_on, qtd_pn, status = acoes_na_data(_disp(acoes, "2021-12-30"), CNPJ_HAPV3, "2021-12-30")
+    assert status == INDISPONIVEL   # não volta para a linha ok de 2021-06-30
+    assert math.isnan(qtd_on) and math.isnan(qtd_pn)
+
+
+@pytest.mark.parametrize("t, data, esperado", [
+    ("2021-11-09", "2021-11-09", (259437983.0, 0.0, OK)),   # antes da entrega do suspeito: vale a anterior
+    ("2022-06-30", "2022-06-30", (476158554.0, 0.0, OK)),   # linha seguinte entregue: volta a valer
+])
+def test_suspeito_vale_so_no_proprio_periodo(t, data, esperado):
+    assert acoes_na_data(_disp(acoes_base_de(_LINHAS_SUSPEITO), t), CNPJ_HAPV3, data) == esperado
+
+
+def test_suspeito_no_valor_de_mercado_fica_indisponivel():
+    valor, status = _vm(CNPJ_HAPV3, "HAPV3", 155.699997, "2021-12-30", acoes_base_de(_LINHAS_SUSPEITO))
+    assert status == INDISPONIVEL and math.isnan(valor)
+
+
 # ---------------------------------------------------------------------------
 # 4. Payout sintético HAPV3 com a quantidade na base atual
 # ---------------------------------------------------------------------------

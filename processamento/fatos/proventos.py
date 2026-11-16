@@ -143,7 +143,8 @@ def acoes_na_data(disponiveis: pd.DataFrame, cnpj: str, data,
     Usa `qtd_on_base_atual`/`qtd_pn_base_atual` quando existem (quantidade na base de hoje, 03/11/2026);
     senão, `qtd_on`/`qtd_pn` (fixtures antigas). Sem linha anterior à data, usa a de menor
     data_referencia (fallback, D3). Sem linha da empresa, ou com quantidade NaN (ex.: `anulado`),
-    sai indisponível. `qtd_pn` igual a zero é válido. Na base atual, PN vazia com ON preenchida vale
+    sai indisponível. `suspeito` (16/11/2026) sai indisponível como o `anulado`, mesmo com a base
+    preenchida, e também não volta para a linha anterior. `qtd_pn` igual a zero é válido. Na base atual, PN vazia com ON preenchida vale
     zero no valor de mercado (09/11/2026: a PN deixou de existir na troca por ON, ex.: Eletrobras, Azul,
     Copel); com `pn_extinta_vale_zero=False` (payout de evento com provento de PN), sai indisponível.
     """
@@ -156,6 +157,8 @@ def acoes_na_data(disponiveis: pd.DataFrame, cnpj: str, data,
         escolhida = linhas.sort_values("data_referencia").iloc[0]
     else:
         escolhida = anteriores.sort_values("data_referencia").iloc[-1]
+    if escolhida.get("situacao") == "suspeito":
+        return float("nan"), float("nan"), INDISPONIVEL
     col_on = "qtd_on_base_atual" if "qtd_on_base_atual" in linhas.columns else "qtd_on"
     col_pn = "qtd_pn_base_atual" if "qtd_pn_base_atual" in linhas.columns else "qtd_pn"
     qtd_on, qtd_pn = escolhida[col_on], escolhida[col_pn]
