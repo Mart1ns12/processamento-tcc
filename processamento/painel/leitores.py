@@ -257,6 +257,10 @@ def _inteiro_positivo(v: object) -> bool:
     return _inteiro(v) and v > 0
 
 
+def _hora_hhmm(v: object) -> bool:
+    return isinstance(v, str) and RE_HHMM.match(v) is not None
+
+
 def _ler_painel_yaml(raiz: Path) -> dict:
     """Conteúdo do `processamento/config/painel.yaml` (só o painel lê); {} se faltar ou estiver quebrado."""
     caminho = Path(raiz) / "processamento" / "config" / "painel.yaml"
@@ -291,6 +295,7 @@ PARAMETROS_PAINEL = {
     "afetadas_max": _inteiro_positivo, "retorno_dia_abs": _positivo,
     "dia_media_execucoes": _inteiro_positivo, "diagnosticos_manter": _inteiro_positivo,
     "mercado_pregoes_linha": _inteiro_positivo, "agendador": _agendador,
+    "coleta_entrega_normal": _hora_hhmm, "suspeito_novo_dias": _inteiro_positivo,
 }
 
 

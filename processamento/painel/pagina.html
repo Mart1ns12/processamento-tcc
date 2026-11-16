@@ -233,6 +233,14 @@ ul{margin:4px 0;padding-left:20px}
 .resumo-lista{list-style:none;margin:0;padding:0;display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(min(320px,100%),1fr))}
 .ponto{border:1px solid var(--line);border-left:4px solid var(--idle);border-radius:8px;padding:8px 10px;font-size:.86rem;display:grid;gap:2px}
 .ponto.warn{border-left-color:var(--warn)} .ponto.bad{border-left-color:var(--bad)}
+.ponto.idle{border-left-color:var(--idle);color:var(--muted)}
+.resumo-obs>summary{min-height:44px;display:flex;align-items:center;cursor:pointer;color:var(--muted);font-size:.86rem;font-weight:600}
+.resumo-obs>summary{list-style:none;white-space:pre}
+.resumo-obs>summary::-webkit-details-marker{display:none}
+.resumo-obs>summary::before{content:"▶";font-size:.7rem;margin-right:6px}
+.resumo-obs[open]>summary::before{content:"▼"}
+.resumo-obs>summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.resumo-obs[open]>.resumo-lista{margin-top:8px}
 .fazer,.fazer-curto{font-size:.8rem;color:var(--muted)}
 .fazer{border-top:1px dashed var(--line);padding-top:6px}
 .fazer strong,.fazer-curto strong{color:var(--ink)}
@@ -484,6 +492,7 @@ tbody tr:hover{background:color-mix(in srgb,var(--track) 60%,transparent)}
       <div class="resumo idle" id="resumo">
         <button type="button" class="resumo-frase" id="resumo-frase" disabled>carregando…</button>
         <ul class="resumo-lista" id="resumo-lista"></ul>
+        <details class="resumo-obs" id="resumo-obs" hidden><summary>Observações (<span id="resumo-obs-n">0</span>)</summary><ul class="resumo-lista" id="resumo-obs-lista"></ul></details>
       </div>
       <p class="note" id="hero-sub" hidden></p>
       <div id="hero-botao"></div>
@@ -1039,32 +1048,41 @@ function renderFazerCartoes() {
   });
 }
 
+// Um ponto da lista do resumo (link para o alvo e "O que fazer"); a cor vem do nível (obs fica cinza).
+function itemDoResumo(p) {
+  const li = criar("li", null, "ponto " + farol(p.nivel));
+  const a = criar("a", txt(p.texto));
+  a.href = "#" + p.alvo;
+  a.addEventListener("click", (ev) => {
+    ev.preventDefault();
+    irPara(p.alvo);
+  });
+  li.appendChild(a);
+  if (p.o_que_fazer) {
+    const f = criar("span", null, "fazer-curto");
+    f.appendChild(criar("strong", "O que fazer: "));
+    f.appendChild(document.createTextNode(String(p.o_que_fazer)));
+    li.appendChild(f);
+  }
+  return li;
+}
+
 function renderResumo(d) {
   const r = (d.visao || {}).resumo || {};
   const pontos = listaSegura(r.pontos).filter((p) => p && typeof p.alvo === "string");
-  ESTADO.pontos = new Map(pontos.map((p) => [p.alvo, p]));
+  const observacoes = listaSegura(r.observacoes).filter((p) => p && typeof p.alvo === "string");
+  // observações primeiro: os pontos (bad/warn) sobrescrevem a mesma chave de alvo ("O que fazer" dos cartões)
+  ESTADO.pontos = new Map([...observacoes, ...pontos].map((p) => [p.alvo, p]));
   $("resumo").className = "resumo " + farol(r.nivel);
   const frase = $("resumo-frase");
   frase.textContent = txt(r.frase);
   frase.disabled = pontos.length === 0;
   frase.onclick = pontos.length ? () => irPara(pontos[0].alvo) : null;
-  $("resumo-lista").replaceChildren(...pontos.map((p) => {
-    const li = criar("li", null, "ponto " + farol(p.nivel));
-    const a = criar("a", txt(p.texto));
-    a.href = "#" + p.alvo;
-    a.addEventListener("click", (ev) => {
-      ev.preventDefault();
-      irPara(p.alvo);
-    });
-    li.appendChild(a);
-    if (p.o_que_fazer) {
-      const f = criar("span", null, "fazer-curto");
-      f.appendChild(criar("strong", "O que fazer: "));
-      f.appendChild(document.createTextNode(String(p.o_que_fazer)));
-      li.appendChild(f);
-    }
-    return li;
-  }));
+  $("resumo-lista").replaceChildren(...pontos.map(itemDoResumo));
+  // recolhido por padrão; só os filhos são trocados, para não fechar o que o usuário abriu
+  $("resumo-obs-n").textContent = String(observacoes.length);
+  $("resumo-obs-lista").replaceChildren(...observacoes.map(itemDoResumo));
+  $("resumo-obs").hidden = observacoes.length === 0;
 }
 
 // E1: frase "hoje × dados de" (visao.dia, calculada no servidor).

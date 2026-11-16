@@ -8,16 +8,18 @@ from __future__ import annotations
 
 import calendar as _cal
 import re
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 
 import yaml
 
 from processamento import calendario
 from processamento.calendario import SP
+from processamento.painel import situacao
 from processamento.painel.acoes import ACOES
 from processamento.painel.ajuda import O_QUE_FAZER
 from processamento.painel.api import resumo_tempos
 from processamento.painel.leitores import _instante, formatar_duracao
+from processamento.painel.saude import TEMAS_ESTRUTURAIS
 
 MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro",
          "outubro", "novembro", "dezembro"]
@@ -308,8 +310,10 @@ def _plural(n: int, singular: str, plural: str) -> str:
     return f"{n} {singular if n == 1 else plural}"
 
 
-def _ponto(nivel: str, texto: str, alvo: str, chave: str) -> dict:
-    return {"nivel": nivel, "texto": texto, "alvo": alvo, "o_que_fazer": O_QUE_FAZER.get(chave)}
+def _ponto(nivel: str, texto: str, alvo: str, chave: str, o_que_fazer: str | None = None) -> dict:
+    """Ponto da situação: "bad", "warn" ou "obs" (observação, cinza). O "o que fazer" vem da chave, salvo se informado."""
+    return {"nivel": nivel, "texto": texto, "alvo": alvo,
+            "o_que_fazer": o_que_fazer if o_que_fazer is not None else O_QUE_FAZER.get(chave)}
 
 
 ROTULOS_ETAPA = {"precos": "preços", "macro": "macro", "noticias": "notícias", "ipe": "IPE",
@@ -413,9 +417,14 @@ def bloco_api(situacao: object, limite_s: object) -> dict:
     if consulta.get("respondeu") is not True:
         timeout = s.get("timeout_s")
         timeout_txt = f"{timeout:g}".replace(".", ",") if _real(timeout) else "sem dados"
-        estado, titulo = "warn", "Sem resposta"
         linhas.append(f"Sem resposta em até {timeout_txt} s ({consulta.get('erro') or 'sem detalhe'})")
-        pontos.append(_ponto_api("warn", "API sem resposta", "api_sem_resposta"))
+        if any(m["ok"] is True for m in serie):
+            estado, titulo = "warn", "Sem resposta"
+            pontos.append(_ponto_api("warn", "API com erro intermitente (sem resposta na última consulta)",
+                                     "api_intermitente"))
+        else:
+            estado, titulo = "bad", "Fora do ar"
+            pontos.append(_ponto_api("bad", "API fora do ar", "api_fora"))
     elif _banco_fora(consulta):
         estado, titulo = "bad", "Banco da API fora"
         linhas.append(f"Status {status or 'sem dados'} · banco {banco or 'sem dados'}")
@@ -427,17 +436,23 @@ def bloco_api(situacao: object, limite_s: object) -> dict:
         estado, titulo = "warn", f"Resposta inesperada (HTTP {http or 'sem dados'})"
         linhas.append(f"Status {status or 'sem dados'} · banco {banco or 'sem dados'}")
         pontos.append(_ponto_api("warn", f"API com resposta inesperada (HTTP {http or 'sem dados'})",
-                                 "api_sem_resposta"))
+                                 "api_inesperada"))
 
     if ultima is not None:
         linhas.append(f"Última publicação completa: {ultima:%d/%m/%Y}")
     linhas.append(tempo["texto"])
     if hora is not None:
         linhas.append(f"Consultada às {hora:%H:%M:%S}")
-    if estado == "ok" and tempo["acima_limite"]:
-        estado = "warn"
+    lenta = estado == "ok" and tempo["acima_limite"]
+    if estado == "ok":
+        falhas = sum(1 for m in serie if m["ok"] is False)
+        if falhas:
+            estado = "warn"
+            pontos.append(_ponto_api("warn", f"API com erro intermitente ({falhas} de {len(medicoes)} consultas "
+                                             "sem resposta)", "api_intermitente"))
+    if lenta:
         media = f"{tempo['media_s']:.2f}".replace(".", ",")
-        pontos.append(_ponto_api("warn", f"API lenta (média {media} s)", "api_lenta"))
+        pontos.append(_ponto_api("obs", f"API lenta (média {media} s)", "api_lenta"))
     return {"configurada": True, "estado": estado, "titulo": titulo, "status": status, "banco": banco,
             "ultima_publicacao": None if ultima is None else ultima.isoformat(),
             "consultado_em": None if hora is None else f"{hora:%H:%M:%S}", "tempo": tempo,
@@ -519,48 +534,125 @@ def fluxo_nos(fluxo_dia: object, banco: object, api: object) -> dict:
     return {"disponivel": disponivel, "nos": saida, "rodape": rodape}
 
 
-def _pontos_do_bloco(bloco: object, alvo: str) -> list[dict]:
-    """Pontos (warn/bad) que um bloco já traz (API, Banco, dia atípico), com o alvo da tela."""
+def _pontos_do_bloco(bloco: object, alvo: str, forcar_bad: tuple[str, ...] = ()) -> list[dict]:
+    """Pontos (bad/warn/obs) que um bloco já traz (API, Banco, dia atípico), com o alvo da tela.
+
+    `forcar_bad`: chaves cujo ponto sobe para "bad" (ex.: banco atrasado, nada publicado).
+    """
     saida = []
     for p in _dic(bloco).get("pontos") or []:
         p = _dic(p)
-        if p.get("nivel") in ("warn", "bad") and isinstance(p.get("texto"), str) and isinstance(p.get("chave"), str):
-            saida.append(_ponto(p["nivel"], p["texto"], alvo, p["chave"]))
+        if p.get("nivel") in ("bad", "warn", "obs") and isinstance(p.get("texto"), str) and isinstance(p.get("chave"), str):
+            nivel = "bad" if p["chave"] in forcar_bad else p["nivel"]
+            saida.append(_ponto(nivel, p["texto"], alvo, p["chave"]))
     return saida
 
 
-def pontos_de_atencao(hoje: object, trava: object, fluxo_dia: object, linha_tempo: object,
-                      saude_visao: object, testes: object, *, api: object = None, banco: object = None,
-                      dia_atipico: object = None) -> list[dict]:
-    """Faróis amarelos (warn) e vermelhos (bad) da tela, na ordem em que aparecem na página."""
-    hoje, trava, fluxo_dia, linha_tempo, saude_visao, testes = (
-        _dic(v) for v in (hoje, trava, fluxo_dia, linha_tempo, saude_visao, testes))
-    pontos: list[dict] = []
-    if fluxo_dia.get("disponivel") is True:
-        coleta = _dic(fluxo_dia.get("coleta"))
-        if coleta.get("estado") in ("warn", "bad"):
-            titulo = str(coleta.get("titulo") or "sem dados").lower()
-            pontos.append(_ponto(coleta["estado"], f"Coleta ({titulo})", "fluxo-coleta", "coleta_" + coleta["estado"]))
-        d = _data(fluxo_dia.get("data"))
-        dia = d.strftime("%d/%m/%Y") if d else "sem data"
-        status = fluxo_dia.get("status")
-        if status == "falhou":
-            pontos.append(_ponto("bad", f"Última rotina diária ({dia}) falhou", "fluxo-processamento", "rotina_falhou"))
-        elif status == "parcial":
-            pontos.append(_ponto("warn", f"Última rotina diária ({dia}) com pendências", "fluxo-processamento",
-                                 "rotina_parcial"))
-        elif status == "em_andamento" and fluxo_dia.get("possivelmente_interrompida"):
-            pontos.append(_ponto("warn", f"Última rotina diária ({dia}) pode ter sido interrompida",
-                                 "fluxo-processamento", "rotina_interrompida"))
-    else:
-        pontos.append(_ponto("warn", "Fluxo do dia: sem dados", "agora", "sem_rotina"))
-    pontos += _pontos_do_bloco(banco, "fluxo-banco")
-    pontos += _pontos_do_bloco(api, "fluxo-api")
-    folga = linha_tempo.get("folga_s")
-    if _inteiro(folga) and folga < 0:
-        pontos.append(_ponto("warn", f"Rotina terminou depois do prazo ({linha_tempo.get('folga_texto')})",
-                             "linha-tempo", "atraso_prazo"))
-    pontos += _pontos_do_bloco(dia_atipico, "dia-atipico")
+def _minutos(hhmm: object) -> int | None:
+    """HH:MM em minutos desde meia-noite; None se não for HH:MM válido."""
+    if not isinstance(hhmm, str) or not RE_HHMM.fullmatch(hhmm):
+        return None
+    horas, minutos = hhmm.split(":")
+    return int(horas) * 60 + int(minutos)
+
+
+def _trecho_aceito(item: dict) -> str:
+    """"O que fazer" de um caso aceito: quando foi aceito e por qual motivo."""
+    desde = _data(item.get("desde"))
+    quando_txt = "data não informada" if desde is None else f"{desde:%d/%m/%Y}"
+    return f"Nada: caso aceito em {quando_txt} ({item.get('motivo')})."
+
+
+def _titulo_coleta(coleta: dict) -> str:
+    return str(coleta.get("titulo") or "sem dados").lower()
+
+
+def _pontos_coleta(coleta: dict, fluxo_dia: dict, linha_tempo: dict, agora: datetime | None, hoje_d: date | None,
+                   coleta_normal: str | None) -> list[dict]:
+    """Coleta da rotina: entrega com problema, prazo perdido, entrega depois do prazo ou atrasada."""
+    estado = coleta.get("estado")
+    if estado in (None, "idle"):
+        return []
+    if estado == "bad":
+        return [_ponto("bad", f"Coleta ({_titulo_coleta(coleta)})", "fluxo-coleta", "coleta_bad")]
+    marcos = {m["id"]: m for m in _dic(linha_tempo).get("marcos") or [] if isinstance(m, dict) and "id" in m}
+    prazo = marcos.get("prazo")
+    if _dic(linha_tempo).get("disponivel") is True and prazo is not None:
+        entrega = marcos.get("entrega")
+        if entrega is None:
+            d_rotina = _data(fluxo_dia.get("data"))
+            prazo_dt = _prazo(d_rotina, prazo["hora"]) if d_rotina is not None else None
+            passou = (agora is None or d_rotina is None or (hoje_d is not None and d_rotina < hoje_d)
+                      or (prazo_dt is not None and agora >= prazo_dt)
+                      or fluxo_dia.get("status") in ("ok", "parcial", "falhou"))
+            if passou:
+                return [_ponto("bad", f"Coleta não entregou até {prazo['hora']}", "fluxo-coleta", "coleta_sem_entrega")]
+            return [_ponto("warn", "Coleta ainda não entregou", "fluxo-coleta", "coleta_warn")]
+        if _inteiro(entrega.get("minuto")) and _inteiro(prazo.get("minuto")) and entrega["minuto"] > prazo["minuto"]:
+            return [_ponto("bad", f"Coleta entregou às {entrega['hora']}, depois do prazo de {prazo['hora']}",
+                           "fluxo-coleta", "coleta_sem_entrega")]
+        normal = _minutos(coleta_normal)
+        if normal is not None and _inteiro(entrega.get("minuto")) and entrega["minuto"] > normal:
+            return [_ponto("warn", f"Coleta entregou atrasada ({entrega['hora']}; o normal é até {coleta_normal})",
+                           "fluxo-coleta", "coleta_atrasada")]
+        return []
+    if estado == "warn":
+        return [_ponto("warn", f"Coleta ({_titulo_coleta(coleta)})", "fluxo-coleta", "coleta_warn")]
+    return []
+
+
+def _pontos_divergencias(divergencias: list, aceitos: object) -> list[dict]:
+    """Divergências do contrato com a coleta: aceitas viram observação; estruturais sobem para bad; as demais, warn."""
+    saida = []
+    for div in divergencias:
+        div = _dic(div)
+        tema, detalhe = div.get("tema"), div.get("detalhe")
+        aceito = situacao.aceito_divergencia(aceitos, div)
+        if aceito is not None:
+            saida.append(_ponto("obs", f"Divergência aceita: {tema} ({detalhe})", "saude-c-contrato", "saude_contrato",
+                                _trecho_aceito(aceito)))
+        elif tema in TEMAS_ESTRUTURAIS:
+            saida.append(_ponto("bad", f"Divergência estrutural no contrato: {tema} ({detalhe})",
+                                "saude-c-contrato", "saude_contrato"))
+        else:
+            saida.append(_ponto("warn", f"Divergência nova com a coleta: {tema} ({detalhe})",
+                                "saude-c-contrato", "saude_contrato"))
+    return saida
+
+
+def _pontos_retornos(suspeitos: list, eventos: object, aceitos: object, hoje_d: date | None,
+                     dias_novo: int) -> list[dict]:
+    """Preços suspeitos: aceitos e já tratados (evento ou mais antigos que `dias_novo`) viram observação; o resto, warn."""
+    saida, tratados = [], []
+    limite = None if hoje_d is None else hoje_d - timedelta(days=dias_novo)
+    for item in suspeitos:
+        item = _dic(item)
+        ticker, data_txt = item.get("ticker"), item.get("data")
+        if not isinstance(ticker, str) or not isinstance(data_txt, str):
+            continue
+        quando_txt = _dd_mm_aaaa(data_txt) or data_txt
+        aceito = situacao.aceito_preco(aceitos, ticker, data_txt)
+        if aceito is not None:
+            saida.append(_ponto("obs", f"Preço suspeito aceito: {ticker} em {quando_txt}", "saude-c-retornos",
+                                "saude_retornos", _trecho_aceito(aceito)))
+            continue
+        d = _data(data_txt)
+        antigo = d is not None and limite is not None and d < limite
+        if (ticker, data_txt) in (eventos or set()) or antigo:
+            tratados.append(f"{ticker} {quando_txt}")
+            continue
+        saida.append(_ponto("warn", f"Preço suspeito novo: {ticker} em {quando_txt}", "saude-c-retornos",
+                            "saude_retornos"))
+    if tratados:
+        saida.append(_ponto("obs", f"Preços suspeitos já tratados: {', '.join(tratados)}", "saude-c-retornos",
+                            "saude_retornos"))
+    return saida
+
+
+def _pontos_saude(saude_visao: dict, divergencias: object, suspeitos: object, eventos: object, aceitos: object,
+                  hoje_d: date | None, dias_novo: int) -> list[dict]:
+    """Saúde dos dados: diagnóstico ausente e cada cartão (contrato e retornos vêm das listas quando existem)."""
+    pontos = []
     if saude_visao.get("disponivel") is not True:
         pontos.append(_ponto("warn", "Saúde dos dados: sem diagnóstico", "saude", "saude_sem_diagnostico"))
     for c in saude_visao.get("cartoes") or []:
@@ -571,19 +663,88 @@ def pontos_de_atencao(hoje: object, trava: object, fluxo_dia: object, linha_temp
         if not isinstance(id_, str):
             continue
         texto = f"{c.get('titulo')} ({c.get('numero')})"
-        if farol in ("warn", "bad"):
+        if id_ == "contrato" and isinstance(divergencias, list):
+            pontos += _pontos_divergencias(divergencias, aceitos)
+        elif id_ == "retornos" and isinstance(suspeitos, list):
+            pontos += _pontos_retornos(suspeitos, eventos, aceitos, hoje_d, dias_novo)
+        elif farol in ("warn", "bad", "idle") and situacao.aceito_cartao(aceitos, id_) is not None:
+            pontos.append(_ponto("obs", texto, f"saude-c-{id_}", f"saude_{id_}",
+                                 _trecho_aceito(situacao.aceito_cartao(aceitos, id_))))
+        elif farol in ("warn", "bad"):
             pontos.append(_ponto(farol, texto, f"saude-c-{id_}", f"saude_{id_}"))
         elif farol == "idle":
             pontos.append(_ponto("warn", texto, f"saude-c-{id_}", "saude_sem_dados"))
+    return pontos
+
+
+def pontos_de_atencao(hoje: object, trava: object, fluxo_dia: object, linha_tempo: object,
+                      saude_visao: object, testes: object, *, api: object = None, banco: object = None,
+                      dia_atipico: object = None, top5: object = None, divergencias: object = None,
+                      suspeitos: object = None, eventos: object = None, aceitos: object = None,
+                      agora: object = None, prazo_hhmm: str | None = None, coleta_normal: str | None = None,
+                      suspeito_novo_dias: object = None) -> list[dict]:
+    """Pontos da situação (bad, warn e obs), na ordem em que aparecem na página.
+
+    `agora` (datetime com fuso) define o dia de hoje e o instante do prazo; sem ele, vale `hoje["data"]`.
+    """
+    hoje, trava, fluxo_dia, linha_tempo, saude_visao, testes = (
+        _dic(v) for v in (hoje, trava, fluxo_dia, linha_tempo, saude_visao, testes))
+    agora_sp = agora.astimezone(SP) if isinstance(agora, datetime) else None
+    hoje_d = agora_sp.date() if agora_sp is not None else _data(hoje.get("data"))
+    dias_novo = suspeito_novo_dias if _inteiro(suspeito_novo_dias) and suspeito_novo_dias > 0 else 30
+    pontos: list[dict] = []
+    if fluxo_dia.get("disponivel") is True:
+        rotina_d = _data(fluxo_dia.get("data"))
+        if (agora_sp is not None and hoje.get("pregao") is True and rotina_d is not None and hoje_d is not None
+                and rotina_d < hoje_d):
+            prazo_dt = _prazo(hoje_d, prazo_hhmm)
+            if prazo_dt is not None and agora_sp >= prazo_dt:
+                pontos.append(_ponto("bad", f"Rotina de hoje ({hoje_d:%d/%m}) não rodou até {prazo_hhmm}: "
+                                            "nada publicado para hoje", "agora", "rotina_nao_rodou"))
+            else:
+                pontos.append(_ponto("obs", f"Rotina de hoje ainda não rodou (mostrando a de {rotina_d:%d/%m/%Y})",
+                                     "agora", "rotina_ainda_nao"))
+        pontos += _pontos_coleta(_dic(fluxo_dia.get("coleta")), fluxo_dia, linha_tempo, agora_sp, hoje_d,
+                                 coleta_normal)
+        status = fluxo_dia.get("status")
+        d = _data(fluxo_dia.get("data"))
+        dia = d.strftime("%d/%m/%Y") if d else "sem data"
+        if status == "falhou":
+            pontos.append(_ponto("bad", f"Última rotina diária ({dia}) falhou", "fluxo-processamento", "rotina_falhou"))
+        elif status == "parcial":
+            pontos.append(_ponto("warn", f"Última rotina diária ({dia}) com pendências", "fluxo-processamento",
+                                 "rotina_parcial"))
+        elif status == "em_andamento" and fluxo_dia.get("possivelmente_interrompida"):
+            pontos.append(_ponto("warn", f"Última rotina diária ({dia}) pode ter sido interrompida",
+                                 "fluxo-processamento", "rotina_interrompida"))
+    else:
+        pontos.append(_ponto("bad", "Nenhuma rotina encontrada: nada publicado", "agora", "sem_rotina"))
+    pontos += _pontos_do_bloco(banco, "fluxo-banco", forcar_bad=("banco_atrasado",))
+    pontos += _pontos_do_bloco(api, "fluxo-api")
+    if isinstance(top5, dict) and fluxo_dia.get("status") in ("ok", "parcial"):
+        if not top5.get("disponivel") or top5.get("n_ranking") == 0:
+            pontos.append(_ponto("warn", f"Top 5 não gerado ({top5.get('motivo') or 'sem dados'})",
+                                 "fluxo-processamento", "top5_ausente"))
+        elif top5.get("valido_para_historico") is False:
+            avisos = [a for a in _dic(top5).get("avisos") or [] if isinstance(a, str)]
+            motivo = avisos[0] if avisos else "gerado depois das 10h"
+            pontos.append(_ponto("warn", f"Top 5 fora do histórico do experimento ({motivo})",
+                                 "fluxo-processamento", "top5_tarde"))
+    folga = linha_tempo.get("folga_s")
+    if _inteiro(folga) and folga < 0:
+        pontos.append(_ponto("obs", f"Rotina terminou depois do prazo ({linha_tempo.get('folga_texto')})",
+                             "linha-tempo", "atraso_prazo"))
+    pontos += _pontos_do_bloco(dia_atipico, "dia-atipico")
+    pontos += _pontos_saude(saude_visao, divergencias, suspeitos, eventos, aceitos, hoje_d, dias_novo)
     if hoje.get("erro") or hoje.get("disponivel") is False:
-        pontos.append(_ponto("bad", "Calendário da B3 com erro", "historico", "calendario_erro"))
+        pontos.append(_ponto("warn", "Calendário da B3 com erro", "historico", "calendario_erro"))
     if testes.get("disponivel") is True:
         contagens = _dic(testes.get("contagens"))
         falhas = sum(v for k, v in contagens.items() if k in ("failed", "errors") and _inteiro(v))
         if testes.get("interrompido"):
             pontos.append(_ponto("warn", "Testes automáticos interrompidos", "testes", "testes_interrompidos"))
         elif testes.get("aprovado") is False and falhas > 0:
-            pontos.append(_ponto("bad", f"Testes automáticos com falhas ({_plural(falhas, 'falha', 'falhas')})",
+            pontos.append(_ponto("warn", f"Testes automáticos com falhas ({_plural(falhas, 'falha', 'falhas')})",
                                  "testes", "testes_falhas"))
         elif testes.get("aprovado") is False:
             pontos.append(_ponto("warn", "Testes automáticos sem resultado completo", "testes", "testes_interrompidos"))
@@ -596,22 +757,29 @@ def pontos_de_atencao(hoje: object, trava: object, fluxo_dia: object, linha_temp
 
 def resumo(hoje: object, trava: object, fluxo_dia: object, linha_tempo: object,
            saude_visao: object, testes: object, *, api: object = None, banco: object = None,
-           dia_atipico: object = None) -> dict:
-    """Frase única do topo ("Tudo certo", "Atenção: N pontos" ou "Falhou: ...") e a lista de pontos."""
+           dia_atipico: object = None, top5: object = None, divergencias: object = None,
+           suspeitos: object = None, eventos: object = None, aceitos: object = None, agora: object = None,
+           prazo_hhmm: str | None = None, coleta_normal: str | None = None,
+           suspeito_novo_dias: object = None) -> dict:
+    """Situação do topo: "bad" (Não funcionou), "warn" (Funcionou, com ressalvas) ou "ok" (Tudo funcionando).
+
+    `pontos` traz bad e warn; `observacoes` traz os obs (cinza), que não mudam a cor.
+    """
     pontos = pontos_de_atencao(hoje, trava, fluxo_dia, linha_tempo, saude_visao, testes,
-                               api=api, banco=banco, dia_atipico=dia_atipico)
-    ruins = [p for p in pontos if p["nivel"] == "bad"]
-    atencao = [p for p in pontos if p["nivel"] == "warn"]
-    if ruins:
-        frase = "Falhou: " + "; ".join(p["texto"] for p in ruins)
-        if atencao:
-            frase += " · e " + _plural(len(atencao), "ponto de atenção", "pontos de atenção")
-        nivel = "bad"
-    elif atencao:
-        frase, nivel = "Atenção: " + _plural(len(atencao), "ponto", "pontos"), "warn"
+                               api=api, banco=banco, dia_atipico=dia_atipico, top5=top5,
+                               divergencias=divergencias, suspeitos=suspeitos, eventos=eventos, aceitos=aceitos,
+                               agora=agora, prazo_hhmm=prazo_hhmm, coleta_normal=coleta_normal,
+                               suspeito_novo_dias=suspeito_novo_dias)
+    niveis = {p["nivel"] for p in pontos}
+    if "bad" in niveis:
+        nivel, frase = "bad", "Não funcionou"
+    elif "warn" in niveis:
+        nivel, frase = "warn", "Funcionou, com ressalvas"
     else:
-        frase, nivel = "Tudo certo", "ok"
-    return {"nivel": nivel, "frase": frase, "pontos": pontos}
+        nivel, frase = "ok", "Tudo funcionando"
+    return {"nivel": nivel, "frase": frase,
+            "pontos": [p for p in pontos if p["nivel"] in ("bad", "warn")],
+            "observacoes": [p for p in pontos if p["nivel"] == "obs"]}
 
 
 def tempo_curto(segundos: object) -> str | None:

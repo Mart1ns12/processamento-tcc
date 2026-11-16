@@ -21,7 +21,7 @@ from urllib.parse import parse_qs, urlsplit
 from processamento.calendario import SP
 from processamento.painel import (acoes, ajuda, aba_api, aba_coleta, aba_diagnostico, aba_execucoes, aba_experimento,
                                   agendador, api, dia, leitores, marcos, mercado, novidades, pedidos, relatorios,
-                                  saude, visao)
+                                  saude, situacao, visao)
 
 PORTA_PADRAO = 8765
 LIMITE_CORPO = 1024
@@ -233,6 +233,7 @@ def montar_painel(raiz: Path, executor: acoes.Executor, agora: datetime, caminho
     coer = _seguro(mercado.cartao_coerencia, dados_dia, {
         "ivvb11_min": painel_p.get("coerencia_ivvb11_min_abs"), "dif_min": painel_p.get("coerencia_ibov_mediana_dif")})
     docs_md = raiz / "docs" / "diagnostico_banco.md"
+    diag_v = _seguro(relatorios.ler_diagnostico, docs_md)
     novid = _seguro(novidades.novidades, docs_md, pasta_painel, painel_p.get("diagnosticos_manter"))
     afet = _seguro(saude.afetadas_saude, docs_md)
     pub = _seguro(dia.verificar_publicador, raiz, painel_p)
@@ -249,8 +250,18 @@ def montar_painel(raiz: Path, executor: acoes.Executor, agora: datetime, caminho
     data_ultima = fluxo_v.get("data") if isinstance(fluxo_v, dict) and fluxo_v.get("disponivel") else None
     botoes_v = _seguro(functools.partial(estado_botoes, motivo_publicador=motivo_pub),
                        params, trava, hoje, rotina_data, d_carga, executor, agora)
-    resumo_v = _seguro(functools.partial(visao.resumo, api=api_v, banco=banco_v, dia_atipico=atipico_v),
-                       hoje, trava, fluxo_v, linha_v, saude_v, testes)
+    aceitos_v = _seguro(situacao.ler_aceitos, raiz / "processamento" / "config" / "painel_aceitos.yaml")
+    suspeitos_v = _seguro(situacao.retornos_suspeitos, docs_md)
+    eventos_v = _seguro(situacao.eventos_tratados, raiz)
+    top5_v = _seguro(situacao.ler_top5, raiz, params["pasta_saida"], data_ultima)
+    resumo_v = _seguro(functools.partial(
+        visao.resumo, api=api_v, banco=banco_v, dia_atipico=atipico_v, top5=top5_v,
+        divergencias=diag_v.get("divergencias") if isinstance(diag_v.get("divergencias"), list) else None,
+        suspeitos=suspeitos_v if isinstance(suspeitos_v, list) else None,
+        eventos=eventos_v if isinstance(eventos_v, set) else None,
+        aceitos=aceitos_v, agora=agora, prazo_hhmm=leitores.ler_prazo_rotina(raiz),
+        coleta_normal=painel_p.get("coleta_entrega_normal"), suspeito_novo_dias=painel_p.get("suspeito_novo_dias")),
+        hoje, trava, fluxo_v, linha_v, saude_v, testes)
     return {
         "gerado_em": agora.isoformat(timespec="seconds"),
         "hoje": hoje,
@@ -258,7 +269,7 @@ def montar_painel(raiz: Path, executor: acoes.Executor, agora: datetime, caminho
         "agora": agora_item,
         "historico": {"diarias": diarias, "completas": completas},
         "etapas": _seguro(relatorios.ler_logs_rotina, raiz / params["pasta_logs"]),
-        "saude": _seguro(relatorios.ler_diagnostico, docs_md),
+        "saude": diag_v,
         "experimento": exp_v,
         "testes": testes,
         "acao": _seguro(functools.partial(estado_com_marcos, pasta_logs_painel=pasta_painel,

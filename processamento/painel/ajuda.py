@@ -21,7 +21,7 @@ CAMPOS_OPCIONAIS = frozenset({"eventos_suspeitos"})
 
 # id -> (título, texto). Strings entre aspas simples: os textos usam aspas duplas e nunca apóstrofo.
 AJUDA: dict[str, tuple[str, str]] = {
-    "hoje": ('Situação de hoje', 'Uma frase que junta tudo o que está amarelo ou vermelho no painel. "Tudo certo": nada pede atenção. "Atenção": há pontos para acompanhar, mas nada quebrou (em geral, defeitos conhecidos da coleta que o processamento já contorna, ou um dado que não pôde ser lido). "Falhou": algo quebrou de verdade, como a rotina do dia, os testes automáticos, o calendário ou o formato combinado com a coleta. Clique num item da lista para ir direto a ele. O botão "Rodar o dia completo" faz a rotina, a carga completa e o publicador em sequência.'),
+    "hoje": ('Situação de hoje', 'Uma frase que junta o que está amarelo ou vermelho no painel. Verde, "Tudo funcionando": nenhum ponto de atenção. Amarelo, "Funcionou, com ressalvas": há pontos para acompanhar, mas nada quebrou (em geral, defeitos conhecidos da coleta que o processamento já contorna, ou um dado que não pôde ser lido). Vermelho, "Não funcionou": algo quebrou de verdade, como a rotina do dia, os testes automáticos, o calendário ou o formato combinado com a coleta. As observações (em cinza, recolhidas em "Observações") não mudam a cor: são casos conhecidos e já tratados. Os casos aceitos ficam em processamento/config/painel_aceitos.yaml. Clique num item da lista para ir direto a ele. O botão "Rodar o dia completo" faz a rotina, a carga completa e o publicador em sequência.'),
     "fluxo": ('Fluxo do dia', 'Mostra o caminho dos dados no último pregão processado, em cinco passos: coleta, processamento, publicador no banco da API, API e interface. Cada passo mostra a cor (a situação) e o horário. A data no título é a do pregão, que pode não ser hoje: fim de semana e feriado não têm pregão. Para ver os detalhes de cada passo, use "Ver detalhes do fluxo".'),
     "progresso": ('Progresso do dia completo', 'Mostra o andamento do dia completo, com uma barra para cada etapa: rotina, carga completa e publicador. As três barras comparam o tempo passado com a média da etapa nas últimas execuções completas em logs/painel/. Quantas execuções entram na média fica no arquivo de configuração do painel (painel.yaml), na chave dia_media_execucoes. É uma estimativa. Sem execução com horário, aparece "sem média ainda". Execuções antigas, de antes de o painel gravar a hora de cada etapa, ficam fora da média.'),
     "coleta": ('Coleta', 'É o outro módulo do TCC. Em todo dia de pregão ele baixa preços, balanços e notícias e grava tudo num banco de dados. Quando termina a parte que interessa, marca a etapa "entrega" como concluída. O processamento começa a perguntar se a entrega ficou pronta às {inicio_consulta} e repete a pergunta a cada {intervalo} minutos. O processamento só lê esse banco; nunca escreve nele.'),
@@ -105,6 +105,15 @@ O_QUE_FAZER: dict[str, str] = {
     "saude_coerencia_mercado": 'Conferir na coleta os preços do dólar, do IVVB11 e do Ibovespa nesse pregão. Se forem erro, avisar a coleta e rodar a rotina de novo depois da correção.',
     "dia_atipico_amplo": 'Nada no processamento: é um aviso de evento de mercado, não um erro dos dados. O mercado inteiro se moveu junto. Vale só confirmar no noticiário o que aconteceu nesse pregão.',
     "dia_atipico_isolado": 'Conferir na coleta os preços dessas ações nesse pregão antes de confiar nos indicadores do dia. Se for erro, avisar a coleta e rodar a rotina de novo depois da correção.',
+    "rotina_nao_rodou": 'Conferir o agendador e o log da rotina; rodar a rotina do dia pelo botão.',
+    "rotina_ainda_nao": 'Nada: a rotina roda no horário do agendador.',
+    "coleta_sem_entrega": 'Ver o daily da coleta e avisar a coleta; a rotina usa dados velhos ou espera até o fim.',
+    "coleta_atrasada": 'Nada, se for raro; se repetir, avisar a coleta.',
+    "api_fora": 'Abrir o endereço da API no navegador. Se continuar sem resposta, ver no painel do Railway se o serviço está no ar. Enquanto isso, o site fica sem dados novos.',
+    "api_intermitente": 'Acompanhar as próximas consultas; se continuar, ver o log do Railway.',
+    "api_inesperada": 'Abrir o endereço da API no navegador. Se continuar sem resposta, ver no painel do Railway se o serviço está no ar. Enquanto isso, o site fica sem dados novos.',
+    "top5_ausente": 'Ver no log da rotina o aviso do modelo (versão de preparação ou modelo ausente).',
+    "top5_tarde": 'Nada para hoje: o top 5 saiu, mas fora do histórico. Ver por que a rotina rodou depois do horário limite do histórico.',
 }
 
 # Palavras do painel (E2): termo -> texto, na ordem do glossário.

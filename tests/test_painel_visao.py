@@ -293,13 +293,13 @@ LT = linha_do_tempo(ITEM, "09:45")   # rotina em outro dia: folga None
 
 def test_resumo_tudo_certo():
     assert resumo(HOJE_OK, TRAVA_VAZIA, fluxo(ITEM), LT, SAUDE_OK, TESTES_OK) == {
-        "nivel": "ok", "frase": "Tudo certo", "pontos": []}
+        "nivel": "ok", "frase": "Tudo funcionando", "pontos": [], "observacoes": []}
 
 
 def test_resumo_atencao_com_os_cartoes_da_fixture():
     r = resumo(HOJE_OK, TRAVA_VAZIA, fluxo(ITEM), LT, cartoes_saude(FIXTURE_DIAG), TESTES_OK)
     assert r["nivel"] == "warn"
-    assert r["frase"] == "Atenção: 4 pontos"
+    assert r["frase"] == "Funcionou, com ressalvas"
     assert [p["texto"] for p in r["pontos"]] == [
         "Quantidade de ações (19 empresas)", "Preços suspeitos (5 retornos)",
         "Lacunas nas séries (3 lacunas)", "Horário das notícias (90,8% sem hora real)"]
@@ -323,26 +323,26 @@ def test_resumo_divergencia_de_dado_nao_derruba_a_situacao(tmp_path):
 
     r = resumo(HOJE_OK, TRAVA_VAZIA, fluxo(ITEM), LT, so_contrato("noticia_sem_hora"), TESTES_OK)
     assert r["nivel"] == "warn"
-    assert r["frase"] == "Atenção: 1 ponto"
+    assert r["frase"] == "Funcionou, com ressalvas"
     assert r["pontos"] == [{"nivel": "warn", "texto": "Contrato com a coleta (1 divergência)",
                             "alvo": "saude-c-contrato", "o_que_fazer": O_QUE_FAZER["saude_contrato"]}]
 
     r = resumo(HOJE_OK, TRAVA_VAZIA, fluxo(ITEM), LT, so_contrato("coluna_faltando"), TESTES_OK)
     assert r["nivel"] == "bad"
-    assert r["frase"] == "Falhou: Contrato com a coleta (1 divergência)"
+    assert r["frase"] == "Não funcionou"
 
 
 def test_resumo_falhou_com_atencao():
     fluxo_falhou = fluxo(dict(ITEM, status="falhou", n_pacotes=0, pacotes=[]))
     r = resumo(HOJE_OK, TRAVA_VAZIA, fluxo_falhou, LT, cartoes_saude(FIXTURE_DIAG), TESTES_OK)
-    assert r["frase"] == "Falhou: Última rotina diária (23/10/2026) falhou · e 4 pontos de atenção"
+    assert r["frase"] == "Não funcionou"
     assert r["pontos"][0] == {"nivel": "bad", "texto": "Última rotina diária (23/10/2026) falhou",
                               "alvo": "fluxo-processamento", "o_que_fazer": O_QUE_FAZER["rotina_falhou"]}
 
 
 def test_resumo_singular_e_parcial():
     r = resumo(HOJE_OK, TRAVA_VAZIA, fluxo(dict(ITEM, status="parcial")), LT, SAUDE_OK, TESTES_OK)
-    assert r["frase"] == "Atenção: 1 ponto"
+    assert r["frase"] == "Funcionou, com ressalvas"
     assert r["pontos"] == [{"nivel": "warn", "texto": "Última rotina diária (23/10/2026) com pendências",
                             "alvo": "fluxo-processamento", "o_que_fazer": O_QUE_FAZER["rotina_parcial"]}]
 
@@ -358,7 +358,7 @@ def test_resumo_coleta_com_problema():
     coleta = {"consultado": True, "motivo": "entrega_falhou", "iniciada_em": "2026-10-23T08:00:01-03:00"}
     r = resumo(HOJE_OK, TRAVA_VAZIA, fluxo(dict(ITEM, coleta=coleta, status="falhou", n_pacotes=0, pacotes=[])),
                LT, SAUDE_OK, TESTES_OK)
-    assert r["frase"] == "Falhou: Coleta (entrega com problema); Última rotina diária (23/10/2026) falhou"
+    assert r["frase"] == "Não funcionou"
     assert r["pontos"][0] == {"nivel": "bad", "texto": "Coleta (entrega com problema)", "alvo": "fluxo-coleta",
                               "o_que_fazer": O_QUE_FAZER["coleta_bad"]}
 
@@ -366,8 +366,11 @@ def test_resumo_coleta_com_problema():
 def test_resumo_atraso_em_relacao_ao_prazo():
     lt = linha_do_tempo(dict(ITEM_MANHA, inicio="2026-10-23T09:50:00-03:00", fim="2026-10-23T09:52:30-03:00"), "09:45")
     r = resumo(HOJE_OK, TRAVA_VAZIA, fluxo(ITEM), lt, SAUDE_OK, TESTES_OK)
-    assert r["pontos"] == [{"nivel": "warn", "texto": "Rotina terminou depois do prazo (atraso de 7 min 30 s)",
-                            "alvo": "linha-tempo", "o_que_fazer": O_QUE_FAZER["atraso_prazo"]}]
+    # atraso em relação ao prazo é observação (cinza): não muda a cor
+    assert r["pontos"] == []
+    assert r["nivel"] == "ok" and r["frase"] == "Tudo funcionando"
+    assert r["observacoes"] == [{"nivel": "obs", "texto": "Rotina terminou depois do prazo (atraso de 7 min 30 s)",
+                                 "alvo": "linha-tempo", "o_que_fazer": O_QUE_FAZER["atraso_prazo"]}]
 
 
 def test_resumo_testes_com_falhas_interrompidos_e_sem_resultado():
@@ -375,7 +378,7 @@ def test_resumo_testes_com_falhas_interrompidos_e_sem_resultado():
         return resumo(HOJE_OK, TRAVA_VAZIA, fluxo(ITEM), LT, SAUDE_OK, kw)["pontos"]
 
     falhou = testes_com(disponivel=True, aprovado=False, interrompido=False, contagens={"failed": 2, "passed": 1698})
-    assert falhou == [{"nivel": "bad", "texto": "Testes automáticos com falhas (2 falhas)", "alvo": "testes",
+    assert falhou == [{"nivel": "warn", "texto": "Testes automáticos com falhas (2 falhas)", "alvo": "testes",
                        "o_que_fazer": O_QUE_FAZER["testes_falhas"]}]
     assert testes_com(disponivel=True, aprovado=False, interrompido=False, contagens={"failed": 1})[0]["texto"] == (
         "Testes automáticos com falhas (1 falha)")
@@ -394,11 +397,11 @@ def test_resumo_trava_calendario_e_saude_indisponivel():
     assert r["pontos"] == [
         {"nivel": "warn", "texto": "Saúde dos dados: sem diagnóstico", "alvo": "saude",
          "o_que_fazer": O_QUE_FAZER["saude_sem_diagnostico"]},
-        {"nivel": "bad", "texto": "Calendário da B3 com erro", "alvo": "historico",
+        {"nivel": "warn", "texto": "Calendário da B3 com erro", "alvo": "historico",
          "o_que_fazer": O_QUE_FAZER["calendario_erro"]},
         {"nivel": "warn", "texto": "Trava da rotina esquecida (420 min)", "alvo": "comandos",
          "o_que_fazer": O_QUE_FAZER["trava_abandonada"]}]
-    assert r["frase"] == "Falhou: Calendário da B3 com erro · e 2 pontos de atenção"
+    assert r["frase"] == "Funcionou, com ressalvas"
 
 
 def test_resumo_cartao_cinza_conta_como_atencao():
@@ -411,8 +414,10 @@ def test_resumo_cartao_cinza_conta_como_atencao():
 
 def test_resumo_sem_nada_nao_quebra():
     r = resumo(None, None, None, None, None, None)
-    assert r["frase"] == "Atenção: 2 pontos"
-    assert [p["texto"] for p in r["pontos"]] == ["Fluxo do dia: sem dados", "Saúde dos dados: sem diagnóstico"]
+    assert r["frase"] == "Não funcionou"
+    assert [p["texto"] for p in r["pontos"]] == ["Nenhuma rotina encontrada: nada publicado",
+                                                 "Saúde dos dados: sem diagnóstico"]
+    assert r["pontos"][0]["nivel"] == "bad" and r["pontos"][0]["alvo"] == "agora"
 
 
 def test_tempo_curto_arredonda_para_o_botao():
@@ -537,19 +542,37 @@ def test_bloco_api_no_ar_com_tempos():
     assert r["ultima_publicacao"] == "2026-10-27" and r["consultado_em"] == "10:58:03"
 
 
-def test_bloco_api_lenta_vira_aviso_com_um_ponto():
+def test_bloco_api_lenta_vira_observacao_sem_mudar_o_estado():
     r = bloco_api(_situacao(OK_API, MEDICOES_API), 0.5)
-    assert r["estado"] == "warn"
-    assert r["pontos"] == [{"nivel": "warn", "texto": "API lenta (média 0,90 s)", "chave": "api_lenta"}]
+    assert r["estado"] == "ok" and r["titulo"] == "No ar"
+    assert r["pontos"] == [{"nivel": "obs", "texto": "API lenta (média 0,90 s)", "chave": "api_lenta"}]
 
 
 def test_bloco_api_sem_resposta_por_timeout():
     consulta = {"respondeu": False, "http": None, "ms": None, "status": None, "banco": None,
                 "ultima_publicacao": None, "erro": "TimeoutError"}
     r = bloco_api(_situacao(consulta, [{"ms": None}]), 2.0)
-    assert r["estado"] == "warn" and r["titulo"] == "Sem resposta"
+    assert r["estado"] == "bad" and r["titulo"] == "Fora do ar"
     assert r["linhas"][0] == "Sem resposta em até 5 s (TimeoutError)"
-    assert r["pontos"] == [{"nivel": "warn", "texto": "API sem resposta", "chave": "api_sem_resposta"}]
+    assert r["pontos"] == [{"nivel": "bad", "texto": "API fora do ar", "chave": "api_fora"}]
+
+
+def test_bloco_api_sem_resposta_com_medicao_ok_e_intermitente():
+    consulta = {"respondeu": False, "http": None, "ms": None, "status": None, "banco": None,
+                "ultima_publicacao": None, "erro": "TimeoutError"}
+    medicoes = [{"ms": 800, "ok": True}, {"ms": None, "ok": False}]
+    r = bloco_api(_situacao(consulta, medicoes), 2.0)
+    assert r["estado"] == "warn" and r["titulo"] == "Sem resposta"
+    assert r["pontos"] == [{"nivel": "warn", "texto": "API com erro intermitente (sem resposta na última consulta)",
+                            "chave": "api_intermitente"}]
+
+
+def test_bloco_api_respondeu_mas_com_falhas_antes_e_intermitente():
+    medicoes = [{"ms": 800, "ok": True}, {"ms": None, "ok": False}, {"ms": None, "ok": False}]
+    r = bloco_api(_situacao(OK_API, medicoes), 2.0)
+    assert r["estado"] == "warn"
+    assert r["pontos"] == [{"nivel": "warn", "texto": "API com erro intermitente (2 de 3 consultas sem resposta)",
+                            "chave": "api_intermitente"}]
 
 
 def test_bloco_api_503_e_banco_fora():
@@ -615,7 +638,8 @@ def test_resumo_pontos_de_api_banco_e_dia_atipico_na_ordem():
                         "aviso de evento de mercado, não erro dos dados")]
     assert r["pontos"][1]["o_que_fazer"] == O_QUE_FAZER["api_sem_resposta"]
     assert r["pontos"][2]["o_que_fazer"] == O_QUE_FAZER["dia_atipico_amplo"]
-    assert r["frase"] == "Atenção: 3 pontos"
+    assert r["frase"] == "Não funcionou"  # o banco atrasado sobe para bad (nada publicado)
+    assert r["pontos"][0]["nivel"] == "bad"
 
 
 def test_resumo_ignora_pontos_malformados_dos_blocos_novos():

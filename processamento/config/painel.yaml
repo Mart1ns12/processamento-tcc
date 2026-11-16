@@ -16,6 +16,8 @@ afetadas_max: 5                  # afetadas listadas em cada item antes de "e ma
 dia_media_execucoes: 3           # tempo estimado do dia completo: média das últimas N execuções concluídas (logs/painel/dia-*.log; no máximo 20)
 diagnosticos_manter: 10          # resumos guardados em logs/painel/diagnosticos/ ("O que mudou desde ontem")
 mercado_pregoes_linha: 7         # pregões na minilinha do Ibovespa (pastas saida/AAAA-MM-DD)
+coleta_entrega_normal: "08:35"   # hora normal da entrega da coleta: depois disto, "Coleta entregou atrasada" (amarelo); HH:MM ENTRE ASPAS
+suspeito_novo_dias: 30           # preço suspeito mais antigo que N dias corridos vira observação (já tratado), não amarelo
 # Agendador de Tarefas do Windows (só informativo: o painel mostra a próxima execução; não cria nem confere a tarefa).
 # Ausente ou inválido = "não configurado". Dias: seg, ter, qua, qui, sex, sab, dom. HORA ENTRE ASPAS.
 agendador:

@@ -276,12 +276,17 @@ def test_api_painel_resumo_tempos_e_ajuda(srv):
     dados = _json(corpo)
     r = dados["visao"]["resumo"]
     assert r["nivel"] == "bad"
-    assert r["frase"] == "Falhou: Contrato com a coleta (2 divergências) · e 5 pontos de atenção"
-    assert [p["alvo"] for p in r["pontos"]] == ["saude-c-contrato", "saude-c-quantidade_acoes", "saude-c-retornos",
-                                                "saude-c-lacunas", "saude-c-horario_noticias", "saude-c-cobertura"]
-    assert r["pontos"][0]["o_que_fazer"] == ajuda.O_QUE_FAZER["saude_contrato"]
-    assert r["pontos"][1]["texto"] == "Quantidade de ações (sem dados)"
-    assert r["pontos"][1]["o_que_fazer"] == ajuda.O_QUE_FAZER["saude_sem_dados"]
+    assert r["frase"] == "Não funcionou"
+    # a fixture não tem experimento_top.json: com a rotina ok, o top 5 aparece como "não gerado" (warn)
+    assert r["pontos"][0] == {"nivel": "warn", "texto": "Top 5 não gerado (experimento_top.json não encontrado)",
+                              "alvo": "fluxo-processamento", "o_que_fazer": ajuda.O_QUE_FAZER["top5_ausente"]}
+    # cada divergência do contrato vira um ponto próprio (as duas da fixture são estruturais: bad)
+    assert [p["alvo"] for p in r["pontos"]] == ["fluxo-processamento", "saude-c-contrato", "saude-c-contrato",
+                                                "saude-c-quantidade_acoes", "saude-c-retornos", "saude-c-lacunas",
+                                                "saude-c-horario_noticias", "saude-c-cobertura"]
+    assert r["pontos"][1]["o_que_fazer"] == ajuda.O_QUE_FAZER["saude_contrato"]
+    assert r["pontos"][3]["texto"] == "Quantidade de ações (sem dados)"
+    assert r["pontos"][3]["o_que_fazer"] == ajuda.O_QUE_FAZER["saude_sem_dados"]
     assert dados["visao"]["tempos"] == {
         "rotina": {"segundos": 118, "curto": "~2 min", "texto": "A última rotina diária levou 1 min 58 s.",
                    "origem": "execucao"},
@@ -646,7 +651,7 @@ def test_trava_abandonada_nao_bloqueia(srv):
     r = dados["visao"]["resumo"]
     assert r["pontos"][-1] == {"nivel": "warn", "texto": "Trava da rotina esquecida (420 min)", "alvo": "comandos",
                                "o_que_fazer": ajuda.O_QUE_FAZER["trava_abandonada"]}
-    assert r["frase"].endswith("· e 6 pontos de atenção")
+    assert r["frase"] == "Não funcionou"
 
 
 # ---------------------------------------------------------------- produção

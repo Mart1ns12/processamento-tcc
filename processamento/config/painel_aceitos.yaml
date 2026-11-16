@@ -1,0 +1,21 @@
+# Casos conhecidos e aceitos: no cartão "Situação de hoje" viram observação (cinza) e não mudam a cor.
+# Caso que não está nesta lista continua subindo de nível normalmente. Valores ENTRE ASPAS.
+# tipo "divergencia": tema + termo (texto procurado no detalhe da divergência do diagnóstico)
+# tipo "preco_suspeito": ticker + data (AAAA-MM-DD) do retorno diário suspeito
+# tipo "cartao": id do cartão de saúde (ex.: "horario_noticias")
+# motivo e desde (AAAA-MM-DD, quando foi aceito) são obrigatórios.
+aceitos:
+  - tipo: "divergencia"
+    tema: "other_codes"
+    termo: "RAIZ4"
+    motivo: "Diagnóstico: RAIZ4 fora do other_codes da empresa (CNPJ 33453598000123); pedido aberto com a coleta em pedidos_coleta.yaml"
+    desde: "2026-11-16"
+  - tipo: "preco_suspeito"
+    ticker: "RAIZ4"
+    data: "2026-11-09"
+    motivo: "Retorno de +118% em 09/11/2026 (0,1119 → 0,244); causa não confirmada, aguardando a coleta."
+    desde: "2026-11-16"
+  - tipo: "cartao"
+    cartao: "horario_noticias"
+    motivo: "A maior parte das notícias do Google News vem só com a data (diagnóstico, seção Notícias); as sem hora entram na janela do dia de forma conservadora, que vai até as 08:00 do pregão seguinte"
+    desde: "2026-11-16"

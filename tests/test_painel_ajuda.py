@@ -25,7 +25,9 @@ CHAVES_FAZER = {"saude_contrato", "saude_quantidade_acoes", "saude_retornos", "s
                 "coleta_warn", "coleta_bad", "rotina_falhou", "rotina_parcial", "rotina_interrompida",
                 "sem_rotina", "atraso_prazo", "calendario_erro", "testes_falhas", "testes_interrompidos",
                 "trava_abandonada", "api_sem_resposta", "api_banco_fora", "api_lenta", "banco_atrasado",
-                "saude_coerencia_mercado", "dia_atipico_amplo", "dia_atipico_isolado"}
+                "saude_coerencia_mercado", "dia_atipico_amplo", "dia_atipico_isolado",
+                "rotina_nao_rodou", "rotina_ainda_nao", "coleta_sem_entrega", "coleta_atrasada", "api_fora",
+                "api_intermitente", "api_inesperada", "top5_ausente", "top5_tarde"}
 TERMOS_GLOSSARIO = ["Pregão", "Ibovespa", "Indicador", "Indisponível", "Histórico insuficiente",
                     "Pacote", "Rodada", "Diagnóstico", "Walk-forward", "Calibração",
                     "P/L", "P/VP", "Payout", "Dividend yield"]
